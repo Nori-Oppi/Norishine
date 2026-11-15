@@ -6,12 +6,17 @@ include_guard(GLOBAL)
 set(BOOST_VERSION "1.89.0")
 set(BOOST_COMPONENTS
         filesystem
-        locale
         log
         program_options
         system
 )
 # system is not used by Sunshine, but by Simple-Web-Server, added here for convenience
+
+# locale is only used by the Linux input code (Sunshine 71323d38). Leaving it out on Windows
+# also avoids building it: Boost 1.89's locale CMakeLists fails to configure with CMake 4.5.
+if(NOT WIN32)
+    list(APPEND BOOST_COMPONENTS locale)
+endif()
 
 # algorithm, preprocessor, scope, and uuid are not used by Sunshine, but by libdisplaydevice, added here for convenience
 if(WIN32)
