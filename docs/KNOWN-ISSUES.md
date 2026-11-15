@@ -12,6 +12,12 @@ audio devices). CI runs the full suite.
 
 - `QOSAddSocketToFlow() failed: 1168` warnings on loopback streams. Expected for
   127.0.0.1; check on a real network.
+- When a session hangs on shutdown ("Hang detected! Session failed to terminate"), the
+  host exits without removing its SudoVDA virtual display. On a headless PC the desktop
+  then stays on that orphaned display, and the next session streams a second, empty
+  one. Restarting the service does not remove it while another process keeps the
+  SudoVDA watchdog alive; it has to be removed through the driver by its GUID (the
+  client's UUID for Desktop).
 
 ## Installer next to Apollo, Vibepollo or Sunshine
 
