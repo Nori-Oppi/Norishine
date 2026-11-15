@@ -39,6 +39,22 @@ basic authentication with the admin username and password.
 ## POST /api/config
 @copydoc confighttp::saveConfig()
 
+## GET /api/v1/config/schema
+@copydoc confighttp::getConfigSchema()
+
+Each setting has `key`, `category` (the web UI tab), `type` (`boolean`, `integer`,
+`number`, `string`, `choice`, `path`, `prep_commands`, `server_commands`, `keybindings`,
+`mode_remapping`), `tier` (`basic`, `advanced`, `dangerous`), `platforms`, `available` (on
+this host), `default`, `restart_required`, `label` and `description` (keys into the web UI
+locale files), and where it applies `min`, `max` and `choices` (an empty choice means
+automatic). The table is `src/config_schema.cpp`.
+
+## GET /api/v1/config
+@copydoc confighttp::getConfigV1()
+
+## PATCH /api/v1/config
+@copydoc confighttp::patchConfigV1()
+
 ## POST /api/covers/upload
 @copydoc confighttp::uploadCover()
 

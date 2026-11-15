@@ -4,6 +4,7 @@
  */
 #include "../tests_common.h"
 
+#include <filesystem>
 #include <format>
 #include <src/file_handler.h>
 
@@ -93,4 +94,27 @@ TEST_P(FileHandlerTests, ReadFileTest) {
 TEST(FileHandlerTests, ReadMissingFileTest) {
   // read missing file
   EXPECT_EQ(file_handler::read_file("non-existing-file.txt"), "");
+}
+
+TEST(FileHandlerTests, WriteFileIsAtomicAndKeepsBackup) {
+  const std::string name = "write_file_atomic_test.json";
+  std::filesystem::remove(name);
+  std::filesystem::remove(name + ".bak");
+
+  ASSERT_EQ(file_handler::write_file(name.c_str(), "first"), 0);
+  EXPECT_EQ(file_handler::read_file(name.c_str()), "first");
+  EXPECT_FALSE(std::filesystem::exists(name + ".bak")) << "nothing to back up the first time";
+
+  ASSERT_EQ(file_handler::write_file(name.c_str(), "second\nline"), 0);
+  EXPECT_EQ(file_handler::read_file(name.c_str()), "second\nline") << "written byte for byte";
+  EXPECT_EQ(file_handler::read_file((name + ".bak").c_str()), "first");
+  EXPECT_FALSE(std::filesystem::exists(name + ".tmp")) << "temporary file replaced, not left behind";
+
+  std::filesystem::remove(name);
+  std::filesystem::remove(name + ".bak");
+}
+
+TEST(FileHandlerTests, WriteFileFailureLeavesNoTemporaryFile) {
+  EXPECT_EQ(file_handler::write_file("no-such-directory/file.json", "x"), -1);
+  EXPECT_FALSE(std::filesystem::exists("no-such-directory"));
 }

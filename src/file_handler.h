@@ -42,10 +42,14 @@ namespace file_handler {
   std::string read_file(const char *path);
 
   /**
-   * @brief Writes a file.
+   * @brief Writes a file atomically.
+   *
+   * The contents go to `<path>.tmp` first and are flushed to disk; the previous file, if
+   * any, is copied to `<path>.bak`; then the temporary file replaces `<path>`. A crash or
+   * power loss leaves either the old or the new file, never a truncated one.
    * @param path The path of the file.
    * @param contents The contents to write.
-   * @return ``0`` on success, ``-1`` on failure.
+   * @return ``0`` on success, ``-1`` on failure (the original file is then unchanged).
    * @examples
    * int write_status = write_file("path/to/file", "file contents");
    * @examples_end
