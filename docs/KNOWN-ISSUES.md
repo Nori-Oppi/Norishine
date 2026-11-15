@@ -2,20 +2,11 @@
 
 Tracked here until fixed. Last checked 2026-11-15 on Windows 11, AMD Radeon 780M.
 
-## Failing unit tests (33 of 240)
+## Unit tests
 
-All are tests that Apollo changed behaviour for without updating. None is a streaming failure.
-
-- `ConfigConsistencyTest` (2): settings missing from `docs/configuration.md` or
-  `en.json`, and option order differs between the web UI and the docs. To be fixed
-  by the settings schema milestone (M1).
-- `MdnsInstanceNameTest` (3): Apollo's default instance name is "Apollo"; the tests
-  expect "Sunshine". Fixed with the rename.
-- `DisplayDeviceConfigTest` (28): Apollo passes refresh rates as millihertz
-  (60 Hz = 60000/1000); the tests expect Sunshine's integer form.
-
-Not run locally because they act on the live desktop: `MouseInputs/*` (moves the
-real cursor) and `Configurations/AudioTest.*` (opens real audio devices).
+All 252 pass locally. Not run locally because they act on the live desktop:
+`MouseInputs/*` (moves the real cursor) and `Configurations/AudioTest.*` (opens real
+audio devices). CI runs the full suite.
 
 ## Host
 

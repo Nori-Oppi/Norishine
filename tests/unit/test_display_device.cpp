@@ -10,6 +10,18 @@
 #include <src/rtsp.h>
 
 namespace {
+  std::string rate_str(const std::optional<display_device::FloatingPoint> &rate) {
+    if (!rate) {
+      return "none";
+    }
+    if (const auto *r = std::get_if<display_device::Rational>(&*rate)) {
+      return std::format("{}/{}", r->m_numerator, r->m_denominator);
+    }
+    return std::format("{}", std::get<double>(*rate));
+  }
+}  // namespace
+
+namespace {
   using config_option_e = config::video_t::dd_t::config_option_e;
   using device_prep_t = display_device::SingleDisplayConfiguration::DevicePreparation;
 
@@ -268,7 +280,8 @@ TEST_P(ParseRefreshRateOption, IntegrationTest) {
   rtsp_stream::launch_session_t session {};
   if (const auto *client_refresh_rate {std::get_if<client_fps_t>(&input_refresh_rate)}; client_refresh_rate) {
     video_config.dd.manual_refresh_rate = {};
-    session.fps = *client_refresh_rate;
+    // Apollo passes the client's frame rate in millihertz.
+    session.fps = *client_refresh_rate * 1000;
   } else {
     video_config.dd.manual_refresh_rate = std::get<std::string>(input_refresh_rate);
     session.fps = {};
@@ -283,7 +296,9 @@ TEST_P(ParseRefreshRateOption, IntegrationTest) {
       expected_refresh_rate = *valid_refresh_rate_option;
     }
 
-    EXPECT_EQ(std::get<display_device::SingleDisplayConfiguration>(result).m_refresh_rate, expected_refresh_rate);
+    const auto &actual_refresh_rate = std::get<display_device::SingleDisplayConfiguration>(result).m_refresh_rate;
+    EXPECT_TRUE(display_device::refresh_rates_equal(actual_refresh_rate, expected_refresh_rate))
+      << "actual: " << rate_str(actual_refresh_rate) << ", expected: " << rate_str(expected_refresh_rate);
   }
 }
 
@@ -485,7 +500,7 @@ namespace {
         video_config.dd.refresh_rate_option = disabled;
       } else if (const auto *auto_fps {std::get_if<auto_value_t<fps_t>>(&input_fps)}; auto_fps) {
         video_config.dd.refresh_rate_option = automatic;
-        session.fps = auto_fps->value;
+        session.fps = auto_fps->value * 1000;  // millihertz, as Apollo passes it
       } else {
         const auto [manual_fps] = std::get<manual_value_t<fps_t>>(input_fps);
         video_config.dd.refresh_rate_option = manual;
@@ -505,7 +520,9 @@ namespace {
       const auto &parsed_config = std::get<display_device::SingleDisplayConfiguration>(result);
 
       EXPECT_EQ(parsed_config.m_resolution, expected_resolution);
-      EXPECT_EQ(parsed_config.m_refresh_rate, expected_refresh_rate ? std::make_optional(display_device::FloatingPoint {*expected_refresh_rate}) : std::nullopt);
+      const auto expected = expected_refresh_rate ? std::make_optional(display_device::FloatingPoint {*expected_refresh_rate}) : std::nullopt;
+      EXPECT_TRUE(display_device::refresh_rates_equal(parsed_config.m_refresh_rate, expected))
+        << "actual: " << rate_str(parsed_config.m_refresh_rate) << ", expected: " << rate_str(expected);
     }
   }
 }  // namespace

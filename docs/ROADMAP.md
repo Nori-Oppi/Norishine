@@ -87,8 +87,10 @@ deliberately broken, but is not verified until CI exists for it.
 - **M0.2** Clean Windows build (**done**; see `docs/DEVELOPMENT.md`); installer (**planned**).
   Needed two fixes to Apollo itself and a newer FFmpeg for AMD encoders
   (`docs/UPSTREAM-SYNC.md`).
-- **M0.3** Unit tests build and run: 195 of 231 pass (**done**); fix the 33 stale tests
-  listed in `docs/KNOWN-ISSUES.md` and add CI for Windows build and tests (**planned**).
+- **M0.3** Unit tests build and run, all pass (**done**); CI builds on Windows and runs
+  the tests (`.github/workflows/ci.yml`, **done**). Fixing the stale tests found one real
+  Apollo bug: display mode remapping by FPS never matched with the automatic refresh
+  rate option.
 - **M0.4** Port Sunshine security fixes, each with a test. **Done:** control packet
   parsing, input packet validation, exact client certificate match, pairing request IDs
   (adapted to OTP), log redaction. **Next:** bounded hex parsing and the remaining

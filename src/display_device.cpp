@@ -12,6 +12,8 @@
 #include <display_device/json.h>
 #include <display_device/retry_scheduler.h>
 #include <display_device/settings_manager_interface.h>
+#include <cmath>
+#include <cstdint>
 #include <mutex>
 #include <regex>
 
@@ -586,7 +588,7 @@ namespace display_device {
         }
 
         // Note: at this point config should already have parsed refresh rate set.
-        if (parsed_entry->requested_fps && parsed_entry->requested_fps != config.m_refresh_rate) {
+        if (parsed_entry->requested_fps && !refresh_rates_equal(parsed_entry->requested_fps, config.m_refresh_rate)) {
           BOOST_LOG(verbose) << "Skipping remapping because requested FPS do not match! Entry:\n"
                              << entry_to_string(entry);
           continue;
@@ -872,5 +874,26 @@ namespace display_device {
     }
 
     return config;
+  }
+  bool refresh_rates_equal(const std::optional<FloatingPoint> &lhs, const std::optional<FloatingPoint> &rhs) {
+    if (!lhs || !rhs) {
+      return !lhs && !rhs;
+    }
+
+    const auto *lhs_rational = std::get_if<Rational>(&*lhs);
+    const auto *rhs_rational = std::get_if<Rational>(&*rhs);
+    if (lhs_rational && rhs_rational) {
+      // Cross-multiply in 64 bits: exact, and no division by a zero denominator.
+      return static_cast<std::uint64_t>(lhs_rational->m_numerator) * rhs_rational->m_denominator ==
+             static_cast<std::uint64_t>(rhs_rational->m_numerator) * lhs_rational->m_denominator;
+    }
+
+    const auto to_double = [](const FloatingPoint &value) {
+      if (const auto *rational = std::get_if<Rational>(&value)) {
+        return rational->m_denominator == 0 ? 0.0 : static_cast<double>(rational->m_numerator) / rational->m_denominator;
+      }
+      return std::get<double>(value);
+    };
+    return std::abs(to_double(*lhs) - to_double(*rhs)) < 1e-6;
   }
 }  // namespace display_device

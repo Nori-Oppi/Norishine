@@ -28,7 +28,7 @@ Run from `build/tests` with `C:\msys64\ucrt64\bin` on `PATH`:
 test_sunshine.exe --gtest_filter=-MouseInputs/*:Configurations/AudioTest.*
 ```
 
-Known failures are listed in [KNOWN-ISSUES.md](KNOWN-ISSUES.md).
+All tests pass; see [KNOWN-ISSUES.md](KNOWN-ISSUES.md) for the suites skipped locally.
 
 ## Running a development host next to an installed one
 

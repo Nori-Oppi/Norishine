@@ -162,4 +162,14 @@ namespace display_device {
    * @examples_end
    */
   [[nodiscard]] std::variant<failed_to_parse_tag_t, configuration_disabled_tag_t, SingleDisplayConfiguration> parse_configuration(const config::video_t &video_config, const rtsp_stream::launch_session_t &session);
+
+  /**
+   * @brief Compare two refresh rates by value.
+   *
+   * `Rational`'s own `==` compares numerator and denominator separately, so the
+   * session's 60 Hz (`60000/1000`, Apollo passes millihertz) differs from a configured
+   * `60` (`60/1`).
+   * @return `true` if both are empty, or both are set and equal in value.
+   */
+  [[nodiscard]] bool refresh_rates_equal(const std::optional<FloatingPoint> &lhs, const std::optional<FloatingPoint> &rhs);
 }  // namespace display_device

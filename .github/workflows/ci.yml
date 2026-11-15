@@ -1,0 +1,93 @@
+---
+name: CI
+permissions: {}
+
+on:
+  push:
+    branches:
+      - master
+      - 'baseline/**'
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows build and tests
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e  # v2.33.0
+        with:
+          msystem: UCRT64
+          update: true
+          # Same package list as docs/DEVELOPMENT.md
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-toolchain
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-cppwinrt
+            mingw-w64-ucrt-x86_64-curl
+            mingw-w64-ucrt-x86_64-MinHook
+            mingw-w64-ucrt-x86_64-miniupnpc
+            mingw-w64-ucrt-x86_64-nsis
+            mingw-w64-ucrt-x86_64-onevpl
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-opus
+            mingw-w64-ucrt-x86_64-nlohmann-json
+
+      # The official Node.js, not MSYS2's (see docs/building.md).
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 'lts/*'
+
+      - name: Node.js path
+        shell: pwsh
+        run: |
+          $dir = Split-Path -Parent (Get-Command node).Source
+          echo "NODEJS_PATH=$dir" >> $env:GITHUB_ENV
+
+      - name: Configure
+        env:
+          PROCESSOR_ARCHITECTURE: AMD64
+        run: |
+          export PATH="$PATH:$(cygpath "$NODEJS_PATH")"
+          cmake -B build -G Ninja -S . -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build
+        run: |
+          export PATH="$PATH:$(cygpath "$NODEJS_PATH")"
+          echo "::add-matcher::.github/matchers/gcc.json"
+          ninja -C build
+          echo "::remove-matcher owner=gcc::"
+
+      - name: Run tests
+        id: test
+        working-directory: build/tests
+        run: ./test_sunshine.exe --gtest_color=yes --gtest_output=xml:test_results.xml
+
+      - name: Upload test results
+        if: always() && (steps.test.outcome == 'success' || steps.test.outcome == 'failure')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: test-results-windows
+          path: |
+            build/tests/test_results.xml
+            build/tests/*.log
+          if-no-files-found: warn
