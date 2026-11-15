@@ -3,8 +3,10 @@
  * @brief Miscellaneous definitions for Windows.
  */
 // standard includes
+#include <array>
 #include <csignal>
 #include <filesystem>
+#include <format>
 #include <iomanip>
 #include <iterator>
 #include <set>
@@ -1064,16 +1066,33 @@ namespace platf {
    * @brief Open a url in the default web browser.
    * @param url The url to open.
    */
+  std::wstring make_url_launch_command(const std::wstring &command_processor, const std::wstring &url) {
+    return std::format(LR"({} /d /v:off /c start "" {})", escape_argument(command_processor), escape_argument_for_cmd(escape_argument(url)));
+  }
+
+  /**
+   * @brief Open a URL through the Windows shell in the user's session (Sunshine c8ea783c).
+   * @details cmd's start command performs shell activation in the user's process context,
+   * which also works for packaged (MSIX) browsers.
+   */
   void open_url(const std::string &url) {
+    std::array<wchar_t, MAX_PATH> system_directory;
+    const auto length = GetSystemDirectoryW(system_directory.data(), system_directory.size());
+    if (!length || length >= system_directory.size()) {
+      BOOST_LOG(warning) << "Couldn't locate Windows command processor to open url ["sv << url << ']';
+      return;
+    }
+    // Use the system command processor and disable AutoRun and delayed environment expansion.
+    const auto command = to_utf8(make_url_launch_command(std::wstring {system_directory.data(), length} + L"\\cmd.exe", from_utf8(url)));
     boost::process::v1::environment _env = boost::this_process::environment();
     auto working_dir = boost::filesystem::path();
     std::error_code ec;
 
-    auto child = run_command(false, false, url, working_dir, _env, nullptr, ec, nullptr);
+    auto child = run_command(false, false, command, working_dir, _env, nullptr, ec, nullptr);
     if (ec) {
       BOOST_LOG(warning) << "Couldn't open url ["sv << url << "]: System: "sv << ec.message();
     } else {
-      BOOST_LOG(info) << "Opened url ["sv << url << "]"sv;
+      BOOST_LOG(info) << "Opening url ["sv << url << "]"sv;
       child.detach();
     }
   }

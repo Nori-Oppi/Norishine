@@ -16,6 +16,14 @@ namespace platf {
   void print_status(const std::string_view &prefix, HRESULT status);
   HDESK syncThreadDesktop();
 
+  /**
+   * @brief Build a command that hands a URL to the Windows shell's default handler.
+   * @param command_processor Absolute path to the system command processor.
+   * @param url URL to open.
+   * @return Command line suitable for CreateProcessW().
+   */
+  std::wstring make_url_launch_command(const std::wstring &command_processor, const std::wstring &url);
+
   int64_t qpc_counter();
 
   std::chrono::nanoseconds qpc_time_difference(int64_t performance_counter1, int64_t performance_counter2);

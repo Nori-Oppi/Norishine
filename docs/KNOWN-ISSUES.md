@@ -10,9 +10,6 @@ audio devices). CI runs the full suite.
 
 ## Host
 
-- Before the first client pairs, the host's unique ID is not saved, so it changes on
-  every restart. A client that saw the host before pairing then refuses it ("Found
-  unexpected PC"). Persist the generated ID in `load_state`.
 - `QOSAddSocketToFlow() failed: 1168` warnings on loopback streams. Expected for
   127.0.0.1; check on a real network.
 - Do not run the installer on a machine with Apollo or Vibepollo yet. The service,

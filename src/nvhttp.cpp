@@ -291,10 +291,25 @@ namespace nvhttp {
     }
   }
 
+  /**
+   * @brief Give the host a new unique ID and save it right away.
+   *
+   * Clients remember a host by this ID. Saving it only when a client paired meant a host
+   * got a new ID on every start until then, and a client that had already seen it
+   * refused it as an unexpected PC.
+   */
+  void generate_and_save_unique_id() {
+    http::uuid = uuid_util::uuid_t::generate();
+    http::unique_id = http::uuid.string();
+    if (!config::sunshine.flags[config::flag::FRESH_STATE]) {
+      save_state();
+    }
+  }
+
   void load_state() {
     if (!fs::exists(config::nvhttp.file_state)) {
       BOOST_LOG(info) << "File "sv << config::nvhttp.file_state << " doesn't exist"sv;
-      http::unique_id = uuid_util::uuid_t::generate().string();
+      generate_and_save_unique_id();
       return;
     }
 
@@ -304,21 +319,25 @@ namespace nvhttp {
       in >> tree;
     } catch (std::exception &e) {
       BOOST_LOG(error) << "Couldn't read "sv << config::nvhttp.file_state << ": "sv << e.what();
+      // Keep a valid ID for this run, but never overwrite a file we could not read.
+      if (http::unique_id.empty()) {
+        http::uuid = uuid_util::uuid_t::generate();
+        http::unique_id = http::uuid.string();
+      }
       return;
     }
 
-    // Check that the file contains a "root.uniqueid" value.
-    if (!tree.contains("root") || !tree["root"].contains("uniqueid")) {
-      http::uuid = uuid_util::uuid_t::generate();
-      http::unique_id = http::uuid.string();
-      return;
+    // The file can exist without "root.uniqueid", for example when it only holds the web UI
+    // credentials. Generate one then, and save it once any paired clients are loaded:
+    // save_state() rewrites "root" from client_root.
+    const bool has_unique_id = tree.contains("root") && tree["root"].contains("uniqueid");
+    if (has_unique_id) {
+      std::string uid = tree["root"]["uniqueid"];
+      http::uuid = uuid_util::uuid_t::parse(uid);
+      http::unique_id = uid;
     }
 
-    std::string uid = tree["root"]["uniqueid"];
-    http::uuid = uuid_util::uuid_t::parse(uid);
-    http::unique_id = uid;
-
-    nlohmann::json root = tree["root"];
+    nlohmann::json root = tree.contains("root") ? tree["root"] : nlohmann::json::object();
     client_t client;  // Local client to load into
 
     // Import from the old format if available.
@@ -370,6 +389,22 @@ namespace nvhttp {
     }
 
     client_root = client;
+
+    if (!has_unique_id) {
+      generate_and_save_unique_id();
+    }
+  }
+
+  std::size_t remove_clients_with_cert(const std::string &cert) {
+    auto certificate = crypto::x509(cert);
+    if (!certificate) {
+      return 0;
+    }
+
+    return std::erase_if(client_root.named_devices, [&certificate](const p_named_cert_t &existing) {
+      auto existing_certificate = crypto::x509(existing->cert);
+      return existing_certificate && X509_cmp(existing_certificate.get(), certificate.get()) == 0;
+    });
   }
 
   void add_authorized_client(const p_named_cert_t& named_cert_p) {
@@ -784,6 +819,12 @@ namespace nvhttp {
       }
       named_cert_p->cert = std::move(client.cert);
       named_cert_p->uuid = uuid_util::uuid_t::generate().string();
+
+      // A device that pairs again replaces its old record (Sunshine 0daeb0e3). Before,
+      // save_state() kept only the first record per certificate, so the new pairing (its
+      // name and default permissions) was silently dropped and the old record stayed.
+      remove_clients_with_cert(named_cert_p->cert);
+
       // The first paired device may stream and send input; anything more is granted in
       // the web UI.
       if (client_root.named_devices.empty()) {

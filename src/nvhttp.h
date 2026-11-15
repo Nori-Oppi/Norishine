@@ -307,6 +307,16 @@ namespace nvhttp {
   bool unpair_client(std::string_view uuid);
 
   /**
+   * @brief Remove every paired client whose certificate is the given one.
+   *
+   * Used when a device pairs again, so it never has more than one record.
+   * Does not save the state; the caller does.
+   * @param cert PEM certificate.
+   * @return Number of records removed.
+   */
+  std::size_t remove_clients_with_cert(const std::string &cert);
+
+  /**
    * @brief Get all paired clients.
    * @return The list of all paired clients.
    * @examples
