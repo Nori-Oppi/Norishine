@@ -310,10 +310,15 @@
     _allow_view: 0x06000000,
     _all_actions: 0x07000000,
 
+    // Management permission group (Norilight, /api/v1 on the HTTPS port)
+    manage_read: 0x10000000,
+    manage_write: 0x20000000,
+    _all_manage: 0x30000000,
+
     // Special permissions
     _default: 0x03000000,
     _no: 0x00000000,
-    _all: 0x071F1F00
+    _all: 0x371F1F00
   };
 
   const permissionGroups = [
@@ -340,6 +345,15 @@
       },
       {
         name: 'server_cmd',
+        suppressed_by: []
+      }
+    ] },
+    { name: 'Manage', permissions: [
+      {
+        name: 'manage_read',
+        suppressed_by: ['manage_write']
+      }, {
+        name: 'manage_write',
         suppressed_by: []
       }
     ] },

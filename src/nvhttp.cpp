@@ -24,6 +24,7 @@
 
 // local includes
 #include "config.h"
+#include "config_schema.h"
 #include "display_device.h"
 #include "file_handler.h"
 #include "globals.h"
@@ -1240,12 +1241,139 @@ namespace nvhttp {
       tree.put("root.state", "SUNSHINE_SERVER_FREE");
     }
 
+    // Norishine management API (roadmap D4): one optional element that Moonlight and
+    // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
+    tree.put("root.Norishine.ApiVersion", API_VERSION);
+    tree.put("root.Norishine.Features", "status,config.schema,config.read,config.write");
+
     std::ostringstream data;
 
     pt::write_xml(data, tree);
     response->write(data.str());
     response->close_connection_after_response = true;
   }
+
+  /**
+   * @brief Management API for paired clients (/api/v1 on the HTTPS port).
+   *
+   * Clients authenticate with the certificate they paired with, as for every HTTPS
+   * request; each call also needs a management permission, which is never granted by
+   * default (crypto::PERM::manage_read, crypto::PERM::manage_write).
+   */
+  namespace api {
+    void send_json(resp_https_t response, SimpleWeb::StatusCode code, const nlohmann::json &body) {
+      SimpleWeb::CaseInsensitiveMultimap headers;
+      headers.emplace("Content-Type", "application/json");
+      response->write(code, body.dump(), headers);
+      response->close_connection_after_response = true;
+    }
+
+    /**
+     * @brief Check a permission; answers 403 when the device lacks it.
+     * @param any Any one of these permission bits is enough.
+     */
+    bool allowed(resp_https_t response, req_https_t request, PERM any, std::string_view what) {
+      auto named_cert_p = get_verified_cert(request);
+      if (!!(named_cert_p->perm & any)) {
+        return true;
+      }
+      BOOST_LOG(info) << "Management API: "sv << what << " denied for ["sv << named_cert_p->name << "] ("sv << (uint32_t) named_cert_p->perm << ')';
+      send_json(response, SimpleWeb::StatusCode::client_error_forbidden, {
+        {"status", false},
+        {"error", "This device may not " + std::string {what} + ". Grant it in the host's web UI, under paired devices."},
+      });
+      return false;
+    }
+
+    // Changing settings includes reading them.
+    constexpr auto read_perm = PERM::_all_manage;
+
+    void status(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, read_perm, "read host status")) {
+        return;
+      }
+
+      auto named_cert_p = get_verified_cert(request);
+      nlohmann::json app = nullptr;
+      if (int id = proc::proc.running(); id > 0) {
+        auto uuid = proc::proc.get_running_app_uuid();
+        std::string name;
+        for (const auto &ctx : proc::proc.get_apps()) {
+          if (ctx.uuid == uuid) {
+            name = ctx.name;
+          }
+        }
+        app = {{"id", id}, {"uuid", uuid}, {"name", name}};
+      }
+
+      send_json(response, SimpleWeb::StatusCode::success_ok, {
+        {"status", true},
+        {"api_version", API_VERSION},
+        {"hostname", config::nvhttp.sunshine_name},
+        {"version", PROJECT_VERSION},
+        {"platform", SUNSHINE_PLATFORM},
+        {"uniqueid", http::unique_id},
+        {"running_app", app},
+        {"active_sessions", rtsp_stream::session_count()},
+        {"device", {{"name", named_cert_p->name}, {"permissions", (uint32_t) named_cert_p->perm}}},
+      });
+    }
+
+    void config_schema(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, read_perm, "read host settings")) {
+        return;
+      }
+      auto body = config::schema::describe();
+      body["status"] = true;
+      send_json(response, SimpleWeb::StatusCode::success_ok, body);
+    }
+
+    void config_get(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, read_perm, "read host settings")) {
+        return;
+      }
+      auto body = config::schema::read_config_file(config::sunshine.config_file);
+      body["status"] = true;
+      send_json(response, SimpleWeb::StatusCode::success_ok, body);
+    }
+
+    void config_patch(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, PERM::manage_write, "change host settings")) {
+        return;
+      }
+
+      auto content_type = request->header.find("content-type");
+      if (content_type == request->header.end() || content_type->second.find("application/json") == std::string::npos) {
+        send_json(response, SimpleWeb::StatusCode::client_error_unsupported_media_type, {{"status", false}, {"error", "Content-Type must be application/json"}});
+        return;
+      }
+
+      auto input = nlohmann::json::parse(request->content.string(), nullptr, false);
+      if (input.is_discarded()) {
+        send_json(response, SimpleWeb::StatusCode::client_error_bad_request, {{"status", false}, {"error", "Invalid JSON"}});
+        return;
+      }
+
+      auto change = config::schema::validate_change(input);
+      if (!change.errors.empty()) {
+        send_json(response, SimpleWeb::StatusCode::client_error_bad_request, {{"status", false}, {"errors", change.errors}});
+        return;
+      }
+
+      auto result = config::schema::apply_change(change, config::sunshine.config_file);
+      if (!result.written) {
+        send_json(response, SimpleWeb::StatusCode::server_error_internal_server_error, {{"status", false}, {"error", "Couldn't write the config file"}});
+        return;
+      }
+
+      BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] changed settings: "sv << result.changed.dump();
+      send_json(response, SimpleWeb::StatusCode::success_ok, {{"status", true}, {"changed", result.changed}, {"restart_required", result.restart_required}});
+    }
+  }  // namespace api
 
   nlohmann::json get_all_clients() {
     nlohmann::json named_cert_nodes = nlohmann::json::array();
@@ -1963,6 +2091,10 @@ namespace nvhttp {
     https_server.resource["^/cancel$"]["GET"] = cancel;
     https_server.resource["^/actions/clipboard$"]["GET"] = getClipboard;
     https_server.resource["^/actions/clipboard$"]["POST"] = setClipboard;
+    https_server.resource["^/api/v1/status$"]["GET"] = api::status;
+    https_server.resource["^/api/v1/config/schema$"]["GET"] = api::config_schema;
+    https_server.resource["^/api/v1/config$"]["GET"] = api::config_get;
+    https_server.resource["^/api/v1/config$"]["PATCH"] = api::config_patch;
 
     https_server.config.reuse_address = true;
     https_server.config.address = net::af_to_any_address_string(address_family);

@@ -1102,9 +1102,6 @@ namespace confighttp {
     response->write(code, output_tree.dump(), headers);
   }
 
-  /// Serializes read-modify-write cycles of the config file.
-  std::mutex config_file_mutex;
-
   /**
    * @brief Get the settings schema: every setting with its type, default and limits.
    * @param response The HTTP response object.
@@ -1141,8 +1138,7 @@ namespace confighttp {
 
     print_req(request);
 
-    std::lock_guard lock {config_file_mutex};
-    auto output_tree = config::schema::read_values(file_handler::read_file(config::sunshine.config_file.c_str()));
+    auto output_tree = config::schema::read_config_file(config::sunshine.config_file);
     output_tree["status"] = true;
     send_response(response, output_tree);
   }
@@ -1184,27 +1180,13 @@ namespace confighttp {
       return;
     }
 
-    std::lock_guard lock {config_file_mutex};
-    const auto current = file_handler::read_file(config::sunshine.config_file.c_str());
-    const auto updated = config::update_config_text(current, change.set, change.reset);
-
-    nlohmann::json changed = nlohmann::json::array();
-    bool restart_required = false;
-    for (const auto &[key, _] : change.set) {
-      changed.push_back(key);
-      restart_required = restart_required || config::schema::find(key)->restart_required;
-    }
-    for (const auto &key : change.reset) {
-      changed.push_back(key);
-      restart_required = restart_required || config::schema::find(key)->restart_required;
-    }
-
-    if (updated != current && file_handler::write_file(config::sunshine.config_file.c_str(), updated)) {
+    auto result = config::schema::apply_change(change, config::sunshine.config_file);
+    if (!result.written) {
       send_json(response, SimpleWeb::StatusCode::server_error_internal_server_error, {{"status", false}, {"error", "Couldn't write the config file"}});
       return;
     }
 
-    send_response(response, {{"status", true}, {"changed", changed}, {"restart_required", restart_required && updated != current}});
+    send_response(response, {{"status", true}, {"changed", result.changed}, {"restart_required", result.restart_required}});
   }
 
   /**

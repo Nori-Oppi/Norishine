@@ -122,7 +122,8 @@ deliberately broken, but is not verified until CI exists for it.
 
 ### Phase 4: Nori integration
 - **M5** Capability element in serverinfo; client-certificate authentication for
-  `/api/v1`; management permission bits and the UI to grant them.
+  `/api/v1`; management permission bits and the UI to grant them (**done**: see
+  `docs/api.md`, "Management API for paired clients").
 - **M6** Norilight: host status and read-only settings view, then editing.
 - **M7** Apps, clients, displays and active sessions managed from Norilight.
 
