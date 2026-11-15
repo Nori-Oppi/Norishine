@@ -1325,7 +1325,9 @@ namespace nvhttp {
       if (!allowed(response, request, read_perm, "read host settings")) {
         return;
       }
-      auto body = config::schema::describe();
+      auto query = request->parse_query_string();
+      auto locale = query.find("locale");
+      auto body = config::schema::describe(locale == query.end() ? std::string {} : locale->second);
       body["status"] = true;
       send_json(response, SimpleWeb::StatusCode::success_ok, body);
     }

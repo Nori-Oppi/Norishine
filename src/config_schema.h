@@ -132,8 +132,14 @@ namespace config::schema {
 
   /**
    * @brief The schema as JSON, for GET /api/v1/config/schema.
+   *
+   * Each setting gets a readable `title` and `help` from the web UI's locale file, so
+   * clients without those files (Norilight) can show them; English fills any gaps.
+   * @param locale A locale from the `locale` setting's choices; empty or unknown uses the
+   *               host's own locale.
+   * @param locale_dir Folder with the locale files (default: the web UI's).
    */
-  nlohmann::json describe();
+  nlohmann::json describe(std::string_view locale = {}, const std::string &locale_dir = {});
 
   /**
    * @brief A validated change request.

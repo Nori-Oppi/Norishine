@@ -1116,7 +1116,9 @@ namespace confighttp {
 
     print_req(request);
 
-    auto output_tree = config::schema::describe();
+    auto query = request->parse_query_string();
+    auto locale = query.find("locale");
+    auto output_tree = config::schema::describe(locale == query.end() ? std::string {} : locale->second);
     output_tree["status"] = true;
     send_response(response, output_tree);
   }
