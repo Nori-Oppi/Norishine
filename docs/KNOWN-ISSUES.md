@@ -24,6 +24,7 @@ real cursor) and `Configurations/AudioTest.*` (opens real audio devices).
   unexpected PC"). Persist the generated ID in `load_state`.
 - `QOSAddSocketToFlow() failed: 1168` warnings on loopback streams. Expected for
   127.0.0.1; check on a real network.
-- Install identity is still Apollo's (service `ApolloService`, install folder, config
-  folder). Vibepollo uses the same service name, so Norishine must not be installed
-  until the rename (M0.1) changes these.
+- Do not run the installer on a machine with Apollo or Vibepollo yet. The service,
+  install folder, config folder and firewall rule are now Norishine's own, but the
+  installer still (re)creates and offers to remove the SudoVDA virtual display device
+  (`root\sudomaker\sudovda`), which those hosts share.

@@ -17,6 +17,9 @@ Configure downloads the pinned FFmpeg package (about 140 MB, SHA256-verified) in
 If configure reports FFmpeg binaries for `Windows-` (empty architecture), the shell did
 not pass `PROCESSOR_ARCHITECTURE`; set it to `AMD64`.
 
+A build folder configured before the Norishine rename keeps Apollo's publisher name
+and support URL in its CMake cache. Reset them with `cmake -U 'SUNSHINE_PUBLISHER_*' build`.
+
 ## Tests
 
 Run from `build/tests` with `C:\msys64\ucrt64\bin` on `PATH`:

@@ -80,9 +80,10 @@ deliberately broken, but is not verified until CI exists for it.
 
 ### Phase 2: establish the baseline
 - **M0.1** Merge Apollo history (**done**); rename project identifiers and branding
-  without changing file formats or ports (**planned**). The rename must give Norishine
-  its own Windows service name, install folder and config folder: Apollo and Vibepollo
-  both use `ApolloService`. Preserve licence, NOTICE and attribution.
+  without changing file formats or ports (**done**): service `NorishineService`,
+  install and config folder `Norishine`, firewall rule, logo and tray icons, web UI
+  text, default mDNS name. Kept: `APOLLO_*` app environment variables (so existing app
+  scripts work) and the Linux app ID `dev.lizardbyte.app.Sunshine`.
 - **M0.2** Clean Windows build (**done**; see `docs/DEVELOPMENT.md`); installer (**planned**).
   Needed two fixes to Apollo itself and a newer FFmpeg for AMD encoders
   (`docs/UPSTREAM-SYNC.md`).
