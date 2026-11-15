@@ -91,3 +91,14 @@ jobs:
             build/tests/test_results.xml
             build/tests/*.log
           if-no-files-found: warn
+
+      - name: Package installer
+        working-directory: build
+        run: cpack -G NSIS --config ./CPackConfig.cmake
+
+      - name: Upload installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: installer-windows
+          path: build/cpack_artifacts/*.exe
+          if-no-files-found: error

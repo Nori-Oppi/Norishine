@@ -11,6 +11,16 @@ cmake -B build -G Ninja -S . -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
 ninja -C build
 ```
 
+Installer (NSIS), written to `build/cpack_artifacts/Norishine.exe`; CI builds it too:
+
+```bash
+cd build && cpack -G NSIS --config ./CPackConfig.cmake
+```
+
+Configure also downloads `nefconc.exe` (nefcon, SHA256-verified), which the installer
+uses to create the SudoVDA device. `SudoVDA.dll` is committed, from the Apollo 0.4.6
+release, and must match `sudovda.cat`.
+
 Configure downloads the pinned FFmpeg package (about 140 MB, SHA256-verified) into
 `build/_deps`. See `cmake/dependencies/ffmpeg.cmake`.
 

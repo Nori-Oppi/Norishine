@@ -30,6 +30,23 @@ install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/drivers/sudovda"
         DESTINATION "drivers"
         COMPONENT sudovda)
 
+# nefconc creates and removes the SudoVDA device node (drivers/sudovda/sudovda.ps1)
+set(NEFCON_VERSION "1.21.0")
+set(NEFCON_ARCHIVE "${CMAKE_BINARY_DIR}/nefcon_v${NEFCON_VERSION}.zip")
+file(DOWNLOAD
+        "https://github.com/nefarius/nefcon/releases/download/v${NEFCON_VERSION}/nefcon_v${NEFCON_VERSION}.zip"
+        ${NEFCON_ARCHIVE}
+        EXPECTED_HASH SHA256=4c8e68f6b663598d77b7c3f76459b16fad00994e53ea8af0bd106a805dd5c18b
+        TIMEOUT 60
+)
+file(ARCHIVE_EXTRACT
+        INPUT ${NEFCON_ARCHIVE}
+        DESTINATION "${CMAKE_BINARY_DIR}/nefcon"
+        PATTERNS "x64/nefconc.exe")
+install(FILES "${CMAKE_BINARY_DIR}/nefcon/x64/nefconc.exe"
+        DESTINATION "drivers/sudovda"
+        COMPONENT sudovda)
+
 # Mandatory scripts
 install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/service/"
         DESTINATION "scripts"
