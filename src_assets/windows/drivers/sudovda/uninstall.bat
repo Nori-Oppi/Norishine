@@ -1,9 +1,6 @@
 @echo off
-
-pushd %~dp0
-
-nefconc.exe --remove-device-node --hardware-id root\sudomaker\sudovda --class-guid "4D36E968-E325-11CE-BFC1-08002BE10318"
-
-popd
-
+rem Removes the SudoVDA device, unless Apollo or Vibepollo also uses it. Pass -Force to remove it anyway.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0sudovda.ps1" -Action uninstall %*
+set RESULT=%ERRORLEVEL%
 pause
+exit /b %RESULT%

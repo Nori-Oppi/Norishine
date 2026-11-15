@@ -32,10 +32,7 @@ if %ERRORLEVEL%==0 (
     echo !CONTENT!> "%SERVICE_CONFIG_FILE%"
 )
 
-rem Stop and delete the legacy SunshineSvc service
-net stop sunshinesvc
-sc delete sunshinesvc
-
-rem Stop and delete the new NorishineService service
+rem Stop and delete the NorishineService service. Never touch SunshineSvc or ApolloService:
+rem those belong to Sunshine, Apollo or Vibepollo installs on the same machine.
 net stop NorishineService
 sc delete NorishineService
