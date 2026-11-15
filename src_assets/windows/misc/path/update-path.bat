@@ -13,9 +13,12 @@ rem Get Norishine root directory
 for %%I in ("%~dp0\..") do set "ROOT_DIR=%%~fI"
 echo Norishine root directory: !ROOT_DIR!
 
-rem Define directories to add to path
-set "PATHS_TO_MANAGE[0]=!ROOT_DIR!"
-set "PATHS_TO_MANAGE[1]=!ROOT_DIR!\tools"
+rem Only bin\ goes on PATH: it holds norishine.cmd. The install folder itself has sunshine.exe,
+rem which Apollo, Vibepollo and Sunshine also put on PATH under the same name.
+set "BIN_DIR=!ROOT_DIR!\bin"
+rem Folders earlier versions added; removed on add and remove.
+set "OLD_DIRS[0]=!ROOT_DIR!"
+set "OLD_DIRS[1]=!ROOT_DIR!\tools"
 
 rem System path registry location
 set "KEY_NAME=HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
@@ -24,93 +27,69 @@ set "VALUE_NAME=Path"
 rem Get the current path
 for /f "tokens=2*" %%A in ('reg query "%KEY_NAME%" /v "%VALUE_NAME%"') do set "CURRENT_PATH=%%B"
 echo Current path: !CURRENT_PATH!
+set "ORIGINAL_PATH=!CURRENT_PATH!"
 
-rem Check if adding to path
 if /i "%~1"=="add" (
-    set "NEW_PATH=!CURRENT_PATH!"
-
-    rem Process each directory to add
-    for /L %%i in (0,1,1) do (
-        set "DIR_TO_ADD=!PATHS_TO_MANAGE[%%i]!"
-
-        rem Check if path already contains this directory
-        echo "!CURRENT_PATH!" | findstr /i /c:"!DIR_TO_ADD!" > nul
-        if !ERRORLEVEL!==0 (
-            echo !DIR_TO_ADD! already in path
-        ) else (
-            echo Adding to path: !DIR_TO_ADD!
-            set "NEW_PATH=!NEW_PATH!;!DIR_TO_ADD!"
-        )
-    )
-
-    rem Only update if path was changed
-    if "!NEW_PATH!" neq "!CURRENT_PATH!" (
-        rem Set the new path in the registry
-        set "PATH_TO_WRITE=!NEW_PATH!"
-        call :write_path
-        if !ERRORLEVEL!==0 (
-            echo Successfully added Norishine directories to PATH
-        ) else (
-            echo Failed to add Norishine directories to PATH
-        )
+    for /L %%i in (0,1,1) do call :remove_entry "!OLD_DIRS[%%i]!"
+    call :has_entry "!BIN_DIR!"
+    if !ERRORLEVEL!==0 (
+        echo !BIN_DIR! already in path
     ) else (
-        echo No changes needed to PATH
+        echo Adding to path: !BIN_DIR!
+        set "CURRENT_PATH=!CURRENT_PATH!;!BIN_DIR!"
     )
-    exit /b !ERRORLEVEL!
+    goto apply
 )
 
-rem Check if removing from path
 if /i "%~1"=="remove" (
-    set "CHANGES_MADE=0"
-
-    rem Process each directory to remove
-    for /L %%i in (0,1,1) do (
-        set "DIR_TO_REMOVE=!PATHS_TO_MANAGE[%%i]!"
-
-        rem Check if path contains this directory
-        echo "!CURRENT_PATH!" | findstr /i /c:"!DIR_TO_REMOVE!" > nul
-        if !ERRORLEVEL!==0 (
-            echo Removing from path: !DIR_TO_REMOVE!
-
-            rem Build a new path by parsing and filtering the current path
-            set "NEW_PATH="
-            for %%p in ("!CURRENT_PATH:;=" "!") do (
-                set "PART=%%~p"
-                if /i "!PART!" NEQ "!DIR_TO_REMOVE!" (
-                    if defined NEW_PATH (
-                        set "NEW_PATH=!NEW_PATH!;!PART!"
-                    ) else (
-                        set "NEW_PATH=!PART!"
-                    )
-                )
-            )
-
-            set "CURRENT_PATH=!NEW_PATH!"
-            set "CHANGES_MADE=1"
-        ) else (
-            echo !DIR_TO_REMOVE! not found in path
-        )
-    )
-
-    rem Only update if path was changed
-    if "!CHANGES_MADE!"=="1" (
-        rem Set the new path in the registry
-        set "PATH_TO_WRITE=!CURRENT_PATH!"
-        call :write_path
-        if !ERRORLEVEL!==0 (
-            echo Successfully removed Norishine directories from PATH
-        ) else (
-            echo Failed to remove Norishine directories from PATH
-        )
-    ) else (
-        echo No changes needed to PATH
-    )
-    exit /b !ERRORLEVEL!
+    call :remove_entry "!BIN_DIR!"
+    for /L %%i in (0,1,1) do call :remove_entry "!OLD_DIRS[%%i]!"
+    goto apply
 )
 
 echo Unknown parameter: %~1
 echo Usage: %0 [add^|remove]
 exit /b 1
+
+rem Write the path if it changed.
+:apply
+if "!CURRENT_PATH!"=="!ORIGINAL_PATH!" (
+    echo No changes needed to PATH
+    exit /b 0
+)
+set "PATH_TO_WRITE=!CURRENT_PATH!"
+call :write_path
+if !ERRORLEVEL!==0 (
+    echo Updated PATH
+) else (
+    echo Failed to update PATH
+)
+exit /b !ERRORLEVEL!
+
+rem @brief Exit code 0 when %~1 is an entry of CURRENT_PATH (whole entry, not a substring).
+:has_entry
+for %%p in ("!CURRENT_PATH:;=" "!") do (
+    if /i "%%~p"=="%~1" exit /b 0
+)
+exit /b 1
+
+rem @brief Remove every CURRENT_PATH entry equal to %~1.
+:remove_entry
+call :has_entry "%~1"
+if !ERRORLEVEL! neq 0 exit /b 0
+echo Removing from path: %~1
+set "NEW_PATH="
+for %%p in ("!CURRENT_PATH:;=" "!") do (
+    if /i "%%~p" neq "%~1" (
+        if defined NEW_PATH (
+            set "NEW_PATH=!NEW_PATH!;%%~p"
+        ) else (
+            set "NEW_PATH=%%~p"
+        )
+    )
+)
+set "CURRENT_PATH=!NEW_PATH!"
+exit /b 0
 
 rem @brief Write PATH_TO_WRITE to KEY_NAME\VALUE_NAME without corrupting trailing backslashes
 rem (Sunshine 4dadc7d4).

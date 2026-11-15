@@ -36,6 +36,7 @@ $NorishineConfig = Join-Path $NorishineRoot 'config'
 $RecordFile = Join-Path $NorishineConfig 'other_host.json'
 $SideBySidePort = 48989
 $PortComment = '# Added by the Norishine installer: Apollo or Vibepollo uses the default port'
+$CopyMarker = 'norishine_copy.txt'
 
 function Write-Log([string]$Message) { Write-Host "[other hosts] $Message" }
 
@@ -117,7 +118,7 @@ function Update-Paths([string]$ConfigDir, [string]$FromRoot, [string]$ToRoot) {
 function Copy-Config([string]$From, [string]$To) {
   New-Item -ItemType Directory -Force -Path $To | Out-Null
   foreach ($item in Get-ChildItem -LiteralPath $From -Force) {
-    if ($item.Name -eq 'logs' -or $item.Name -like '*.log' -or $item.Name -like '*.log.*') { continue }
+    if ($item.Name -eq 'logs' -or $item.Name -like '*.log' -or $item.Name -like '*.log.*' -or $item.Name -eq $CopyMarker) { continue }
     Copy-Item -LiteralPath $item.FullName -Destination $To -Recurse -Force
   }
 }
@@ -194,6 +195,22 @@ function Remove-SideBySidePort([string]$ConfigDir) {
   }
 }
 
+# Vibepollo's uninstaller leaves its folder and tools\ on the system PATH. Removes them when
+# the folder no longer has its sunshine.exe.
+function Remove-StalePathEntries([string]$InstallDir, [string]$Key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment') {
+  if (-not $InstallDir -or (Test-Path -LiteralPath (Join-Path $InstallDir 'sunshine.exe'))) { return }
+  $stale = @($InstallDir.TrimEnd('\'), (Join-Path $InstallDir.TrimEnd('\') 'tools'))
+  $item = Get-Item -LiteralPath $Key
+  # Read unexpanded, so %SystemRoot% style entries stay as they are.
+  $raw = $item.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+  $entries = @($raw -split ';')
+  $kept = @($entries | Where-Object { $e = $_.TrimEnd('\'); -not ($stale | Where-Object { $_ -ieq $e }) })
+  if ($kept.Count -ne $entries.Count) {
+    Set-ItemProperty -LiteralPath $Key -Name 'Path' -Value ($kept -join ';') -Type ExpandString
+    Write-Log "Removed $($entries.Count - $kept.Count) leftover PATH entries of $InstallDir."
+  }
+}
+
 function Uninstall-OtherHost($OtherHost) {
   $entry = $OtherHost.Entry
   if ($entry) {
@@ -220,6 +237,7 @@ function Uninstall-OtherHost($OtherHost) {
 
   if (-not (Get-OtherHost)) {
     Write-Log "$($OtherHost.Name) is uninstalled."
+    Remove-StalePathEntries $OtherHost.InstallDir
     return $true
   }
 
@@ -230,6 +248,27 @@ function Uninstall-OtherHost($OtherHost) {
     Write-Log 'Could not uninstall it; stopped and disabled ApolloService instead.'
   }
   return $false
+}
+
+# Puts Norishine's configuration in the replaced host's config folder.
+function Copy-ConfigBack($record) {
+  $target = Join-Path $record.install_dir 'config'
+  $marker = Join-Path $target $CopyMarker
+  if (Test-Path -LiteralPath $marker) {
+    # Our copy from an earlier uninstall (upgrades uninstall too): refresh it.
+    Remove-Item -LiteralPath $target -Recurse -Force
+  } elseif ((Test-Path -LiteralPath $target) -and (Get-ChildItem -LiteralPath $target -Force)) {
+    $backup = "$target.before-norishine"
+    if (Test-Path -LiteralPath $backup) { $backup = "$backup-$(Get-Date -Format yyyyMMddHHmmss)" }
+    Move-Item -LiteralPath $target -Destination $backup
+    Write-Log "Kept the old configuration as $backup."
+  }
+  Copy-Config $NorishineConfig $target
+  Remove-Item -LiteralPath (Join-Path $target 'other_host.json') -Force -ErrorAction SilentlyContinue
+  Set-Content -LiteralPath $marker -Value 'Copy of the Norishine configuration, made when Norishine was uninstalled or upgraded.'
+  Update-Paths $target $NorishineRoot $record.install_dir
+  Protect-Credentials $target
+  Write-Log "Norishine's settings, apps and paired devices are in $target for $($record.host)."
 }
 
 # Dot-sourced (tests): define the functions only.
@@ -282,18 +321,7 @@ switch ($Action) {
       exit 0
     }
     if (-not (Test-HasState $NorishineConfig)) { exit 0 }
-    $target = Join-Path $record.install_dir 'config'
-    if ((Test-Path -LiteralPath $target) -and (Get-ChildItem -LiteralPath $target -Force)) {
-      $backup = "$target.before-norishine"
-      if (Test-Path -LiteralPath $backup) { $backup = "$backup-$(Get-Date -Format yyyyMMddHHmmss)" }
-      Move-Item -LiteralPath $target -Destination $backup
-      Write-Log "Kept the old configuration as $backup."
-    }
-    Copy-Config $NorishineConfig $target
-    Remove-Item -LiteralPath (Join-Path $target 'other_host.json') -Force -ErrorAction SilentlyContinue
-    Update-Paths $target $NorishineRoot $record.install_dir
-    Protect-Credentials $target
-    Write-Log "Norishine's settings, apps and paired devices are in $target for $($record.host)."
+    Copy-ConfigBack $record
     exit 0
   }
 }

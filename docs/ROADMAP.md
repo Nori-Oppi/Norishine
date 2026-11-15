@@ -86,7 +86,9 @@ deliberately broken, but is not verified until CI exists for it.
   scripts work) and the Linux app ID `dev.lizardbyte.app.Sunshine`.
 - **M0.2** Clean Windows build (**done**; see `docs/DEVELOPMENT.md`); installer builds
   locally and in CI and keeps the SudoVDA and ViGEmBus drivers shared with Apollo and
-  Vibepollo (**in progress**: not yet installed and tested on a machine).
+  Vibepollo. Replacing Vibepollo tested on one machine. **Deferred** until after M1:
+  fresh install without Apollo or Vibepollo, the keep-both path (port 48989), and going
+  back (uninstall Norishine, reinstall Vibepollo, settings carried back).
   Needed two fixes to Apollo itself and a newer FFmpeg for AMD encoders
   (`docs/UPSTREAM-SYNC.md`).
 - **M0.3** Unit tests build and run, all pass (**done**); CI builds on Windows and runs
@@ -98,8 +100,9 @@ deliberately broken, but is not verified until CI exists for it.
   (adapted to OTP), log redaction, bounded hex parsing, duplicate client records, audio
   and video UDP endpoints, URL opening, PATH writing. CSRF tokens follow in M3.
 - **M0.5** Smoke test streaming: Norilight pairs and streams the Desktop app (HEVC on
-  AMD AMF, D3D11VA decode) from a development host (**done**, loopback only); stock
-  Moonlight and a second machine (**planned**).
+  AMD AMF, D3D11VA decode) from a development host (**done**, loopback only), and from
+  an installed host over the network (**done**). Stock Moonlight: **deferred** until
+  after M1.
 - **M0.6** Permission defaults (**done**): the first paired device gets launch, view and
   input only (was every permission); clipboard and server commands are always granted
   explicitly. Checked end to end, with virtual displays, by `scripts/e2e/host_check.py`.

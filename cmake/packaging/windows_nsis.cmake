@@ -56,13 +56,12 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\delete-firewall-rule.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\uninstall-service.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\sunshine.exe\\\" --restore-nvprefs-undo'
-        # If Norishine replaced Apollo or Vibepollo, leave its settings where a reinstall finds
-        # them. Skipped when silent: an upgrade runs the old uninstaller silently.
-        IfSilent NoHostRestore
-            nsExec::ExecToLog \
-              'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
-                \\\"$INSTDIR\\\\scripts\\\\other-hosts.ps1\\\" -Action restore'
-        NoHostRestore:
+        nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" remove'
+        # If Norishine replaced Apollo or Vibepollo, keep a copy of its settings where a
+        # reinstall of that host finds them (also on upgrades, which uninstall silently).
+        nsExec::ExecToLog \
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+            \\\"$INSTDIR\\\\scripts\\\\other-hosts.ps1\\\" -Action restore'
         # Apollo and Vibepollo share the ViGEmBus and SudoVDA drivers. While either is
         # installed, do not offer to remove them (exit code 0 means no other host).
         nsExec::ExecToLog \
@@ -89,7 +88,6 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
             'Do you want to remove $INSTDIR (this includes the configuration, cover images, and settings)?' \
             /SD IDNO IDNO NoDelete
             RMDir /r \\\"$INSTDIR\\\"; skipped if no
-        nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" remove'
         NoDelete:
         ")
 
