@@ -332,7 +332,7 @@ namespace nvhttp {
             named_cert_p->cert = el.get<std::string>();
             named_cert_p->uuid = uuid_util::uuid_t::generate().string();
             named_cert_p->display_mode = "";
-            named_cert_p->perm = PERM::_all;
+            named_cert_p->perm = PERM::_first_device;
             named_cert_p->enable_legacy_ordering = true;
             named_cert_p->allow_client_commands = true;
             named_cert_p->always_use_virtual_display = false;
@@ -350,7 +350,9 @@ namespace nvhttp {
         named_cert_p->cert = el.value("cert", "");
         named_cert_p->uuid = el.value("uuid", "");
         named_cert_p->display_mode = el.value("display_mode", "");
-        named_cert_p->perm = (PERM)(util::get_non_string_json_value<uint32_t>(el, "perm", (uint32_t)PERM::_all)) & PERM::_all;
+        // A missing "perm" means a state file from before permissions existed (Sunshine);
+        // those clients could stream and send input, nothing more.
+        named_cert_p->perm = (PERM)(util::get_non_string_json_value<uint32_t>(el, "perm", (uint32_t)PERM::_first_device)) & PERM::_all;
         named_cert_p->enable_legacy_ordering = el.value("enable_legacy_ordering", true);
         named_cert_p->allow_client_commands = el.value("allow_client_commands", true);
         named_cert_p->always_use_virtual_display = el.value("always_use_virtual_display", false);
@@ -782,9 +784,10 @@ namespace nvhttp {
       }
       named_cert_p->cert = std::move(client.cert);
       named_cert_p->uuid = uuid_util::uuid_t::generate().string();
-      // If the device is the first one paired with the server, assign full permission.
+      // The first paired device may stream and send input; anything more is granted in
+      // the web UI.
       if (client_root.named_devices.empty()) {
-        named_cert_p->perm = PERM::_all;
+        named_cert_p->perm = PERM::_first_device;
       } else {
         named_cert_p->perm = PERM::_default;
       }

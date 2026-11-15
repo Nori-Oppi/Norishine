@@ -52,6 +52,20 @@ Apollo, Vibepollo or Sunshine keeps working. Create web UI credentials with
 `sunshine.exe <conf> --creds <user> <password>` and copy
 `src_assets/windows/assets/apps.json` into the dev folder.
 
+## End-to-end host check
+
+`scripts/e2e/host_check.py` acts as GameStream clients against a running dev host: it
+pairs through the web UI pairing API (including two requests at once), checks the
+permission defaults and that granting a permission takes effect, and launches Desktop
+with a virtual display and checks that a monitor is added and removed again. It unpairs
+every client first, so use a separate dev host for it (for example `port = 49889` with
+its own state files), never an installed one.
+
+```
+python -m venv .venv && .venv/Scripts/pip install cryptography
+.venv/Scripts/python scripts/e2e/host_check.py 127.0.0.1 49889 <webuser> <webpass>
+```
+
 To test with Norilight without touching its installed settings, copy a Norilight build
 folder elsewhere and create an empty `portable.dat` in it; settings then live in that
 folder. Add the host as `127.0.0.1:49989`.

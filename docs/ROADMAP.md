@@ -96,6 +96,9 @@ deliberately broken, but is not verified until CI exists for it.
 - **M0.5** Smoke test streaming: Norilight pairs and streams the Desktop app (HEVC on
   AMD AMF, D3D11VA decode) from a development host (**done**, loopback only); stock
   Moonlight and a second machine (**planned**).
+- **M0.6** Permission defaults (**done**): the first paired device gets launch, view and
+  input only (was every permission); clipboard and server commands are always granted
+  explicitly. Checked end to end, with virtual displays, by `scripts/e2e/host_check.py`.
 
 ### Phase 3: settings and UI
 - **M1 (first feature milestone)** Host-owned settings schema with server-side

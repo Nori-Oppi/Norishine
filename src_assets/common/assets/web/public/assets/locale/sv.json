@@ -499,7 +499,6 @@
     "otp_pair_now": "PIN genererades framgångsrikt, vill du parkoppla nu?",
     "device_management": "Enhetshantering",
     "device_management_desc": "Hantera dina parkopplade enheter och deras behörigheter.",
-    "device_management_warning": "Den första parkopplade enheten kommer att ha fulla behörigheter som standard. Andra nyligen parkopplade enheter kommer att ha begränsade behörigheter som standard.",
     "save_client_error": "Fel vid sparande av klient: ",
     "unpair_all": "Koppla från alla",
     "unpair_all_success": "Alla enheter frånkopplade.",

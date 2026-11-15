@@ -125,7 +125,10 @@ TEST_P(PairingTest, Run) {
   ASSERT_EQ(tree.get<int>("root.paired") == 1, expected.phase_4_success);
 
   if (expected.phase_4_success) {
-    ASSERT_EQ(get_all_clients().size(), clients_before + 1);
+    const auto clients = get_all_clients();
+    ASSERT_EQ(clients.size(), clients_before + 1);
+    const auto expected_perm = clients_before == 0 ? crypto::PERM::_first_device : crypto::PERM::_default;
+    EXPECT_EQ(clients.back()["perm"].get<uint32_t>(), static_cast<uint32_t>(expected_perm));
   }
 }
 

@@ -499,7 +499,6 @@
     "otp_pair_now": "PIN gerado com sucesso, você quer parear agora?",
     "device_management": "Gerenciamento de Dispositivos",
     "device_management_desc": "Gerencie os seus dispositivos pareados e suas permissões.",
-    "device_management_warning": "O primeiro dispositivo pareado terá todas as permissões ativadas por padrão. Todos dispositivos pareados depois terão por padrão o mínimo de permissões.",
     "save_client_error": "Erro salvando o cliente: ",
     "unpair_all": "Desparear todos",
     "unpair_all_success": "Todos os dispositivos foram despareados.",
