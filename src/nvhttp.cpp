@@ -12,6 +12,7 @@
 #include <format>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 
 // lib includes
@@ -1244,7 +1245,7 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
-    tree.put("root.Norishine.Features", "status,config.schema,config.read,config.write");
+    tree.put("root.Norishine.Features", "status,config.schema,config.read,config.write,restart");
 
     std::ostringstream data;
 
@@ -1374,6 +1375,23 @@ namespace nvhttp {
 
       BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] changed settings: "sv << result.changed.dump();
       send_json(response, SimpleWeb::StatusCode::success_ok, {{"status", true}, {"changed", result.changed}, {"restart_required", result.restart_required}});
+    }
+
+    void restart(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, PERM::manage_write, "restart the host")) {
+        return;
+      }
+
+      BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] restarts the host"sv;
+      send_json(response, SimpleWeb::StatusCode::success_ok, {{"status", true}});
+
+      // Answer first: platf::restart() may not return.
+      std::thread([]() {
+        std::this_thread::sleep_for(500ms);
+        proc::proc.terminate();
+        platf::restart();
+      }).detach();
     }
   }  // namespace api
 
@@ -2097,6 +2115,7 @@ namespace nvhttp {
     https_server.resource["^/api/v1/config/schema$"]["GET"] = api::config_schema;
     https_server.resource["^/api/v1/config$"]["GET"] = api::config_get;
     https_server.resource["^/api/v1/config$"]["PATCH"] = api::config_patch;
+    https_server.resource["^/api/v1/restart$"]["POST"] = api::restart;
 
     https_server.config.reuse_address = true;
     https_server.config.address = net::af_to_any_address_string(address_family);
