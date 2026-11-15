@@ -5,7 +5,11 @@
 #pragma once
 
 // standard includes
+#include <cstdint>
 #include <functional>
+#include <memory>
+#include <span>
+#include <vector>
 
 // local includes
 #include "platform/common.h"
@@ -18,6 +22,13 @@ namespace input {
   void print(void *input);
   void reset(std::shared_ptr<input_t> &input);
   void passthrough(std::shared_ptr<input_t> &input, std::vector<std::uint8_t> &&input_data, const crypto::PERM& permission);
+
+  /**
+   * @brief Check that a raw input packet's declared and actual sizes match its type.
+   *
+   * passthrough() drops packets that fail this check before reading them.
+   */
+  bool is_valid_input_packet(std::span<const std::uint8_t> packet);
 
   [[nodiscard]] std::unique_ptr<platf::deinit_t> init();
 
