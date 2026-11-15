@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Norishine</title>
+
+  <!-- Norilight's grey ring as the background -->
+  <circle cx="128" cy="128" r="128" fill="rgb(86,92,100)"/>
+
+  <!-- Apollo's two six-point stars, filled in solid: together they are the seal pup's face -->
+  <g transform="translate(128 128) scale(0.2272) translate(-512 -512)" fill="rgb(255,255,255)">
+    <g transform="matrix(1.27997,0,0,1.27997,-143.345,-143.345)">
+      <path transform="matrix(1.51135,0,0,1.51135,-71.7818,-193.324)" d="M386.266,211.675L443.827,366.986L607.111,339.18L501.389,466.686L607.111,594.191L443.827,566.385L386.266,721.696L328.704,566.385L165.42,594.191L271.143,466.686L165.42,339.18L328.704,366.986L386.266,211.675Z"/>
+      <path transform="matrix(1.26917,-0.732758,0.732758,1.26917,-512.989,237.355)" d="M512,264C556.301,340.731 638.172,388 726.774,388C682.473,464.731 682.473,559.269 726.774,636C638.172,636 556.301,683.269 512,760C467.699,683.269 385.828,636 297.226,636C341.527,559.269 341.527,464.731 297.226,388C385.828,388 467.699,340.731 512,264Z"/>
+    </g>
+  </g>
+
+  <!-- Norilight's seal pup face, scaled to sit inside the star -->
+  <g transform="translate(128 128) scale(0.74) translate(-128 -128)">
+    <!-- Whiskers: three fine, drooping hairs per side, growing out of the pads -->
+    <g fill="none" stroke="rgb(86,92,100)" stroke-width="4" stroke-linecap="round">
+      <path d="M96 135 Q68 126 40 131"/>
+      <path d="M93 142 Q64 142 41 156"/>
+      <path d="M97 149 Q74 156 56 180"/>
+      <path d="M160 135 Q188 126 216 131"/>
+      <path d="M163 142 Q192 142 215 156"/>
+      <path d="M159 149 Q182 156 200 180"/>
+    </g>
+
+    <!-- Big, wide-set, glossy eyes -->
+    <g fill="rgb(30,32,36)">
+      <ellipse cx="80" cy="98" rx="18" ry="20"/>
+      <ellipse cx="176" cy="98" rx="18" ry="20"/>
+    </g>
+    <g fill="rgb(255,255,255)">
+      <circle cx="74" cy="90" r="6"/>
+      <circle cx="170" cy="90" r="6"/>
+      <circle cx="87" cy="106" r="2.6" opacity="0.7"/>
+      <circle cx="183" cy="106" r="2.6" opacity="0.7"/>
+    </g>
+
+    <!-- Whisker pads, mouth and whisker spots -->
+    <g fill="rgb(226,230,235)">
+      <ellipse cx="106" cy="140" rx="27" ry="20"/>
+      <ellipse cx="150" cy="140" rx="27" ry="20"/>
+    </g>
+    <path d="M128 132 V146 M128 146 Q120 158 108 153 M128 146 Q136 158 148 153"
+          fill="none" stroke="rgb(86,92,100)" stroke-width="5" stroke-linecap="round"/>
+    <g fill="rgb(86,92,100)">
+      <circle cx="96" cy="135" r="2.6"/>
+      <circle cx="93" cy="142" r="2.6"/>
+      <circle cx="97" cy="149" r="2.6"/>
+      <circle cx="160" cy="135" r="2.6"/>
+      <circle cx="163" cy="142" r="2.6"/>
+      <circle cx="159" cy="149" r="2.6"/>
+    </g>
+
+    <!-- Nose -->
+    <path d="M115 117 Q128 112 141 117 Q144 121 137 128 Q128 135 119 128 Q112 121 115 117 Z" fill="rgb(30,32,36)"/>
+  </g>
+</svg>
