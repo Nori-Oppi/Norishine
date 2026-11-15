@@ -713,6 +713,69 @@ namespace config {
     return vars;
   }
 
+  std::string update_config_text(
+    const std::string_view &file_content,
+    const std::map<std::string, std::string, std::less<>> &set,
+    const std::set<std::string, std::less<>> &reset
+  ) {
+    std::string out;
+    out.reserve(file_content.size() + 64);
+    std::set<std::string, std::less<>> written;
+
+    auto pos = std::begin(file_content);
+    auto end = std::end(file_content);
+    while (pos < end) {
+      // Blank lines and indentation are kept as they are.
+      auto first = std::find_if_not(pos, end, whitespace);
+      out.append(pos, first);
+      if (first == end) {
+        break;
+      }
+
+      TUPLE_2D(endl, var, parse_option(first, end));
+      bool drop = false;
+      if (var) {
+        const auto &name = var->first;
+        if (reset.contains(name) || (set.contains(name) && written.contains(name))) {
+          drop = true;
+        } else if (auto it = set.find(name); it != std::end(set)) {
+          out.append(name).append(" = ").append(it->second);
+          written.insert(name);
+          pos = endl;
+          continue;
+        }
+      }
+
+      if (drop) {
+        // Remove the entry together with its line break.
+        pos = endl;
+        if (pos != end && *pos == '\r') {
+          ++pos;
+        }
+        if (pos != end && *pos == '\n') {
+          ++pos;
+        }
+        continue;
+      }
+
+      // Comments, unrelated settings and lines the parser ignores stay unchanged.
+      out.append(first, endl);
+      pos = endl;
+    }
+
+    for (const auto &[name, value] : set) {
+      if (written.contains(name)) {
+        continue;
+      }
+      if (!out.empty() && out.back() != '\n') {
+        out.push_back('\n');
+      }
+      out.append(name).append(" = ").append(value).push_back('\n');
+    }
+
+    return out;
+  }
+
   void string_f(std::unordered_map<std::string, std::string> &vars, const std::string &name, std::string &input) {
     auto it = vars.find(name);
     if (it == std::end(vars)) {

@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <mutex>
 #include <set>
 #include <sstream>
 #include <thread>
@@ -26,6 +27,7 @@
 
 // local includes
 #include "config.h"
+#include "config_schema.h"
 #include "confighttp.h"
 #include "crypto.h"
 #include "display_device.h"
@@ -1065,6 +1067,17 @@ namespace confighttp {
           continue;
         }
 
+        // Each setting must stay one "key = value" entry: a line break would let a value
+        // add other settings to the file.
+        if (k.empty() || k.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_") != std::string::npos) {
+          bad_request(response, request, "Invalid setting name: " + k);
+          return;
+        }
+        if (v.is_string() && v.get<std::string>().find_first_of("\r\n") != std::string::npos) {
+          bad_request(response, request, "Setting " + k + " must be a single line");
+          return;
+        }
+
         // v.dump() will dump valid json, which we do not want for strings in the config right now
         // we should migrate the config file to straight json and get rid of all this nonsense
         config_stream << k << " = " << (v.is_string() ? v.get<std::string>() : v.dump()) << std::endl;
@@ -1076,6 +1089,122 @@ namespace confighttp {
       BOOST_LOG(warning) << "SaveConfig: "sv << e.what();
       bad_request(response, request, e.what());
     }
+  }
+
+  /**
+   * @brief Send a JSON response with a status code.
+   */
+  void send_json(resp_https_t response, SimpleWeb::StatusCode code, const nlohmann::json &output_tree) {
+    SimpleWeb::CaseInsensitiveMultimap headers;
+    headers.emplace("Content-Type", "application/json");
+    headers.emplace("X-Frame-Options", "DENY");
+    headers.emplace("Content-Security-Policy", "frame-ancestors 'none';");
+    response->write(code, output_tree.dump(), headers);
+  }
+
+  /// Serializes read-modify-write cycles of the config file.
+  std::mutex config_file_mutex;
+
+  /**
+   * @brief Get the settings schema: every setting with its type, default and limits.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   *
+   * @api_examples{/api/v1/config/schema| GET| null}
+   */
+  void getConfigSchema(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    auto output_tree = config::schema::describe();
+    output_tree["status"] = true;
+    send_response(response, output_tree);
+  }
+
+  /**
+   * @brief Get the settings stored in the config file, typed.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   *
+   * Settings not in the file use their schema default. "unknown" lists keys the host does
+   * not know; "invalid" lists stored values that do not pass validation.
+   *
+   * @api_examples{/api/v1/config| GET| null}
+   */
+  void getConfigV1(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    std::lock_guard lock {config_file_mutex};
+    auto output_tree = config::schema::read_values(file_handler::read_file(config::sunshine.config_file.c_str()));
+    output_tree["status"] = true;
+    send_response(response, output_tree);
+  }
+
+  /**
+   * @brief Change settings: validate everything, then write only the changed lines.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   * The body:
+   * @code{.json}
+   * {
+   *   "set": {"headless_mode": true, "max_bitrate": 50000},
+   *   "reset": ["port"]
+   * }
+   * @endcode
+   * On any invalid key or value nothing is written and the response is 400 with
+   * {"status": false, "errors": {key: message}}.
+   *
+   * @api_examples{/api/v1/config| PATCH| {"set":{"headless_mode":true},"reset":["port"]}}
+   */
+  void patchConfigV1(resp_https_t response, req_https_t request) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    std::stringstream ss;
+    ss << request->content.rdbuf();
+    auto input_tree = nlohmann::json::parse(ss.str(), nullptr, false);
+    if (input_tree.is_discarded()) {
+      bad_request(response, request, "Invalid JSON");
+      return;
+    }
+
+    auto change = config::schema::validate_change(input_tree);
+    if (!change.errors.empty()) {
+      send_json(response, SimpleWeb::StatusCode::client_error_bad_request, {{"status", false}, {"errors", change.errors}});
+      return;
+    }
+
+    std::lock_guard lock {config_file_mutex};
+    const auto current = file_handler::read_file(config::sunshine.config_file.c_str());
+    const auto updated = config::update_config_text(current, change.set, change.reset);
+
+    nlohmann::json changed = nlohmann::json::array();
+    bool restart_required = false;
+    for (const auto &[key, _] : change.set) {
+      changed.push_back(key);
+      restart_required = restart_required || config::schema::find(key)->restart_required;
+    }
+    for (const auto &key : change.reset) {
+      changed.push_back(key);
+      restart_required = restart_required || config::schema::find(key)->restart_required;
+    }
+
+    if (updated != current && file_handler::write_file(config::sunshine.config_file.c_str(), updated)) {
+      send_json(response, SimpleWeb::StatusCode::server_error_internal_server_error, {{"status", false}, {"error", "Couldn't write the config file"}});
+      return;
+    }
+
+    send_response(response, {{"status", true}, {"changed", changed}, {"restart_required", restart_required && updated != current}});
   }
 
   /**
@@ -1626,6 +1755,9 @@ namespace confighttp {
     server.resource["^/api/logs$"]["GET"] = getLogs;
     server.resource["^/api/config$"]["GET"] = getConfig;
     server.resource["^/api/config$"]["POST"] = saveConfig;
+    server.resource["^/api/v1/config/schema$"]["GET"] = getConfigSchema;
+    server.resource["^/api/v1/config$"]["GET"] = getConfigV1;
+    server.resource["^/api/v1/config$"]["PATCH"] = patchConfigV1;
     server.resource["^/api/configLocale$"]["GET"] = getLocale;
     server.resource["^/api/restart$"]["POST"] = restart;
     server.resource["^/api/quit$"]["POST"] = quit;

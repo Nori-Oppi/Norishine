@@ -7,7 +7,9 @@
 // standard includes
 #include <bitset>
 #include <chrono>
+#include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -299,4 +301,22 @@ namespace config {
 
   int parse(int argc, char *argv[]);
   std::unordered_map<std::string, std::string> parse_config(const std::string_view &file_content);
+
+  /**
+   * @brief Change settings in config file text, keeping everything else as it is.
+   *
+   * Entries are found with the same parser as parse_config(). Settings in `set` get the
+   * given value in place (or are appended if absent; later duplicates are removed),
+   * settings in `reset` are removed, and comments, blank lines and other settings are kept.
+   * Values must already be validated: they are written as given.
+   * @param file_content The current config file text.
+   * @param set Settings to set, name to value text.
+   * @param reset Settings to remove.
+   * @return The new config file text.
+   */
+  std::string update_config_text(
+    const std::string_view &file_content,
+    const std::map<std::string, std::string, std::less<>> &set,
+    const std::set<std::string, std::less<>> &reset
+  );
 }  // namespace config

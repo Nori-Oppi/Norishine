@@ -109,9 +109,14 @@ deliberately broken, but is not verified until CI exists for it.
 
 ### Phase 3: settings and UI
 - **M1 (first feature milestone)** Host-owned settings schema with server-side
-  validation: schema table in C++ covering all 104 keys, `GET /api/v1/config/schema`,
-  validated partial updates with per-key errors, atomic state writes, tests for all
-  of it. No visible UI change yet; this is what both the new web UI and Norilight build on.
+  validation (**done**): schema table in C++ (`src/config_schema.cpp`) covering all 103
+  keys config.cpp reads (the 104th, `dd_wa_hdr_toggle`, is dead and left out),
+  `GET /api/v1/config/schema`, `GET /api/v1/config` (typed values, unknown and invalid
+  entries), `PATCH /api/v1/config` (validated partial updates with per-key errors,
+  rewriting only the changed lines), atomic writes with a `.bak` copy for the config,
+  state, credentials and apps files, and tests for all of it. config.cpp still parses the
+  file itself; a test keeps its keys and the schema identical. No visible UI change yet;
+  this is what both the new web UI and Norilight build on.
 - **M2** New settings UI on the schema: Norilight-matched theme, categories reworked,
   full-text search, Basic / Advanced, confirmation for dangerous settings,
   restart-required indication. Remove dead settings (`dd_wa_hdr_toggle`), fix
