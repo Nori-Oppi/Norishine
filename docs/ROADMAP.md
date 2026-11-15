@@ -1,7 +1,6 @@
 # Norishine architecture decisions and roadmap
 
-Status key: **done**, **in progress**, **planned**. As of 2026-11-15 everything
-below is planned; Phase 1 (research) is the only completed phase. Evidence for the
+Status key: **done**, **in progress**, **planned**. Updated 2026-11-15. Evidence for the
 decisions is in [PHASE1-RESEARCH.md](PHASE1-RESEARCH.md).
 
 ## Decisions
@@ -80,15 +79,21 @@ deliberately broken, but is not verified until CI exists for it.
 ## Roadmap
 
 ### Phase 2: establish the baseline
-- **M0.1** Merge Apollo history; rename project identifiers and branding without
-  changing file formats or ports; preserve licence, NOTICE and attribution.
-- **M0.2** Install missing MSYS2 packages; get a clean Windows build and installer;
-  record exact steps in `BUILDING.md`.
-- **M0.3** Enable the existing unit tests; add CI for Windows build and tests.
+- **M0.1** Merge Apollo history (**done**); rename project identifiers and branding
+  without changing file formats or ports (**planned**). The rename must give Norishine
+  its own Windows service name, install folder and config folder: Apollo and Vibepollo
+  both use `ApolloService`. Preserve licence, NOTICE and attribution.
+- **M0.2** Clean Windows build (**done**; see `docs/DEVELOPMENT.md`); installer (**planned**).
+  Needed two fixes to Apollo itself and a newer FFmpeg for AMD encoders
+  (`docs/UPSTREAM-SYNC.md`).
+- **M0.3** Unit tests build and run: 195 of 231 pass (**done**); fix the 33 stale tests
+  listed in `docs/KNOWN-ISSUES.md` and add CI for Windows build and tests (**planned**).
 - **M0.4** Port Sunshine security fixes, each with a test: control packet parsing,
   input packet validation, pairing request IDs (adapted to OTP), exact client
   certificate match, bounded hex parsing, log redaction, pairing session fixes.
-- **M0.5** Smoke test streaming with Norilight and stock Moonlight.
+- **M0.5** Smoke test streaming: Norilight pairs and streams the Desktop app (HEVC on
+  AMD AMF, D3D11VA decode) from a development host (**done**, loopback only); stock
+  Moonlight and a second machine (**planned**).
 
 ### Phase 3: settings and UI
 - **M1 (first feature milestone)** Host-owned settings schema with server-side
