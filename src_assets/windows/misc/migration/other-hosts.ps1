@@ -131,6 +131,19 @@ function Protect-Credentials([string]$ConfigDir) {
   icacls.exe "$credentials" /grant:r '*S-1-5-32-545:(R)' | Out-Null
 }
 
+# Vibepollo has capture methods Norishine lacks (for example wgcc), and Norishine's service
+# cannot use wgc. Anything but ddx is dropped, so Norishine chooses automatically.
+function Remove-UnsupportedCapture([string]$ConfigDir) {
+  $conf = Join-Path $ConfigDir 'sunshine.conf'
+  if (-not (Test-Path -LiteralPath $conf)) { return }
+  $lines = @(Get-Content -LiteralPath $conf)
+  $kept = @($lines | Where-Object { $_ -notmatch '^\s*capture\s*=' -or $_ -match '^\s*capture\s*=\s*ddx\s*$' })
+  if ($kept.Count -ne $lines.Count) {
+    Set-Content -LiteralPath $conf -Value $kept -Encoding UTF8
+    Write-Log 'Removed a capture method Norishine does not support; it chooses automatically.'
+  }
+}
+
 function Import-Config([string]$Name, [string]$InstallDir) {
   $from = Join-Path $InstallDir 'config'
   if (-not (Test-HasState $from)) {
@@ -143,6 +156,7 @@ function Import-Config([string]$Name, [string]$InstallDir) {
   }
   Copy-Config $from $NorishineConfig
   Update-Paths $NorishineConfig $InstallDir $NorishineRoot
+  Remove-UnsupportedCapture $NorishineConfig
   Write-Log "Imported settings, apps and paired devices from $Name ($from)."
   return $true
 }

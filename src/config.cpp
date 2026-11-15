@@ -1178,6 +1178,14 @@ namespace config {
     bool_f(vars, "vaapi_strict_rc_buffer", video.vaapi.strict_rc_buffer);
 
     string_f(vars, "capture", video.capture);
+#ifdef _WIN32
+    // An unknown method matches no capture backend, so nothing could be captured at all.
+    // Seen with configs imported from Vibepollo (capture = wgcc).
+    if (!video.capture.empty() && video.capture != "ddx"sv && video.capture != "wgc"sv) {
+      std::cout << "Warning: Unknown capture method ["sv << video.capture << "], choosing automatically"sv << std::endl;
+      video.capture.clear();
+    }
+#endif
     string_f(vars, "encoder", video.encoder);
     string_f(vars, "adapter_name", video.adapter_name);
     string_f(vars, "output_name", video.output_name);
