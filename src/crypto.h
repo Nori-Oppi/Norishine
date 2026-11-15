@@ -145,7 +145,16 @@ namespace crypto {
     const char *verify(x509_t::element_type *cert, p_named_cert_t& named_cert_out);
 
   private:
-    std::vector<std::pair<p_named_cert_t, x509_store_t>> _certs;
+    /**
+     * @brief A paired client's certificate, parsed once, with its single-certificate store.
+     */
+    struct trusted_cert_t {
+      p_named_cert_t named_cert;
+      x509_t cert;
+      x509_store_t store;
+    };
+
+    std::vector<trusted_cert_t> _certs;
     x509_store_ctx_t _cert_ctx;
   };
 

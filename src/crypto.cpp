@@ -18,8 +18,9 @@ namespace crypto {
   void cert_chain_t::add(p_named_cert_t& named_cert_p) {
     x509_store_t x509_store { X509_STORE_new() };
 
-    X509_STORE_add_cert(x509_store.get(), x509(named_cert_p->cert).get());
-    _certs.emplace_back(std::make_pair(named_cert_p, std::move(x509_store)));
+    auto cert = x509(named_cert_p->cert);
+    X509_STORE_add_cert(x509_store.get(), cert.get());
+    _certs.push_back({named_cert_p, std::move(cert), std::move(x509_store)});
   }
 
   void cert_chain_t::clear() {
@@ -49,12 +50,18 @@ namespace crypto {
    * Moonlight to be able to use Sunshine
    *
    * To circumvent this, x509_store_t instance will be created for each instance of the certificates.
+   *
+   * A chain that verifies is only accepted when the presented certificate is the paired
+   * certificate itself. Otherwise a certificate signed by a paired certificate's key would be
+   * accepted as that client (Sunshine 4d768847, GHSA-6jvv-jqr7-m6m3).
    * @param cert The certificate to verify.
    * @return nullptr if the certificate is valid, otherwise an error string.
    */
   const char * cert_chain_t::verify(x509_t::element_type *cert, p_named_cert_t& named_cert_out) {
     int err_code = 0;
-    for (auto &[named_cert_p, x509_store] : _certs) {
+    for (auto &trusted : _certs) {
+      auto &named_cert_p = trusted.named_cert;
+      auto &x509_store = trusted.store;
       auto fg = util::fail_guard([this]() {
         X509_STORE_CTX_cleanup(_cert_ctx.get());
       });
@@ -70,8 +77,13 @@ namespace crypto {
       auto err = X509_verify_cert(_cert_ctx.get());
 
       if (err == 1) {
-        named_cert_out = named_cert_p;
-        return nullptr;
+        if (trusted.cert && X509_cmp(trusted.cert.get(), cert) == 0) {
+          named_cert_out = named_cert_p;
+          return nullptr;
+        }
+
+        err_code = X509_V_ERR_CERT_REJECTED;
+        continue;
       }
 
       err_code = X509_STORE_CTX_get_error(_cert_ctx.get());
@@ -81,7 +93,7 @@ namespace crypto {
       }
     }
 
-    return X509_verify_cert_error_string(err_code);
+    return err_code == 0 ? "Client certificate identity is not paired" : X509_verify_cert_error_string(err_code);
   }
 
   namespace cipher {
