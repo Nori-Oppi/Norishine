@@ -84,7 +84,9 @@ deliberately broken, but is not verified until CI exists for it.
   install and config folder `Norishine`, firewall rule, logo and tray icons, web UI
   text, default mDNS name. Kept: `APOLLO_*` app environment variables (so existing app
   scripts work) and the Linux app ID `dev.lizardbyte.app.Sunshine`.
-- **M0.2** Clean Windows build (**done**; see `docs/DEVELOPMENT.md`); installer (**planned**).
+- **M0.2** Clean Windows build (**done**; see `docs/DEVELOPMENT.md`); installer builds
+  locally and in CI and keeps the SudoVDA and ViGEmBus drivers shared with Apollo and
+  Vibepollo (**in progress**: not yet installed and tested on a machine).
   Needed two fixes to Apollo itself and a newer FFmpeg for AMD encoders
   (`docs/UPSTREAM-SYNC.md`).
 - **M0.3** Unit tests build and run, all pass (**done**); CI builds on Windows and runs
