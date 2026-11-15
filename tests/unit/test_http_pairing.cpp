@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <src/nvhttp.h>
+#include <src/uuid.h>
 
 using namespace nvhttp;
 
@@ -273,6 +274,7 @@ TEST(PairingTest, OutOfOrderCalls) {
 
 namespace nvhttp {
   extern std::unordered_map<std::string, pair_session_t> map_id_sess;
+  void add_authorized_client(const crypto::p_named_cert_t &named_cert_p);
 }  // namespace nvhttp
 
 namespace {
@@ -443,4 +445,27 @@ TEST_F(PairingSessionRegistryTest, ConcurrentInsertionAndCancellationLeaveConsis
 
   EXPECT_EQ(successful_cancellations, session_count);
   EXPECT_TRUE(get_pending_pairings().empty());
+}
+
+// Sunshine 0daeb0e3: a device that pairs again must not leave a second record behind.
+TEST(PairedClientRecordsTest, RemovesEveryRecordWithTheSameCertificate) {
+  const bool fresh_state = config::sunshine.flags[config::flag::FRESH_STATE];
+  config::sunshine.flags[config::flag::FRESH_STATE] = true;
+
+  for (const auto *name : {"old record", "duplicate record"}) {
+    auto named_cert = std::make_shared<crypto::named_cert_t>();
+    named_cert->name = name;
+    named_cert->cert = PUBLIC_CERT;
+    named_cert->uuid = uuid_util::uuid_t::generate().string();
+    add_authorized_client(named_cert);
+  }
+
+  EXPECT_GE(remove_clients_with_cert(PUBLIC_CERT), 2);
+  EXPECT_EQ(remove_clients_with_cert(PUBLIC_CERT), 0);
+  for (const auto &client : get_all_clients()) {
+    EXPECT_NE(client["name"].get<std::string>(), "duplicate record");
+  }
+  EXPECT_EQ(remove_clients_with_cert("not a certificate"), 0);
+
+  config::sunshine.flags[config::flag::FRESH_STATE] = fresh_state;
 }

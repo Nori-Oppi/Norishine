@@ -93,8 +93,8 @@ deliberately broken, but is not verified until CI exists for it.
   rate option.
 - **M0.4** Port Sunshine security fixes, each with a test. **Done:** control packet
   parsing, input packet validation, exact client certificate match, pairing request IDs
-  (adapted to OTP), log redaction. **Next:** bounded hex parsing and the remaining
-  advisories in `docs/UPSTREAM-SYNC.md`.
+  (adapted to OTP), log redaction, bounded hex parsing, duplicate client records, audio
+  and video UDP endpoints, URL opening, PATH writing. CSRF tokens follow in M3.
 - **M0.5** Smoke test streaming: Norilight pairs and streams the Desktop app (HEVC on
   AMD AMF, D3D11VA decode) from a development host (**done**, loopback only); stock
   Moonlight and a second machine (**planned**).

@@ -15,12 +15,21 @@ Cherry-picks use `git cherry-pick -x`, so each commit message also names its sou
 | `ccf97e38` | GHSA-36ff-frg7-492f: PIN applied to the wrong pairing session | ported by hand | Adapted to Apollo's OTP pairing (OTP sessions are never listed as waiting) and pin page. Client name stays optional. Also guards Apollo's OTP state with the session mutex |
 | `c33f3b46` | Retried `getservercert` replaces an abandoned handshake | ported by hand | Follow-up to `ccf97e38`; without it a client that gave up mid-pairing is blocked for 5 minutes |
 | `31b85802` | Redact sensitive data from logs | adapted | Config half not applicable (Apollo has no `csrf_allowed_origins` or secret settings). Instead redacts what Apollo actually logged at debug level: the web UI session `Cookie`, and GameStream `rikey` and pairing values (`salt`, challenges, `otpauth`) |
+| `71323d38` | Build Boost.Locale on Linux only | ported by hand | Needed for CI: Boost 1.89's locale CMakeLists fails to configure with CMake 4.5 |
+| `f86c4c9c` | Bound `from_hex` to the target size | ported by hand | In Apollo a long input overflowed a stack buffer |
+| `127b4948` | Read an odd hex digit count as a leading zero | ported by hand | In Apollo an odd count read before the start of the input |
+| `0daeb0e3` | Replace duplicate client certificates on pairing | adapted | Apollo's client list instead of Sunshine's client auth store. In Apollo, saving kept only the first record per certificate, so pairing again was silently dropped and the old record (name, permissions) stayed |
+| `c1012508` | Separate audio and video UDP receive endpoints | ported by hand | With its loopback test |
+| `c8ea783c` | Open browser URLs through the Windows shell | ported by hand | Upstream's 200-line launcher test not ported; a test of the command line is |
+| `4dadc7d4` | Keep trailing backslashes when writing system PATH | ported by hand | Also moves `/f` before `/d` (an earlier upstream fix Apollo lacked). Not run locally: it writes the system PATH |
 
 ## Pending, in priority order
 
 Security (published advisories Apollo lacks; see docs/PHASE1-RESEARCH.md):
 
-- `f86c4c9c`, `127b4948`, `0daeb0e3`, `c1012508`, `c8ea783c`, `4dadc7d4`
+- All security commits identified in docs/PHASE1-RESEARCH.md are ported. Token-based
+  CSRF protection for the web UI is part of the login hardening in roadmap M3. Check
+  Sunshine's security advisories again before each release.
 
 Then stability and Windows capture/encoder fixes listed in docs/PHASE1-RESEARCH.md.
 NVENC SDK update (`fb3d85cf` and follow-ups) is needed before the FFmpeg package's own

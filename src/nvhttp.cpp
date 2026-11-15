@@ -372,6 +372,18 @@ namespace nvhttp {
     client_root = client;
   }
 
+  std::size_t remove_clients_with_cert(const std::string &cert) {
+    auto certificate = crypto::x509(cert);
+    if (!certificate) {
+      return 0;
+    }
+
+    return std::erase_if(client_root.named_devices, [&certificate](const p_named_cert_t &existing) {
+      auto existing_certificate = crypto::x509(existing->cert);
+      return existing_certificate && X509_cmp(existing_certificate.get(), certificate.get()) == 0;
+    });
+  }
+
   void add_authorized_client(const p_named_cert_t& named_cert_p) {
     client_t &client = client_root;
     client.named_devices.push_back(named_cert_p);
@@ -784,6 +796,12 @@ namespace nvhttp {
       }
       named_cert_p->cert = std::move(client.cert);
       named_cert_p->uuid = uuid_util::uuid_t::generate().string();
+
+      // A device that pairs again replaces its old record (Sunshine 0daeb0e3). Before,
+      // save_state() kept only the first record per certificate, so the new pairing (its
+      // name and default permissions) was silently dropped and the old record stayed.
+      remove_clients_with_cert(named_cert_p->cert);
+
       // The first paired device may stream and send input; anything more is granted in
       // the web UI.
       if (client_root.named_devices.empty()) {
