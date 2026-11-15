@@ -6,9 +6,12 @@
 #pragma once
 
 // standard includes
-#include <string>
 #include <chrono>
+#include <cstddef>
 #include <list>
+#include <string>
+#include <string_view>
+#include <vector>
 
 // lib includes
 #include <boost/property_tree/ptree.hpp>
@@ -53,6 +56,26 @@ namespace nvhttp {
   constexpr auto PORT_HTTPS = -5;
 
   constexpr auto OTP_EXPIRE_DURATION = 180s;
+
+  /**
+   * @brief Maximum number of pairing sessions kept at one time.
+   */
+  constexpr std::size_t MAX_PENDING_PAIRING_SESSIONS = 32;
+
+  /**
+   * @brief Number of hexadecimal characters in a pairing request ID.
+   */
+  constexpr std::size_t PAIRING_ID_SIZE = 32;
+
+  /**
+   * @brief Maximum length in bytes of a paired client's name.
+   */
+  constexpr std::size_t MAX_PAIRING_CLIENT_NAME_SIZE = 128;
+
+  /**
+   * @brief Lifetime of an incomplete pairing session.
+   */
+  constexpr auto PAIRING_SESSION_TIMEOUT = std::chrono::minutes {5};
 
   /**
    * @brief Start the nvhttp server.
@@ -119,13 +142,88 @@ namespace nvhttp {
         std::shared_ptr<typename SimpleWeb::ServerBase<SunshineHTTPS>::Response>>
         response;
       std::string salt = {};
+      std::string id = {};  ///< Unguessable ID the web UI uses to approve this request.
+      std::string device_name = {};  ///< Device name reported by the client (untrusted).
+      std::string address = {};  ///< Address the pairing request came from.
+      std::chrono::steady_clock::time_point expires_at = std::chrono::steady_clock::time_point::max();  ///< Deadline for completing pairing.
     } async_insert_pin;
 
     /**
      * @brief used as a security measure to prevent out of order calls
      */
     PAIR_PHASE last_phase = PAIR_PHASE::NONE;
+    bool failed = false;  ///< Set when a pairing step fails; the caller then removes the session.
   };
+
+  /**
+   * @brief A PIN pairing request waiting for approval in the web UI.
+   */
+  struct pending_pairing_t {
+    std::string id;  ///< Unguessable pairing request ID.
+    std::string name;  ///< Device name reported by the client (untrusted).
+    std::string address;  ///< Address the request came from.
+  };
+
+  /**
+   * @brief Result of adding a pairing session.
+   */
+  enum class pair_session_insert_e {
+    ADDED,  ///< The session was added.
+    ALREADY_EXISTS,  ///< A pending session with the same client unique ID exists.
+    FULL  ///< MAX_PENDING_PAIRING_SESSIONS has been reached.
+  };
+
+  /**
+   * @brief Check the format of a pairing request ID received from the web UI.
+   * @return `true` for exactly PAIRING_ID_SIZE hexadecimal characters.
+   */
+  bool is_valid_pairing_id(std::string_view pairing_id);
+
+  /**
+   * @brief Check a PIN received from the web UI.
+   * @return `true` for exactly four ASCII digits.
+   */
+  bool is_valid_pairing_pin(std::string_view pin);
+
+  /**
+   * @brief Check a client name received from the web UI.
+   * @return `true` if the name fits MAX_PAIRING_CLIENT_NAME_SIZE. An empty name keeps
+   * the name the device reported.
+   */
+  bool is_valid_pairing_name(std::string_view name);
+
+  /**
+   * @brief Add a new pairing session, giving it an unguessable ID and an expiry time.
+   * @param sess Pairing session to add.
+   * @param pairing_id Receives the new session's ID when it was added.
+   */
+  pair_session_insert_e insert_pair_session(pair_session_t sess, std::string &pairing_id);
+
+  /**
+   * @brief Remove a client's session that already got past the PIN step.
+   *
+   * A new `getservercert` from the same client means it gave up on that handshake, which
+   * can never resume. Sessions still waiting for a PIN are kept, so a stray request
+   * cannot replace a request the user is about to approve.
+   * @return `true` if a session was removed.
+   */
+  bool evict_abandoned_pair_session(const std::string &unique_id);
+
+  /**
+   * @brief Remove pairing sessions whose deadline has passed.
+   */
+  void expire_pair_sessions(std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
+
+  /**
+   * @brief List PIN pairing requests waiting for approval, oldest first.
+   */
+  std::vector<pending_pairing_t> get_pending_pairings();
+
+  /**
+   * @brief Reject a PIN pairing request that is waiting for approval.
+   * @return `true` if the request was found and cancelled.
+   */
+  bool cancel_pairing(std::string_view pairing_id);
 
   /**
    * @brief removes the temporary pairing session
@@ -185,15 +283,17 @@ namespace nvhttp {
   void clientpairingsecret(pair_session_t &sess, boost::property_tree::ptree &tree, const std::string &client_pairing_secret);
 
   /**
-   * @brief Compare the user supplied pin to the Moonlight pin.
+   * @brief Apply the user supplied PIN to the selected pairing request.
+   * @param pairing_id ID of the pairing request, from get_pending_pairings().
    * @param pin The user supplied pin.
-   * @param name The user supplied name.
-   * @return `true` if the pin is correct, `false` otherwise.
+   * @param name The user supplied name. Empty keeps the name the device reported.
+   * @return `true` if the PIN was passed on to the waiting client. A wrong PIN is only
+   * detected in a later pairing step.
    * @examples
-   * bool pin_status = nvhttp::pin("1234", "laptop");
+   * bool pin_status = nvhttp::pin("0123456789abcdef0123456789abcdef", "1234", "laptop");
    * @examples_end
    */
-  bool pin(std::string pin, std::string name);
+  bool pin(std::string_view pairing_id, std::string pin, std::string name);
 
   std::string request_otp(const std::string& passphrase, const std::string& deviceName);
 

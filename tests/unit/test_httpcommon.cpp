@@ -13,6 +13,30 @@
 
 struct UrlEscapeTest: testing::TestWithParam<std::tuple<std::string, std::string>> {};
 
+TEST(LogRedactionTest, SensitiveHeaders) {
+  EXPECT_TRUE(http::is_sensitive_header("Cookie"));
+  EXPECT_TRUE(http::is_sensitive_header("cookie"));
+  EXPECT_TRUE(http::is_sensitive_header("AUTHORIZATION"));
+  EXPECT_TRUE(http::is_sensitive_header("Set-Cookie"));
+  EXPECT_FALSE(http::is_sensitive_header("Content-Type"));
+  EXPECT_FALSE(http::is_sensitive_header("Cookies"));
+  EXPECT_FALSE(http::is_sensitive_header(""));
+}
+
+TEST(LogRedactionTest, SensitiveQueryArgs) {
+  for (const auto *name : {"rikey", "RIKEY", "salt", "clientchallenge", "serverchallengeresp", "clientpairingsecret", "otpauth"}) {
+    EXPECT_TRUE(http::is_sensitive_query_arg(name)) << name;
+  }
+  for (const auto *name : {"uniqueid", "devicename", "appid", "rikeyid", "clientcert", "mode"}) {
+    EXPECT_FALSE(http::is_sensitive_query_arg(name)) << name;
+  }
+}
+
+TEST(LogRedactionTest, RedactIf) {
+  EXPECT_EQ(http::redact_if(true, "secret"), http::REDACTED);
+  EXPECT_EQ(http::redact_if(false, "value"), "value");
+}
+
 TEST_P(UrlEscapeTest, Run) {
   const auto &[input, expected] = GetParam();
   ASSERT_EQ(http::url_escape(input), expected);

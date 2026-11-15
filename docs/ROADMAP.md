@@ -89,8 +89,9 @@ deliberately broken, but is not verified until CI exists for it.
 - **M0.3** Unit tests build and run: 195 of 231 pass (**done**); fix the 33 stale tests
   listed in `docs/KNOWN-ISSUES.md` and add CI for Windows build and tests (**planned**).
 - **M0.4** Port Sunshine security fixes, each with a test. **Done:** control packet
-  parsing, input packet validation, exact client certificate match. **Next:** pairing
-  request IDs (adapted to OTP), log redaction, bounded hex parsing, pairing session fixes.
+  parsing, input packet validation, exact client certificate match, pairing request IDs
+  (adapted to OTP), log redaction. **Next:** bounded hex parsing and the remaining
+  advisories in `docs/UPSTREAM-SYNC.md`.
 - **M0.5** Smoke test streaming: Norilight pairs and streams the Desktop app (HEVC on
   AMD AMF, D3D11VA decode) from a development host (**done**, loopback only); stock
   Moonlight and a second machine (**planned**).

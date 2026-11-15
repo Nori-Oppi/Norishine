@@ -4,6 +4,10 @@
  */
 #pragma once
 
+// standard includes
+#include <string>
+#include <string_view>
+
 // lib includes
 #include <curl/curl.h>
 
@@ -27,6 +31,31 @@ namespace http {
   bool download_file(const std::string &url, const std::string &file, long ssl_version = CURL_SSLVERSION_TLSv1_2);
   std::string url_escape(const std::string &url);
   std::string url_get_host(const std::string &url);
+
+  /**
+   * @brief Text written to the log in place of a sensitive value.
+   */
+  constexpr std::string_view REDACTED = "[redacted]";
+
+  /**
+   * @brief Whether a request header carries a credential and must not be logged.
+   * @param name Header name, compared case-insensitively.
+   */
+  bool is_sensitive_header(std::string_view name);
+
+  /**
+   * @brief Whether a GameStream query parameter carries a key or pairing secret
+   * and must not be logged.
+   * @param name Parameter name, compared case-insensitively.
+   */
+  bool is_sensitive_query_arg(std::string_view name);
+
+  /**
+   * @brief Return `value`, or REDACTED if `sensitive` is set.
+   */
+  inline std::string_view redact_if(bool sensitive, std::string_view value) {
+    return sensitive ? REDACTED : value;
+  }
 
   extern std::string unique_id;
   extern uuid_util::uuid_t uuid;

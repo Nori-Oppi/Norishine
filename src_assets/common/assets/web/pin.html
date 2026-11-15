@@ -29,11 +29,23 @@
     </ul>
     <form v-if="currentTab === '#PIN'" class="form d-flex flex-column align-items-center" id="form" @submit.prevent="registerDevice">
       <div class="card flex-column d-flex p-4 mb-4">
-        <input type="text" pattern="\d*" :placeholder="`${$t('navbar.pin')}`" autofocus id="pin-input" class="form-control mt-2" required />
-        <input type="text" :placeholder="`${$t('pin.device_name')}`" id="name-input" class="form-control my-4" />
-        <button class="btn btn-primary">{{ $t('pin.send') }}</button>
+        <label for="pairing-select" class="form-label">{{ $t('pin.select_pairing') }}</label>
+        <select id="pairing-select" class="form-select" v-model="selectedPairingId" required :disabled="pendingPairings.length === 0">
+          <option v-if="pendingPairings.length === 0" value="" disabled>{{ pairingsLoadFailed ? $t('pin.load_failure') : $t('pin.no_pending_pairings') }}</option>
+          <option v-for="pairing in pendingPairings" :key="pairing.id" :value="pairing.id">
+            {{ pairing.name || $t('pin.unknown_device') }} ({{ pairing.address || $t('pin.unknown_address') }})
+          </option>
+        </select>
+        <input type="text" inputmode="numeric" pattern="\d{4}" maxlength="4" :placeholder="`${$t('navbar.pin')}`" autofocus v-model="pinInput" class="form-control mt-3" required />
+        <input type="text" maxlength="128" :placeholder="`${$t('pin.device_name')}`" v-model="pinName" class="form-control my-4" />
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary flex-grow-1" :disabled="!selectedPairingId">{{ $t('pin.send') }}</button>
+          <button type="button" class="btn btn-outline-danger" :disabled="!selectedPairingId" :title="$t('pin.cancel_pairing')" @click="cancelPairing">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
       </div>
-      <div id="status"></div>
+      <div v-if="pinMessage" class="alert" :class="['alert-' + pinStatus]" role="alert">{{ pinMessage }}</div>
     </form>
     <form v-else class="form d-flex flex-column align-items-center" @submit.prevent="requestOTP">
       <div class="card flex-column d-flex p-4 mb-4">
@@ -370,9 +382,18 @@
       clients: [],
       showApplyMessage: false,
       unpairAllPressed: false,
-      unpairAllStatus: null
+      unpairAllStatus: null,
+      pendingPairings: [],
+      pairingsLoadFailed: false,
+      selectedPairingId: '',
+      pinInput: '',
+      pinName: '',
+      pinMessage: '',
+      pinStatus: 'success'
     }
   }
+
+  let pendingPairingsTimer = null;
 
   const cmdTpl = {
     cmd: '',
@@ -396,6 +417,13 @@
     },
     created() {
       this.refreshClients();
+      this.refreshPendingPairings();
+      pendingPairingsTimer = setInterval(() => {
+        if (this.currentTab === '#PIN') this.refreshPendingPairings();
+      }, 2000);
+    },
+    beforeUnmount() {
+      clearInterval(pendingPairingsTimer);
     },
     methods: {
       switchTab(currentTab) {
@@ -404,6 +432,7 @@
         Object.assign(this, data(), { clients });
         hostInfoCache = null;
         clearTimeout(resetOTPTimeout);
+        this.refreshPendingPairings();
       },
       editHost() {
         this.editingHost = !this.editingHost;
@@ -415,37 +444,81 @@
         this.editingHost = false;
         saveHostCache(this, true);
       },
-      registerDevice(e) {
-        let pin = document.querySelector("#pin-input").value;
-        let name = document.querySelector("#name-input").value;
-        document.querySelector("#status").innerHTML = "";
-        let b = JSON.stringify({pin: pin, name: name});
+      refreshPendingPairings() {
+        fetch("./api/pin", { credentials: 'include' })
+          .then((response) => response.json())
+          .then((response) => {
+            if (!response.status) throw new Error(response.error);
+            this.pendingPairings = response.pairings || [];
+            this.pairingsLoadFailed = false;
+            // Never fall back to another request: the PIN must reach the device the user picked.
+            if (!this.pendingPairings.some((p) => p.id === this.selectedPairingId)) {
+              this.selectedPairingId = this.pendingPairings.length === 1 ? this.pendingPairings[0].id : '';
+            }
+          })
+          .catch(() => {
+            this.pendingPairings = [];
+            this.pairingsLoadFailed = true;
+            this.selectedPairingId = '';
+          });
+      },
+      registerDevice() {
+        if (!this.selectedPairingId) {
+          this.pinStatus = 'danger';
+          this.pinMessage = this.i18n.t('pin.select_pairing_required');
+          return;
+        }
+        this.pinMessage = '';
         fetch("./api/pin", {
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json'
           },
           method: 'POST',
-          body: b
+          body: JSON.stringify({ pairing_id: this.selectedPairingId, pin: this.pinInput, name: this.pinName })
         })
           .then((response) => response.json())
           .then((response) => {
             if (response.status === true) {
-              document.querySelector(
-                "#status"
-              ).innerHTML = `<div class="alert alert-success" role="alert">${this.i18n.t('pin.pair_success')}</div>`;
-              document.querySelector("#pin-input").value = "";
-              document.querySelector("#name-input").value = "";
+              this.pinStatus = 'success';
+              this.pinMessage = this.i18n.t('pin.pair_success');
+              this.pinInput = '';
+              this.pinName = '';
 
               setTimeout(() => this.refreshClients(), 1000);
 
               alert(this.i18n.t('pin.pair_success_check_perm'));
             } else {
-              document.querySelector(
-                "#status"
-              ).innerHTML = `<div class="alert alert-danger" role="alert">${this.i18n.t('pin.pair_failure')}</div>`;
+              this.pinStatus = 'danger';
+              this.pinMessage = this.i18n.t('pin.pair_failure');
             }
-          });
+          })
+          .catch(() => {
+            this.pinStatus = 'danger';
+            this.pinMessage = this.i18n.t('pin.pair_failure');
+          })
+          .finally(() => this.refreshPendingPairings());
+      },
+      cancelPairing() {
+        if (!this.selectedPairingId) return;
+        fetch("./api/pin", {
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          method: 'DELETE',
+          body: JSON.stringify({ pairing_id: this.selectedPairingId })
+        })
+          .then((response) => response.json())
+          .then((response) => {
+            this.pinStatus = response.status === true ? 'success' : 'danger';
+            this.pinMessage = this.i18n.t(response.status === true ? 'pin.cancel_success' : 'pin.cancel_failure');
+          })
+          .catch(() => {
+            this.pinStatus = 'danger';
+            this.pinMessage = this.i18n.t('pin.cancel_failure');
+          })
+          .finally(() => this.refreshPendingPairings());
       },
       requestOTP() {
         if (this.editingHost) return;

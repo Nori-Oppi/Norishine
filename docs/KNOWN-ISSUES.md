@@ -22,8 +22,6 @@ real cursor) and `Configurations/AudioTest.*` (opens real audio devices).
 - Before the first client pairs, the host's unique ID is not saved, so it changes on
   every restart. A client that saw the host before pairing then refuses it ("Found
   unexpected PC"). Persist the generated ID in `load_state`.
-- Debug logging (`min_log_level = 1`) writes request headers, including the web UI
-  session cookie. Sunshine `31b85802` is the fix to port.
 - `QOSAddSocketToFlow() failed: 1168` warnings on loopback streams. Expected for
   127.0.0.1; check on a real network.
 - Install identity is still Apollo's (service `ApolloService`, install folder, config

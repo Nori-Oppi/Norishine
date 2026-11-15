@@ -5,6 +5,9 @@
 #define BOOST_BIND_GLOBAL_PLACEHOLDERS
 
 // standard includes
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <utility>
@@ -223,6 +226,43 @@ namespace http {
     std::string result(string);
     curl_free(string);
     return result;
+  }
+
+  namespace {
+    bool iequals_ascii(std::string_view a, std::string_view b) {
+      return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char x, char y) {
+               return std::tolower(static_cast<unsigned char>(x)) == std::tolower(static_cast<unsigned char>(y));
+             });
+    }
+
+    template<std::size_t N>
+    bool in_list(std::string_view name, const std::array<std::string_view, N> &list) {
+      return std::ranges::any_of(list, [name](std::string_view entry) {
+        return iequals_ascii(name, entry);
+      });
+    }
+  }  // namespace
+
+  bool is_sensitive_header(std::string_view name) {
+    static constexpr std::array<std::string_view, 4> sensitive {
+      "Authorization",
+      "Proxy-Authorization",
+      "Cookie",  // Web UI session cookie
+      "Set-Cookie",
+    };
+    return in_list(name, sensitive);
+  }
+
+  bool is_sensitive_query_arg(std::string_view name) {
+    static constexpr std::array<std::string_view, 6> sensitive {
+      "rikey",  // AES key for the stream's input and control channels
+      "salt",  // with the challenges below, enough to brute-force the pairing PIN
+      "clientchallenge",
+      "serverchallengeresp",
+      "clientpairingsecret",
+      "otpauth",
+    };
+    return in_list(name, sensitive);
   }
 
   std::string url_get_host(const std::string &url) {
