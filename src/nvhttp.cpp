@@ -636,9 +636,8 @@ namespace nvhttp {
       named_cert_p->allow_client_commands = true;
       named_cert_p->always_use_virtual_display = false;
 
-      auto it = map_id_sess.find(client.uniqueID);
-      map_id_sess.erase(it);
-
+      // The session is removed by remove_session() below. Erasing it here as well
+      // destroyed `sess` (a reference into map_id_sess) before that call used it.
       add_authorized_client(named_cert_p);
     } else {
       tree.put("root.paired", 0);
