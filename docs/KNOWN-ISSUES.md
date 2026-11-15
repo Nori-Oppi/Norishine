@@ -2,7 +2,7 @@
 
 Tracked here until fixed. Last checked 2026-11-15 on Windows 11, AMD Radeon 780M.
 
-## Failing unit tests (33 of 231)
+## Failing unit tests (33 of 240)
 
 All are tests that Apollo changed behaviour for without updating. None is a streaming failure.
 
