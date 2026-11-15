@@ -9,11 +9,37 @@ set(CPACK_NSIS_INSTALLED_ICON_NAME "${PROJECT__DIR}\\\\${PROJECT_EXE}")
 # Install service
 SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS
         "${CPACK_NSIS_EXTRA_INSTALL_COMMANDS}
-        IfSilent +2 0
-        # ExecShell 'open' 'https://docs.lizardbyte.dev/projects/sunshine'
         nsExec::ExecToLog 'icacls \\\"$INSTDIR\\\" /reset'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" add'
-        nsExec::ExecToLog '\\\"$INSTDIR\\\\drivers\\\\sudovda\\\\install.bat\\\"'
+        # Apollo or Vibepollo installed: replace it (recommended) or keep both on another port.
+        # Runs before the driver installs, because their uninstallers may remove the drivers.
+        nsExec::ExecToLog \
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+            \\\"$INSTDIR\\\\scripts\\\\other-hosts.ps1\\\" -Action prepare'
+        Pop $0
+        StrCmp $0 '10' 0 OtherHostDone
+        MessageBox MB_YESNO|MB_ICONQUESTION \
+            'Apollo or Vibepollo is installed on this PC. Replace it with Norishine? (Recommended)$\\\\n$\\\\n\
+Yes: its settings, apps and paired devices move to Norishine, and it is uninstalled. \
+To go back later, uninstall Norishine, then install Apollo or Vibepollo again: the settings carry over.$\\\\n$\\\\n\
+No: keep both. Norishine then uses port 48989 instead of 47989 (web UI at https://localhost:48990).' \
+            /SD IDNO IDNO OtherHostKeep
+            nsExec::ExecToLog \
+              'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+                \\\"$INSTDIR\\\\scripts\\\\other-hosts.ps1\\\" -Action replace'
+            Pop $0
+            StrCmp $0 '0' OtherHostDone
+            MessageBox MB_OK|MB_ICONEXCLAMATION \
+                'Apollo or Vibepollo could not be uninstalled. Its service was stopped and disabled; \
+uninstall it from Settings, Apps.'
+            Goto OtherHostDone
+        OtherHostKeep:
+            nsExec::ExecToLog \
+              'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+                \\\"$INSTDIR\\\\scripts\\\\other-hosts.ps1\\\" -Action side-by-side'
+        OtherHostDone:
+        nsExec::ExecToLog \
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \\\"$INSTDIR\\\\drivers\\\\sudovda\\\\sudovda.ps1\\\" -Action install'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\migrate-config.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\add-firewall-rule.bat\\\"'
         nsExec::ExecToLog \
@@ -30,8 +56,21 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\delete-firewall-rule.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\uninstall-service.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\sunshine.exe\\\" --restore-nvprefs-undo'
+        nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" remove'
+        # If Norishine replaced Apollo or Vibepollo, keep a copy of its settings where a
+        # reinstall of that host finds them (also on upgrades, which uninstall silently).
+        nsExec::ExecToLog \
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+            \\\"$INSTDIR\\\\scripts\\\\other-hosts.ps1\\\" -Action restore'
+        # Apollo and Vibepollo share the ViGEmBus and SudoVDA drivers. While either is
+        # installed, do not offer to remove them (exit code 0 means no other host).
+        nsExec::ExecToLog \
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+            \\\"$INSTDIR\\\\drivers\\\\sudovda\\\\sudovda.ps1\\\" -Action check'
+        Pop $0
+        StrCmp $0 '0' 0 NoSudoVDA
         MessageBox MB_YESNO|MB_ICONQUESTION \
-            'Do you want to remove Virtual Gamepad?' \
+            'Do you want to remove the ViGEmBus virtual gamepad driver? Other programs, such as controller tools, may also use it.' \
             /SD IDNO IDNO NoGamepad
             nsExec::ExecToLog \
               'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
@@ -41,13 +80,14 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
         MessageBox MB_YESNO|MB_ICONQUESTION \
             'Do you want to remove SudoVDA Virtual Display Driver?' \
             /SD IDNO IDNO NoSudoVDA
-            nsExec::ExecToLog '\\\"$INSTDIR\\\\drivers\\\\sudovda\\\\uninstall.bat\\\"'; skipped if no
+            nsExec::ExecToLog \
+              'powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+                \\\"$INSTDIR\\\\drivers\\\\sudovda\\\\sudovda.ps1\\\" -Action uninstall'; skipped if no
         NoSudoVDA:
         MessageBox MB_YESNO|MB_ICONQUESTION \
             'Do you want to remove $INSTDIR (this includes the configuration, cover images, and settings)?' \
             /SD IDNO IDNO NoDelete
             RMDir /r \\\"$INSTDIR\\\"; skipped if no
-        nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" remove'
         NoDelete:
         ")
 

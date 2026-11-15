@@ -1,10 +1,12 @@
 # Check if a compatible version of ViGEmBus is already installed (1.17 or later)
 try {
     $vigemBusPath = "$env:SystemRoot\System32\drivers\ViGEmBus.sys"
-    $fileVersion = (Get-Item $vigemBusPath).VersionInfo.FileVersion
+    $versionInfo = (Get-Item $vigemBusPath -ErrorAction Stop).VersionInfo
+    $fileVersion = [System.Version]::new($versionInfo.FileMajorPart, $versionInfo.FileMinorPart,
+        $versionInfo.FileBuildPart, $versionInfo.FilePrivatePart)
 
     if ($fileVersion -ge [System.Version]"1.17") {
-        Write-Information "The installed version is 1.17 or later, no update needed. Exiting."
+        Write-Information "ViGEmBus $fileVersion is installed (1.17 or later), no update needed. Exiting."
         exit 0
     }
 }
