@@ -24,9 +24,6 @@ It keeps Apollo's **virtual displays**, **per-device permissions**, **OTP pairin
 host controls inside Norilight. Set up the host in your browser, then adjust its
 streaming settings from the client when you need to.
 
-<p align="center">
-  <img src="docs/images/nori-overview.svg" alt="Norishine streams games and desktops to Norilight; paired devices can manage host settings when permitted" width="100%">
-</p>
 
 ## Getting started
 
