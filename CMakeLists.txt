@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(Norishine VERSION 0.0.0
         DESCRIPTION "Self-hosted game stream host for Norilight, Moonlight and Artemis"
-        HOMEPAGE_URL "https://github.com/azijnwater/Norishine")
+        HOMEPAGE_URL "https://github.com/Nori-Oppi/Norishine")
 
 set(PROJECT_LICENSE "GPL-3.0-only")
 

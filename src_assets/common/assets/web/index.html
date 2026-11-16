@@ -105,10 +105,10 @@
         this.notifyPreReleases = config.notify_pre_releases;
         this.version = new ApolloVersion(null, config.version);
         console.log("Version: ", this.version.version)
-        this.githubVersion = new ApolloVersion(await fetch("https://api.github.com/repos/azijnwater/Norishine/releases/latest").then((r) => r.json()), null);
+        this.githubVersion = new ApolloVersion(await fetch("https://api.github.com/repos/Nori-Oppi/Norishine/releases/latest").then((r) => r.json()), null);
         console.log("GitHub Version: ", this.githubVersion.version)
         if (this.githubVersion) {
-          this.preReleaseVersion = new ApolloVersion((await fetch("https://api.github.com/repos/azijnwater/Norishine/releases").then((r) => r.json())).find(release => release.prerelease), null);
+          this.preReleaseVersion = new ApolloVersion((await fetch("https://api.github.com/repos/Nori-Oppi/Norishine/releases").then((r) => r.json())).find(release => release.prerelease), null);
           console.log("Pre-Release Version: ", this.preReleaseVersion.version)
         }
       } catch (e) {
