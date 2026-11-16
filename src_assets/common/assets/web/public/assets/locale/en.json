@@ -517,7 +517,9 @@
     "server_cmd": "Server Command",
     "list": "List Apps",
     "view": "View Streams",
-    "launch": "Launch Apps"
+    "launch": "Launch Apps",
+    "manage_read": "Read Host Settings",
+    "manage_write": "Change Host Settings"
   },
   "pin": {
     "allow_client_commands": "Allow client commands",

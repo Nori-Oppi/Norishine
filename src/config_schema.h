@@ -159,6 +159,29 @@ namespace config::schema {
   nlohmann::json read_values(std::string_view file_content);
 
   /**
+   * @brief Read the config file and return read_values() for it.
+   *
+   * Shared by the web UI API and the client management API; serialized with apply_change().
+   */
+  nlohmann::json read_config_file(const std::string &config_file);
+
+  /**
+   * @brief Result of applying a change to the config file.
+   */
+  struct apply_result_t {
+    bool written = true;  ///< False when the file could not be written.
+    nlohmann::json changed = nlohmann::json::array();  ///< Keys set or reset.
+    bool restart_required = false;  ///< True when the file changed and a changed setting needs a restart.
+  };
+
+  /**
+   * @brief Apply a validated change (no errors) to the config file atomically.
+   *
+   * Reads, updates only the affected lines and writes the file under one lock.
+   */
+  apply_result_t apply_change(const change_t &change, const std::string &config_file);
+
+  /**
    * @brief Names used in JSON.
    */
   std::string_view to_string(type_e type);

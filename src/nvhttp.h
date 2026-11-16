@@ -55,6 +55,11 @@ namespace nvhttp {
    */
   constexpr auto PORT_HTTPS = -5;
 
+  /**
+   * @brief Version of the Norishine management API on the HTTPS port (/api/v1).
+   */
+  constexpr int API_VERSION = 1;
+
   constexpr auto OTP_EXPIRE_DURATION = 180s;
 
   /**

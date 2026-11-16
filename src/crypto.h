@@ -68,12 +68,18 @@ namespace crypto {
     _allow_view      = view | launch,    // If no view permission is granted, disconnect the device upon permission update
     _all_actions     = list | view | launch,
 
+    // Management through /api/v1 on the HTTPS port (Norilight). Never granted by default:
+    // only from the host's own web UI, per device.
+    manage_read      = _action << 4,     // Read host status and settings
+    manage_write     = _action << 5,     // Change host settings
+    _all_manage      = manage_read | manage_write,
+
     _default         = view | list,      // Default permissions for new clients
     // The first paired device, and imported devices with no stored permissions: stream,
     // launch and send input. Clipboard and server commands are only granted explicitly.
     _first_device    = _all_actions | _all_inputs,
     _no              = 0,                // No permissions are granted
-    _all             = _all_inputs | _all_opeiations | _all_actions, // All current permissions
+    _all             = _all_inputs | _all_opeiations | _all_actions | _all_manage, // All current permissions
   };
 
   inline constexpr PERM

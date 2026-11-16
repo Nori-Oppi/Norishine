@@ -55,6 +55,25 @@ automatic). The table is `src/config_schema.cpp`.
 ## PATCH /api/v1/config
 @copydoc confighttp::patchConfigV1()
 
+## Management API for paired clients
+
+Norilight (and other clients) use the same `/api/v1` calls on the GameStream HTTPS port
+(47984 by default), authenticated by the certificate the client paired with; no admin
+password is stored on the client. Each call also needs a permission that is never granted
+by default, only per device from the web UI (paired devices, "Manage"):
+
+| Permission | Bit | Allows |
+| --- | --- | --- |
+| `manage_read` (Read Host Settings) | `0x10000000` | `GET /api/v1/status`, `GET /api/v1/config/schema`, `GET /api/v1/config` |
+| `manage_write` (Change Host Settings) | `0x20000000` | the above, and `PATCH /api/v1/config` |
+
+Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,config.schema,config.read,config.write</Features></Norishine>`,
+and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
+host name, version, platform, unique ID, running app, number of active sessions, and the
+requesting device's name and permissions. `scripts/e2e/manage_check.py` checks all of it
+against a dev host.
+
 ## POST /api/covers/upload
 @copydoc confighttp::uploadCover()
 

@@ -8,11 +8,13 @@
 #include <charconv>
 #include <cmath>
 #include <limits>
+#include <mutex>
 #include <regex>
 
 // local includes
 #include "config.h"
 #include "config_schema.h"
+#include "file_handler.h"
 #include "nvhttp.h"
 #include "platform/common.h"
 #include "rtsp.h"
@@ -703,6 +705,38 @@ namespace config::schema {
       }
     }
     return {{"values", values}, {"unknown", unknown}, {"invalid", invalid}};
+  }
+
+  namespace {
+    std::mutex config_file_mutex;
+  }
+
+  json read_config_file(const std::string &config_file) {
+    std::lock_guard lock {config_file_mutex};
+    return read_values(file_handler::read_file(config_file.c_str()));
+  }
+
+  apply_result_t apply_change(const change_t &change, const std::string &config_file) {
+    apply_result_t result;
+    bool restart = false;
+    for (const auto &[key, _] : change.set) {
+      result.changed.push_back(key);
+      restart = restart || find(key)->restart_required;
+    }
+    for (const auto &key : change.reset) {
+      result.changed.push_back(key);
+      restart = restart || find(key)->restart_required;
+    }
+
+    std::lock_guard lock {config_file_mutex};
+    const auto current = file_handler::read_file(config_file.c_str());
+    const auto updated = config::update_config_text(current, change.set, change.reset);
+    if (updated == current) {
+      return result;
+    }
+    result.written = file_handler::write_file(config_file.c_str(), updated) == 0;
+    result.restart_required = result.written && restart;
+    return result;
   }
 
   std::string_view to_string(type_e type) {
