@@ -92,3 +92,24 @@ python -m venv .venv && .venv/Scripts/pip install cryptography
 To test with Norilight without touching its installed settings, copy a Norilight build
 folder elsewhere and create an empty `portable.dat` in it; settings then live in that
 folder. Add the host as `127.0.0.1:49989`.
+
+## Branches
+
+Branch review: **16 November 2026**. All of these are included in `master`.
+
+| Branch | Work |
+| --- | --- |
+| `security/remaining-advisories` | Remaining Sunshine security ports and persistent host identity |
+| `installer/other-hosts` | Replace/coexist installer, shared-driver handling, configuration copies and PATH cleanup |
+| `m1/settings-schema` | Settings schema, validated configuration API, atomic writes and backups |
+| `m5/client-management` | Capability discovery, paired-certificate management API and per-device grants |
+| `m6/host-strings` | Readable schema labels and help, paired-client restart endpoint |
+| `ci/nightly` | Rolling Windows nightly installer built through CI |
+| `phase3/m2-settings-ui` | Schema-driven settings page and shared visual theme |
+| `phase3/m3` | Remaining web pages, active-stream status, sign-in hardening and CSRF |
+| `phase3/m4` | Split state files with versioned migrations; sign-ins that survive a restart |
+| `phase3/m7-manage-api` | Apps, paired devices, streams and displays in the management API |
+
+Clone with submodules (`git clone --recursive`). The [general build notes](building.md)
+keep the upstream platform instructions; [initial research](PHASE1-RESEARCH.md) explains
+the starting point.
