@@ -39,6 +39,7 @@
 #include "nvhttp.h"
 #include "platform/common.h"
 #include "process.h"
+#include "state_store.h"
 #include "utility.h"
 #include "uuid.h"
 #include "web_auth.h"
@@ -1810,8 +1811,31 @@ namespace confighttp {
   /**
    * @brief Start the HTTPS server.
    */
+  /**
+   * @brief Keep signed-in browsers signed in across a restart of the host.
+   *
+   * Sessions live in state/sessions.json (token hashes, never the tokens themselves).
+   */
+  void load_sessions() {
+    const auto file = state_store::paths().dir / "sessions.json";
+    if (state_store::writable() && !state_store::paths().dir.empty()) {
+      if (auto saved = state_store::read(file); saved && saved->contains("sessions")) {
+        sessions.load((*saved)["sessions"]);
+      }
+    }
+    sessions.on_change([file](const nlohmann::json &list) {
+      if (!state_store::writable() || state_store::paths().dir.empty()) {
+        return;
+      }
+      if (!state_store::write(file, {{"sessions", list}})) {
+        BOOST_LOG(warning) << "Couldn't save web UI sessions to "sv << file.string();
+      }
+    });
+  }
+
   void start() {
     auto shutdown_event = mail::man->event<bool>(mail::shutdown);
+    load_sessions();
     auto port_https = net::map_port(PORT_HTTPS);
     auto address_family = net::af_from_enum_string(config::sunshine.address_family);
     https_server_t server { config::nvhttp.cert, config::nvhttp.pkey };

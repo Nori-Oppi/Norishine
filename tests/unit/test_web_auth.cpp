@@ -53,7 +53,7 @@ TEST(WebAuthTests, RandomTokensAreCookieSafe) {
 
 TEST(WebAuthTests, SessionsAreIndependentAndExpire) {
   sessions_t sessions {100s, 3};
-  auto t0 = clock::now();
+  auto t0 = sessions_t::wall_clock::now();
   auto a = sessions.create(t0);
   auto b = sessions.create(t0 + 10s);
   EXPECT_NE(a.token, b.token);
@@ -74,7 +74,7 @@ TEST(WebAuthTests, SessionsAreIndependentAndExpire) {
 
 TEST(WebAuthTests, OldestSessionMakesRoom) {
   sessions_t sessions {1000s, 2};
-  auto t0 = clock::now();
+  auto t0 = sessions_t::wall_clock::now();
   auto a = sessions.create(t0);
   auto b = sessions.create(t0 + 1s);
   auto c = sessions.create(t0 + 2s);
@@ -84,6 +84,67 @@ TEST(WebAuthTests, OldestSessionMakesRoom) {
   EXPECT_TRUE(sessions.find(c.token, t0 + 3s));
   sessions.clear();
   EXPECT_EQ(sessions.size(), 0u);
+}
+
+TEST(WebAuthTests, SessionsSurviveARestart) {
+  using namespace std::chrono_literals;
+  auto t0 = sessions_t::wall_clock::now();
+  sessions_t before {1000s};
+  nlohmann::json saved;
+  int changes = 0;
+  before.on_change([&](const nlohmann::json &list) {
+    saved = list;
+    changes++;
+  });
+  auto a = before.create(t0);
+  auto b = before.create(t0);
+  EXPECT_EQ(changes, 2);
+  ASSERT_EQ(saved.size(), 2u);
+  // Only hashes are saved, never the tokens.
+  EXPECT_EQ(saved.dump().find(a.token), std::string::npos);
+  EXPECT_EQ(saved.dump().find(b.token), std::string::npos);
+
+  // A new host process loads them: the same cookies and CSRF tokens still work.
+  sessions_t after {1000s};
+  after.load(saved, t0 + 5s);
+  EXPECT_EQ(after.find(a.token, t0 + 5s), a.csrf);
+  EXPECT_EQ(after.find(b.token, t0 + 5s), b.csrf);
+
+  // Signing out and password changes are saved too.
+  before.remove(a.token);
+  EXPECT_EQ(saved.size(), 1u);
+  before.remove("unknown");
+  EXPECT_EQ(changes, 3) << "nothing changed, nothing saved";
+  before.clear();
+  EXPECT_TRUE(saved.empty());
+}
+
+TEST(WebAuthTests, SavedSessionsAreChecked) {
+  using namespace std::chrono_literals;
+  auto t0 = sessions_t::wall_clock::now();
+  sessions_t source {100s};
+  nlohmann::json saved;
+  source.on_change([&](const nlohmann::json &list) { saved = list; });
+  auto good = source.create(t0);
+
+  auto list = saved;
+  list.push_back({{"hash", "short"}, {"csrf", "x"}, {"created", 1}});
+  list.push_back({{"hash", std::string(64, 'A')}, {"csrf", ""}, {"created", 1}});
+  list.push_back("not an object");
+  sessions_t loaded {100s};
+  loaded.load(list, t0 + 1s);
+  EXPECT_EQ(loaded.size(), 1u);
+  EXPECT_TRUE(loaded.find(good.token, t0 + 1s));
+
+  // Expired while the host was off.
+  loaded.load(saved, t0 + 200s);
+  EXPECT_EQ(loaded.size(), 0u);
+  // Created "in the future" (the clock was set back a lot): dropped as well.
+  loaded.load(saved, t0 - 200s);
+  EXPECT_EQ(loaded.size(), 0u);
+  // Not a list at all.
+  loaded.load(nlohmann::json::object(), t0);
+  EXPECT_EQ(loaded.size(), 0u);
 }
 
 TEST(WebAuthTests, LoginLimiterLocksOutAndDoubles) {

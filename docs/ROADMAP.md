@@ -142,7 +142,8 @@ deliberately broken, but is not verified until CI exists for it.
   reordering, launch and close; troubleshooting with a live, filterable log and the
   close / restart / display-reset / quit actions; account page. Sign-in: several
   sessions at once, HttpOnly session cookie, CSRF token required on every change (and a
-  matching Origin), per-address lockout after failed sign-ins, PBKDF2 password hashes
+  matching Origin), sessions that survive a restart of the host, per-address lockout
+  after failed sign-ins, PBKDF2 password hashes
   (old ones converted at the next sign-in), sign out, and no more passwords kept in the
   browser (`src/web_auth.*`, tested).
 - **M4** State file split and migrations; import from Apollo (**done**). Import from an

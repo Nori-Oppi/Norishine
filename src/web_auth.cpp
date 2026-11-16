@@ -79,27 +79,51 @@ namespace web_auth {
       max_sessions {max_sessions} {
   }
 
-  void sessions_t::expire(clock::time_point now) {
-    std::erase_if(by_hash, [&](const auto &item) {
-      return now - item.second.created > lifetime;
-    });
+  bool sessions_t::expire(wall_clock::time_point now) {
+    // A clock set back by more than the lifetime would keep sessions forever; drop those too.
+    return std::erase_if(by_hash, [&](const auto &item) {
+             return now - item.second.created > lifetime || item.second.created - now > lifetime;
+           }) > 0;
   }
 
-  sessions_t::created_t sessions_t::create(clock::time_point now) {
-    created_t created {random_token(), random_token()};
-    std::lock_guard lock {mutex};
-    expire(now);
-    while (by_hash.size() >= max_sessions) {
-      auto oldest = std::min_element(by_hash.begin(), by_hash.end(), [](const auto &a, const auto &b) {
-        return a.second.created < b.second.created;
+  nlohmann::json sessions_t::to_json_locked() const {
+    nlohmann::json list = nlohmann::json::array();
+    for (const auto &[hash, session] : by_hash) {
+      list.push_back({
+        {"hash", hash},
+        {"csrf", session.csrf},
+        {"created", std::chrono::duration_cast<std::chrono::seconds>(session.created.time_since_epoch()).count()},
       });
-      by_hash.erase(oldest);
     }
-    by_hash[sha256_hex(created.token)] = {created.csrf, now};
+    return list;
+  }
+
+  void sessions_t::notify(const nlohmann::json &content) {
+    if (changed) {
+      changed(content);
+    }
+  }
+
+  sessions_t::created_t sessions_t::create(wall_clock::time_point now) {
+    created_t created {random_token(), random_token()};
+    nlohmann::json content;
+    {
+      std::lock_guard lock {mutex};
+      expire(now);
+      while (by_hash.size() >= max_sessions) {
+        auto oldest = std::min_element(by_hash.begin(), by_hash.end(), [](const auto &a, const auto &b) {
+          return a.second.created < b.second.created;
+        });
+        by_hash.erase(oldest);
+      }
+      by_hash[sha256_hex(created.token)] = {created.csrf, now};
+      content = to_json_locked();
+    }
+    notify(content);
     return created;
   }
 
-  std::optional<std::string> sessions_t::find(std::string_view token, clock::time_point now) {
+  std::optional<std::string> sessions_t::find(std::string_view token, wall_clock::time_point now) {
     if (token.empty()) {
       return std::nullopt;
     }
@@ -113,18 +137,65 @@ namespace web_auth {
   }
 
   void sessions_t::remove(std::string_view token) {
-    std::lock_guard lock {mutex};
-    by_hash.erase(sha256_hex(token));
+    nlohmann::json content;
+    {
+      std::lock_guard lock {mutex};
+      if (by_hash.erase(sha256_hex(token)) == 0) {
+        return;
+      }
+      content = to_json_locked();
+    }
+    notify(content);
   }
 
   void sessions_t::clear() {
-    std::lock_guard lock {mutex};
-    by_hash.clear();
+    {
+      std::lock_guard lock {mutex};
+      by_hash.clear();
+    }
+    notify(nlohmann::json::array());
   }
 
   std::size_t sessions_t::size() {
     std::lock_guard lock {mutex};
     return by_hash.size();
+  }
+
+  nlohmann::json sessions_t::to_json() {
+    std::lock_guard lock {mutex};
+    return to_json_locked();
+  }
+
+  void sessions_t::load(const nlohmann::json &saved, wall_clock::time_point now) {
+    std::lock_guard lock {mutex};
+    by_hash.clear();
+    if (!saved.is_array()) {
+      return;
+    }
+    for (const auto &item : saved) {
+      if (!item.is_object() || !item.contains("hash") || !item["hash"].is_string() || !item.contains("csrf") ||
+          !item["csrf"].is_string() || !item.contains("created") || !item["created"].is_number_integer()) {
+        continue;
+      }
+      const auto hash = item["hash"].get<std::string>();
+      const auto csrf = item["csrf"].get<std::string>();
+      if (hash.size() != 64 || csrf.empty()) {
+        continue;
+      }
+      by_hash[hash] = {csrf, wall_clock::time_point {std::chrono::seconds {item["created"].get<long long>()}}};
+    }
+    expire(now);
+    while (by_hash.size() > max_sessions) {
+      auto oldest = std::min_element(by_hash.begin(), by_hash.end(), [](const auto &a, const auto &b) {
+        return a.second.created < b.second.created;
+      });
+      by_hash.erase(oldest);
+    }
+  }
+
+  void sessions_t::on_change(std::function<void(const nlohmann::json &)> callback) {
+    std::lock_guard lock {mutex};
+    changed = std::move(callback);
   }
 
   std::chrono::seconds login_limiter_t::wait_time(const std::string &address, clock::time_point now) {
