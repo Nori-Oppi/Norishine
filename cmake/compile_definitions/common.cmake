@@ -70,6 +70,8 @@ set(SUNSHINE_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/state_store.h"
         "${CMAKE_SOURCE_DIR}/src/state_store.cpp"
         "${CMAKE_SOURCE_DIR}/src/web_auth.h"
+        "${CMAKE_SOURCE_DIR}/src/manage_api.cpp"
+        "${CMAKE_SOURCE_DIR}/src/manage_api.h"
         "${CMAKE_SOURCE_DIR}/src/web_auth.cpp"
         "${CMAKE_SOURCE_DIR}/src/display_device.h"
         "${CMAKE_SOURCE_DIR}/src/display_device.cpp"
