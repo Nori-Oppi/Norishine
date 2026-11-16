@@ -224,8 +224,12 @@ namespace config::schema {
       return value;
     }
 
-    std::optional<bool> parse_bool(std::string_view text) {
-      // Same spellings as config.cpp to_bool(); anything else is an error here, not "false".
+    std::optional<bool> parse_bool(std::string_view raw) {
+      // Same spellings as config.cpp to_bool(), in any case; anything else is an error here, not "false".
+      std::string text {raw};
+      std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+        return (char) std::tolower(ch);
+      });
       for (auto t : {"true"sv, "yes"sv, "enable"sv, "enabled"sv, "on"sv, "1"sv}) {
         if (text == t) {
           return true;
