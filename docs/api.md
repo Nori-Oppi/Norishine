@@ -42,12 +42,25 @@ basic authentication with the admin username and password.
 ## GET /api/v1/config/schema
 @copydoc confighttp::getConfigSchema()
 
-Each setting has `key`, `category` (the web UI tab), `type` (`boolean`, `integer`,
+Each setting has `key`, `category` (an `id` from `categories`), `type` (`boolean`, `integer`,
 `number`, `string`, `choice`, `path`, `prep_commands`, `server_commands`, `keybindings`,
 `mode_remapping`), `tier` (`basic`, `advanced`, `dangerous`), `platforms`, `available` (on
 this host), `default`, `restart_required`, `label` and `description` (keys into the web UI
 locale files), and where it applies `min`, `max` and `choices` (an empty choice means
 automatic). The table is `src/config_schema.cpp`.
+
+Optional fields, added later (clients must not require them):
+
+- `depends_on`: `{"key": ..., "values": [...]}`. The setting only has an effect while that
+  other setting (always earlier in the list, in the same category) has one of these values.
+  The web UI indents such settings and says when they have no effect.
+- `value_titles`: readable names for values, keyed by the value as text (`"0"` for an
+  integer, `""` for automatic). Choices always have them; integers with a few named values
+  (`hevc_mode`, `min_log_level`, ...) have one per value and can be shown as a list.
+
+`categories` lists `id` and `title` in display order; related categories also have `group`
+and `group_title` (the encoder categories, under "Encoders"). Category ids and the order of
+settings can change between versions, so render them from the schema rather than by name.
 
 ## GET /api/v1/config
 @copydoc confighttp::getConfigV1()

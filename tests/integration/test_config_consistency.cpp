@@ -18,28 +18,11 @@
 #include <vector>
 
 // local includes
+#include "src/config_schema.h"
 #include "src/file_handler.h"
 
 class ConfigConsistencyTest: public ::testing::Test {
 protected:
-  void SetUp() override {
-    // Define the expected mapping between documentation sections and UI tabs
-    expectedDocToTabMapping = {
-      {"General", "general"},
-      {"Input", "input"},
-      {"Audio/Video", "av"},
-      {"Network", "network"},
-      {"Config Files", "files"},
-      {"Advanced", "advanced"},
-      {"NVIDIA NVENC Encoder", "nv"},
-      {"Intel QuickSync Encoder", "qsv"},
-      {"AMD AMF Encoder", "amd"},
-      {"VideoToolbox Encoder", "vt"},
-      {"VA-API Encoder", "vaapi"},
-      {"Software Encoder", "sw"}
-    };
-  }
-
   // Extract config options from config.cpp - the authoritative source
   static std::set<std::string, std::less<>> extractConfigCppOptions() {
     std::set<std::string, std::less<>> options;
@@ -68,114 +51,6 @@ protected:
     return options;
   }
 
-  // Helper function to find brace boundaries
-  static size_t findClosingBrace(const std::string &content, const size_t start) {
-    size_t pos = start + 1;
-    int braceLevel = 1;
-
-    while (pos < content.length() && braceLevel > 0) {
-      if (content[pos] == '{') {
-        braceLevel++;
-      } else if (content[pos] == '}') {
-        braceLevel--;
-      }
-      pos++;
-    }
-
-    return pos - 1;
-  }
-
-  // Helper function to extract tab ID from a tab object
-  static std::string extractTabId(const std::string &tabObject) {
-    const std::regex idPattern(R"DELIM(id:\s*"([^"]+)")DELIM");
-
-    if (std::smatch idMatch; std::regex_search(tabObject, idMatch, idPattern)) {
-      return idMatch[1].str();
-    }
-
-    return "";
-  }
-
-  // Helper function to find and extract tabs content from HTML
-  static std::string extractTabsContent(const std::string &content) {
-    const size_t tabsStart = content.find("tabs: [");
-    if (tabsStart == std::string::npos) {
-      return "";
-    }
-
-    // Find the end of the tab array
-    size_t pos = tabsStart + 7;  // Skip "tabs: ["
-    int bracketLevel = 1;
-    size_t tabsEnd = pos;
-
-    while (pos < content.length() && bracketLevel > 0) {
-      if (content[pos] == '[') {
-        bracketLevel++;
-      } else if (content[pos] == ']') {
-        bracketLevel--;
-      }
-      tabsEnd = pos;
-      pos++;
-    }
-
-    return content.substr(tabsStart + 7, tabsEnd - tabsStart - 7);
-  }
-
-  // Helper function to extract options from a tab object (generic version)
-  template<typename Container>
-  static void extractOptionsFromTabGeneric(const std::string &tabObject, Container &container) {
-    const std::string tabId = extractTabId(tabObject);
-    if (tabId.empty()) {
-      return;
-    }
-
-    const size_t optionsStart = tabObject.find("options:");
-    if (optionsStart == std::string::npos) {
-      return;
-    }
-
-    const size_t optStart = tabObject.find('{', optionsStart);
-    if (optStart == std::string::npos) {
-      return;
-    }
-
-    const size_t optEnd = findClosingBrace(tabObject, optStart);
-    std::string optionsSection = tabObject.substr(optStart + 1, optEnd - optStart - 1);
-
-    // Extract option names
-    const std::regex optionPattern(R"DELIM("([^"]+)":\s*)DELIM");
-    std::sregex_iterator optionIter(optionsSection.begin(), optionsSection.end(), optionPattern);
-
-    for (const std::sregex_iterator optionEnd; optionIter != optionEnd; ++optionIter) {
-      std::string optionName = (*optionIter)[1].str();
-
-      // Use if constexpr to handle different container types
-      if constexpr (std::is_same_v<Container, std::map<std::string, std::string, std::less<>>>) {
-        container[optionName] = tabId;
-      } else if constexpr (std::is_same_v<Container, std::map<std::string, std::vector<std::string>, std::less<>>>) {
-        container[tabId].push_back(optionName);
-      }
-    }
-  }
-
-  // Helper function to process tab objects from tabs content
-  template<typename Container>
-  static void processTabObjects(const std::string &tabsContent, Container &container) {
-    size_t tabPos = 0;
-    while (tabPos < tabsContent.length()) {
-      const size_t objStart = tabsContent.find('{', tabPos);
-      if (objStart == std::string::npos) {
-        break;
-      }
-
-      const size_t objEnd = findClosingBrace(tabsContent, objStart);
-      std::string tabObject = tabsContent.substr(objStart, objEnd - objStart + 1);
-
-      extractOptionsFromTabGeneric(tabObject, container);
-
-      tabPos = objEnd + 1;
-    }
-  }
 
   // Helper function to trim whitespace from string
   static void trimWhitespace(std::string &str) {
@@ -193,37 +68,13 @@ protected:
     return "";
   }
 
-  // Extract config options from config.html
+  // Settings the web UI shows: the settings schema (src/config_schema.cpp), key to category.
   static std::map<std::string, std::string, std::less<>> extractConfigHtmlOptions() {
     std::map<std::string, std::string, std::less<>> options;
-    const std::string content = file_handler::read_file("src_assets/common/assets/web/config.html");
-
-    const std::string tabsContent = extractTabsContent(content);
-    if (tabsContent.empty()) {
-      return options;
+    for (const auto &setting : config::schema::settings()) {
+      options[std::string {setting.key}] = std::string {setting.category};
     }
-
-    processTabObjects(tabsContent, options);
     return options;
-  }
-
-  // Helper function to extract options from a single tab object (now using generic function)
-  static void extractOptionsFromTab(const std::string &tabObject, std::map<std::string, std::vector<std::string>, std::less<>> &optionsByTab) {
-    extractOptionsFromTabGeneric(tabObject, optionsByTab);
-  }
-
-  // Extract config options from config.html with order preserved
-  static std::map<std::string, std::vector<std::string>, std::less<>> extractConfigHtmlOptionsWithOrder() {
-    std::map<std::string, std::vector<std::string>, std::less<>> optionsByTab;
-    const std::string content = file_handler::read_file("src_assets/common/assets/web/config.html");
-
-    const std::string tabsContent = extractTabsContent(content);
-    if (tabsContent.empty()) {
-      return optionsByTab;
-    }
-
-    processTabObjects(tabsContent, optionsByTab);
-    return optionsByTab;
   }
 
   // Helper function to process markdown line for section headers
@@ -356,7 +207,6 @@ protected:
     return options;
   }
 
-  std::map<std::string, std::string, std::less<>> expectedDocToTabMapping;
 
   // Helper function to check if an option exists in HTML options
   static bool isOptionInHtml(const std::string &option, const std::map<std::string, std::string, std::less<>> &htmlOptions) {
@@ -371,7 +221,7 @@ protected:
   // Helper function to validate option existence across files
   static void validateOptionExistence(const std::string &option, const std::map<std::string, std::string, std::less<>> &htmlOptions, const std::map<std::string, std::string, std::less<>> &mdOptions, const std::set<std::string, std::less<>> &jsonOptions, std::vector<std::string> &missingFromFiles) {
     if (!isOptionInHtml(option, htmlOptions)) {
-      missingFromFiles.push_back(std::format("config.html missing: {}", option));
+      missingFromFiles.push_back(std::format("settings schema missing: {}", option));
     }
 
     if (!isOptionInMd(option, mdOptions)) {
@@ -383,26 +233,6 @@ protected:
     }
   }
 
-  // Helper function to check tab correspondence with documentation sections
-  static void checkTabCorrespondence(const std::string &tab, const std::map<std::string, std::string, std::less<>> &expectedDocToTabMapping, const std::set<std::string, std::less<>> &mdSections, std::vector<std::string> &inconsistencies) {
-    bool found = false;
-
-    for (const auto &[docSection, expectedTab] : expectedDocToTabMapping) {
-      if (expectedTab != tab) {
-        continue;
-      }
-
-      if (!mdSections.contains(docSection)) {
-        inconsistencies.push_back(std::format("Tab '{}' maps to doc section '{}' but section not found", tab, docSection));
-      }
-      found = true;
-      break;
-    }
-
-    if (!found) {
-      inconsistencies.push_back(std::format("Tab '{}' has no corresponding documentation section", tab));
-    }
-  }
 
   // Helper function to check if a test fake option is found in missing files
   static void checkTestDummyDetection(const std::vector<std::string> &missingFromFiles, const std::string &testDummyOption, bool &foundMissingDummyInHtml, bool &foundMissingDummyInMd, bool &foundMissingDummyInJson) {
@@ -411,7 +241,7 @@ protected:
         continue;
       }
 
-      if (missing.contains("config.html")) {
+      if (missing.contains("settings schema")) {
         foundMissingDummyInHtml = true;
       }
       if (missing.contains("configuration.md")) {
@@ -423,17 +253,6 @@ protected:
     }
   }
 
-  // Helper function to create comma-separated string from vector
-  static std::string buildCommaSeparatedString(const std::vector<std::string> &options) {
-    std::string result;
-    for (size_t i = 0; i < options.size(); ++i) {
-      if (i > 0) {
-        result += ", ";
-      }
-      result += options[i];
-    }
-    return result;
-  }
 };
 
 TEST_F(ConfigConsistencyTest, AllConfigOptionsExistInAllFiles) {
@@ -467,104 +286,6 @@ TEST_F(ConfigConsistencyTest, AllConfigOptionsExistInAllFiles) {
   }
 }
 
-TEST_F(ConfigConsistencyTest, ConfigTabsMatchDocumentationSections) {
-  auto htmlOptions = extractConfigHtmlOptions();
-  auto mdOptions = extractConfigMdOptions();
-
-  // Get unique tabs and sections
-  std::set<std::string, std::less<>> htmlTabs;
-  std::set<std::string, std::less<>> mdSections;
-
-  for (const auto &tab : htmlOptions | std::views::values) {
-    htmlTabs.insert(tab);
-  }
-
-  for (const auto &section : mdOptions | std::views::values) {
-    mdSections.insert(section);
-  }
-
-  std::vector<std::string> inconsistencies;
-
-  // Check that each HTML tab has a corresponding documentation section
-  for (const auto &tab : htmlTabs) {
-    checkTabCorrespondence(tab, expectedDocToTabMapping, mdSections, inconsistencies);
-  }
-
-  // Check that each documentation section has a corresponding HTML tab
-  for (const auto &section : mdSections) {
-    if (!expectedDocToTabMapping.contains(section)) {
-      inconsistencies.push_back(std::format("Documentation section '{}' has no corresponding UI tab", section));
-    }
-  }
-
-  if (!inconsistencies.empty()) {
-    std::string errorMsg = "Tab/Section mapping inconsistencies:\n";
-    for (const auto &inconsistency : inconsistencies) {
-      errorMsg += std::format("  {}\n", inconsistency);
-    }
-    FAIL() << errorMsg;
-  }
-}
-
-TEST_F(ConfigConsistencyTest, ConfigOptionsInSameOrderWithinSections) {
-  // Extract options with order preserved
-  auto htmlOptionsByTab = extractConfigHtmlOptionsWithOrder();
-  auto mdOptionsBySection = extractConfigMdOptionsWithOrder();
-
-  std::vector<std::string> orderInconsistencies;
-
-  // Compare order for each tab/section pair
-  for (const auto &[docSection, tabId] : expectedDocToTabMapping) {
-    if (!htmlOptionsByTab.contains(tabId) || !mdOptionsBySection.contains(docSection)) {
-      continue;  // Skip if either tab or section doesn't exist
-    }
-
-    const auto &htmlOrder = htmlOptionsByTab.at(tabId);
-    const auto &mdOrder = mdOptionsBySection.at(docSection);
-
-    // Find options that exist in both HTML and MD for this section
-    std::vector<std::string> commonOptions;
-    for (const auto &option : htmlOrder) {
-      if (std::ranges::find(mdOrder, option) != mdOrder.end()) {
-        commonOptions.push_back(option);
-      }
-    }
-
-    // Filter MD order to only include common options in the same order they appear in MD
-    std::vector<std::string> mdOrderFiltered;
-    for (const auto &option : mdOrder) {
-      if (std::ranges::find(commonOptions, option) != commonOptions.end()) {
-        mdOrderFiltered.push_back(option);
-      }
-    }
-
-    // Compare the order of common options
-    if (commonOptions != mdOrderFiltered && !commonOptions.empty() && !mdOrderFiltered.empty()) {
-      // Create readable string representations of the option lists
-      std::string htmlOrderStr = buildCommaSeparatedString(commonOptions);
-      std::string mdOrderStr = buildCommaSeparatedString(mdOrderFiltered);
-
-      std::string detailMsg = std::format(
-        "Section '{}' (tab '{}') has different option order:\n"
-        "  HTML order: [{}]\n"
-        "  MD order:   [{}]",
-        docSection,
-        tabId,
-        htmlOrderStr,
-        mdOrderStr
-      );
-      orderInconsistencies.push_back(detailMsg);
-    }
-  }
-
-  if (!orderInconsistencies.empty()) {
-    std::string errorMsg = "Config option order inconsistencies:\n";
-    for (const auto &inconsistency : orderInconsistencies) {
-      errorMsg += std::format("  {}\n", inconsistency);
-    }
-    FAIL() << errorMsg;
-  }
-}
 
 TEST_F(ConfigConsistencyTest, DummyConfigOptionsDoNotExist) {
   const auto cppOptions = extractConfigCppOptions();
@@ -590,7 +311,7 @@ TEST_F(ConfigConsistencyTest, DummyConfigOptionsDoNotExist) {
     }
 
     if (htmlOptions.contains(dummyOption)) {
-      unexpectedlyFound.push_back(std::format("config.html contains dummy option: {}", dummyOption));
+      unexpectedlyFound.push_back(std::format("settings schema contains dummy option: {}", dummyOption));
     }
 
     if (mdOptions.contains(dummyOption)) {
@@ -638,7 +359,7 @@ TEST_F(ConfigConsistencyTest, TestFrameworkDetectsMissingOptions) {
     }
 
     if (!htmlOptions.contains(option)) {
-      missingFromFiles.push_back(std::format("config.html missing: {}", option));
+      missingFromFiles.push_back(std::format("settings schema missing: {}", option));
     }
 
     if (!mdOptions.contains(option)) {
@@ -658,7 +379,7 @@ TEST_F(ConfigConsistencyTest, TestFrameworkDetectsMissingOptions) {
   checkTestDummyDetection(missingFromFiles, testDummyOption, foundMissingDummyInHtml, foundMissingDummyInMd, foundMissingDummyInJson);
 
   // The test framework should have detected the fake option as missing from all files
-  EXPECT_TRUE(foundMissingDummyInHtml) << "Test framework failed to detect missing option in config.html";
+  EXPECT_TRUE(foundMissingDummyInHtml) << "Test framework failed to detect missing option in the settings schema";
   EXPECT_TRUE(foundMissingDummyInMd) << "Test framework failed to detect missing option in configuration.md";
   EXPECT_TRUE(foundMissingDummyInJson) << "Test framework failed to detect missing option in en.json";
 

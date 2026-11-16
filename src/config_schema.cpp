@@ -61,101 +61,108 @@ namespace config::schema {
       return {key, category, type, t, ALL, std::move(def)};
     }
 
+    setting_t depends(setting_t setting, std::string_view key, std::vector<json> values) {
+      setting.depends_on = key;
+      setting.depends_on_values = std::move(values);
+      return setting;
+    }
+
     std::vector<setting_t> make_settings() {
       const std::vector<choice_t> coders {{"auto"}, {"cabac"}, {"cavlc"}};
       const std::vector<choice_t> dd_auto_manual {{"disabled"}, {"auto"}, {"manual"}};
+      // Display device settings only act when the host changes the display for a stream.
+      const std::vector<json> dd_on {"verify_only", "ensure_active", "ensure_primary", "ensure_only_display"};
+      auto dd = [&](setting_t setting) {
+        return depends(std::move(setting), "dd_configuration_option", dd_on);
+      };
 
       return {
         // General
-        choice("locale", "general", tier::basic, ALL, "en", {{"bg"}, {"cs"}, {"de"}, {"en"}, {"en_GB"}, {"en_US"}, {"es"}, {"fr"}, {"hu"}, {"it"}, {"ja"}, {"ko"}, {"pl"}, {"pt"}, {"pt_BR"}, {"ru"}, {"sv"}, {"tr"}, {"uk"}, {"vi"}, {"zh"}, {"zh_TW"}}),
         text("sunshine_name", "general", tier::basic, ALL),
-        integer("min_log_level", "general", tier::advanced, ALL, 2, 0, 6),
-        special("global_prep_cmd", "general", type_e::prep_commands, tier::dangerous, json::array()),
-        special("global_state_cmd", "general", type_e::prep_commands, tier::dangerous, json::array()),
-        special("server_cmd", "general", type_e::server_commands, tier::dangerous, json::array()),
-        boolean("notify_pre_releases", "general", tier::basic, ALL, false),
+        choice("locale", "general", tier::basic, ALL, "en", {{"bg"}, {"cs"}, {"de"}, {"en"}, {"en_GB"}, {"en_US"}, {"es"}, {"fr"}, {"hu"}, {"it"}, {"ja"}, {"ko"}, {"pl"}, {"pt"}, {"pt_BR"}, {"ru"}, {"sv"}, {"tr"}, {"uk"}, {"vi"}, {"zh"}, {"zh_TW"}}),
         boolean("system_tray", "general", tier::basic, ALL, true),
-        boolean("hide_tray_controls", "general", tier::advanced, ALL, false),
-        boolean("enable_pairing", "general", tier::advanced, ALL, true),
-        boolean("enable_discovery", "general", tier::advanced, ALL, true),
+        depends(boolean("hide_tray_controls", "general", tier::advanced, ALL, false), "system_tray", {true}),
+        boolean("notify_pre_releases", "general", tier::basic, ALL, false),
+        integer("min_log_level", "general", tier::advanced, ALL, 2, 0, 6),
+
+        // Display
+        boolean("headless_mode", "display", tier::basic, W, false),
+        text("output_name", "display", tier::advanced, ALL),
+        text("adapter_name", "display", tier::advanced, W | L),
+        text("fallback_mode", "display", tier::advanced, ALL),
+        boolean("double_refreshrate", "display", tier::advanced, W, false),
+        boolean("isolated_virtual_display_option", "display", tier::advanced, W, false),
+        choice("dd_configuration_option", "display", tier::advanced, W, "disabled", {{"disabled"}, {"verify_only"}, {"ensure_active"}, {"ensure_primary"}, {"ensure_only_display"}}),
+        dd(choice("dd_resolution_option", "display", tier::advanced, W, "auto", dd_auto_manual)),
+        depends(text("dd_manual_resolution", "display", tier::advanced, W), "dd_resolution_option", {"manual"}),
+        dd(choice("dd_refresh_rate_option", "display", tier::advanced, W, "auto", dd_auto_manual)),
+        depends(text("dd_manual_refresh_rate", "display", tier::advanced, W), "dd_refresh_rate_option", {"manual"}),
+        dd({"dd_mode_remapping", "display", type_e::mode_remapping, tier::advanced, W, json {{"mixed", json::array()}, {"resolution_only", json::array()}, {"refresh_rate_only", json::array()}}}),
+        dd(integer("dd_config_revert_delay", "display", tier::advanced, W, 3000, 0, INT_MAX_D)),
+        dd(boolean("dd_config_revert_on_disconnect", "display", tier::advanced, W, false)),
+        choice("dd_hdr_option", "display", tier::advanced, W, "auto", {{"disabled"}, {"auto"}}),
+        integer("dd_wa_hdr_toggle_delay", "display", tier::advanced, W, 0, 0, 3000),
+
+        // Video
+        integer("max_bitrate", "video", tier::basic, ALL, 0, 0, INT_MAX_D),
+        number("minimum_fps_target", "video", tier::advanced, ALL, 0, 0, 1000),
+        boolean("limit_framerate", "video", tier::advanced, ALL, true),
+        choice("encoder", "video", tier::advanced, ALL, "", {{""}, {"nvenc", W | L}, {"quicksync", W | L}, {"amdvce", W}, {"vaapi", L}, {"videotoolbox", M}, {"software"}}),
+        choice("capture", "video", tier::advanced, W | L, "", {{""}, {"ddx", W}, {"wgc", W}, {"nvfbc", L}, {"wlr", L}, {"kms", L}, {"x11", L}}),
+        integer("hevc_mode", "video", tier::advanced, ALL, 0, 0, 3),
+        integer("av1_mode", "video", tier::advanced, ALL, 0, 0, 3),
+        integer("qp", "video", tier::advanced, ALL, 28, 0, 255),
+        integer("min_threads", "video", tier::advanced, ALL, 2, 1, 256),
+        boolean("ignore_encoder_probe_failure", "video", tier::advanced, ALL, false),
+
+        // Audio
+        boolean("stream_audio", "audio", tier::basic, ALL, true),
+        text("audio_sink", "audio", tier::advanced, ALL),
+        text("virtual_sink", "audio", tier::advanced, ALL),
+        boolean("keep_sink_default", "audio", tier::advanced, W, true),
+        boolean("auto_capture_sink", "audio", tier::advanced, W, true),
+        boolean("install_steam_audio_drivers", "audio", tier::advanced, W, true),
 
         // Input
         boolean("controller", "input", tier::basic, ALL, true),
         // Values come from the platform at runtime; see choices().
-        choice("gamepad", "input", tier::basic, ALL, "auto", {}),
-        boolean("ds4_back_as_touchpad_click", "input", tier::advanced, ALL, true),
-        boolean("motion_as_ds4", "input", tier::advanced, ALL, true),
-        boolean("touchpad_as_ds4", "input", tier::advanced, ALL, true),
-        boolean("ds5_inputtino_randomize_mac", "input", tier::advanced, L, true),
-        integer("back_button_timeout", "input", tier::advanced, ALL, -1, -1, INT_MAX_D),
+        depends(choice("gamepad", "input", tier::basic, ALL, "auto", {}), "controller", {true}),
+        depends(boolean("motion_as_ds4", "input", tier::advanced, ALL, true), "controller", {true}),
+        depends(boolean("touchpad_as_ds4", "input", tier::advanced, ALL, true), "controller", {true}),
+        depends(boolean("ds4_back_as_touchpad_click", "input", tier::advanced, ALL, true), "controller", {true}),
+        depends(boolean("ds5_inputtino_randomize_mac", "input", tier::advanced, L, true), "controller", {true}),
+        depends(integer("back_button_timeout", "input", tier::advanced, ALL, -1, -1, INT_MAX_D), "controller", {true}),
+        depends(boolean("forward_rumble", "input", tier::basic, ALL, true), "controller", {true}),
         boolean("keyboard", "input", tier::basic, ALL, true),
-        integer("key_repeat_delay", "input", tier::advanced, ALL, 500, 0, INT_MAX_D),
-        number("key_repeat_frequency", "input", tier::advanced, ALL, 24.9, 0, 1000),
-        boolean("always_send_scancodes", "input", tier::advanced, W, true),
-        boolean("key_rightalt_to_key_win", "input", tier::advanced, ALL, false),
+        depends(integer("key_repeat_delay", "input", tier::advanced, ALL, 500, 0, INT_MAX_D), "keyboard", {true}),
+        depends(number("key_repeat_frequency", "input", tier::advanced, ALL, 24.9, 0, 1000), "keyboard", {true}),
+        depends(boolean("always_send_scancodes", "input", tier::advanced, W, true), "keyboard", {true}),
+        depends(boolean("key_rightalt_to_key_win", "input", tier::advanced, ALL, false), "keyboard", {true}),
+        depends(special("keybindings", "input", type_e::keybindings, tier::advanced, "[0x10,0xA0,0x11,0xA2,0x12,0xA4]"), "keyboard", {true}),
         boolean("mouse", "input", tier::basic, ALL, true),
-        boolean("high_resolution_scrolling", "input", tier::advanced, ALL, true),
-        boolean("native_pen_touch", "input", tier::advanced, W, true),
+        depends(boolean("high_resolution_scrolling", "input", tier::advanced, ALL, true), "mouse", {true}),
+        depends(boolean("native_pen_touch", "input", tier::advanced, W, true), "mouse", {true}),
         boolean("enable_input_only_mode", "input", tier::advanced, ALL, false),
-        boolean("forward_rumble", "input", tier::basic, ALL, true),
-        special("keybindings", "input", type_e::keybindings, tier::advanced, "[0x10,0xA0,0x11,0xA2,0x12,0xA4]"),
 
-        // Audio and video
-        text("audio_sink", "av", tier::advanced, ALL),
-        text("virtual_sink", "av", tier::advanced, ALL),
-        boolean("stream_audio", "av", tier::basic, ALL, true),
-        boolean("install_steam_audio_drivers", "av", tier::advanced, W, true),
-        boolean("keep_sink_default", "av", tier::advanced, W, true),
-        boolean("auto_capture_sink", "av", tier::advanced, W, true),
-        text("adapter_name", "av", tier::advanced, W | L),
-        text("output_name", "av", tier::advanced, ALL),
-        boolean("isolated_virtual_display_option", "av", tier::advanced, W, false),
-        text("fallback_mode", "av", tier::advanced, ALL),
-        choice("dd_configuration_option", "av", tier::advanced, W, "disabled", {{"disabled"}, {"verify_only"}, {"ensure_active"}, {"ensure_primary"}, {"ensure_only_display"}}),
-        choice("dd_resolution_option", "av", tier::advanced, W, "auto", dd_auto_manual),
-        text("dd_manual_resolution", "av", tier::advanced, W),
-        choice("dd_refresh_rate_option", "av", tier::advanced, W, "auto", dd_auto_manual),
-        text("dd_manual_refresh_rate", "av", tier::advanced, W),
-        choice("dd_hdr_option", "av", tier::advanced, W, "auto", {{"disabled"}, {"auto"}}),
-        integer("dd_wa_hdr_toggle_delay", "av", tier::advanced, W, 0, 0, 3000),
-        integer("dd_config_revert_delay", "av", tier::advanced, W, 3000, 0, INT_MAX_D),
-        boolean("dd_config_revert_on_disconnect", "av", tier::advanced, W, false),
-        {"dd_mode_remapping", "av", type_e::mode_remapping, tier::advanced, W, json {{"mixed", json::array()}, {"resolution_only", json::array()}, {"refresh_rate_only", json::array()}}},
-        boolean("headless_mode", "av", tier::basic, W, false),
-        boolean("double_refreshrate", "av", tier::advanced, W, false),
-        integer("max_bitrate", "av", tier::basic, ALL, 0, 0, INT_MAX_D),
-        number("minimum_fps_target", "av", tier::advanced, ALL, 0, 0, 1000),
-
-        // Network
+        // Network and pairing
+        boolean("enable_pairing", "network", tier::advanced, ALL, true),
+        boolean("enable_discovery", "network", tier::advanced, ALL, true),
         boolean("upnp", "network", tier::advanced, ALL, false),
         choice("address_family", "network", tier::advanced, ALL, "ipv4", {{"ipv4"}, {"both"}}),
+        text("external_ip", "network", tier::advanced, ALL),
         integer("port", "network", tier::dangerous, ALL, 47989, 1024 + nvhttp::PORT_HTTPS, 65535 - rtsp_stream::RTSP_SETUP_PORT),
         choice("origin_web_ui_allowed", "network", tier::dangerous, ALL, "lan", {{"pc"}, {"lan"}, {"wan"}}),
-        text("external_ip", "network", tier::advanced, ALL),
         integer("lan_encryption_mode", "network", tier::dangerous, ALL, 0, 0, 2),
         integer("wan_encryption_mode", "network", tier::dangerous, ALL, 1, 0, 2),
         integer("ping_timeout", "network", tier::advanced, ALL, 10000, -1, INT_MAX_D),
+        integer("fec_percentage", "network", tier::advanced, ALL, 20, 1, 255),
 
-        // Files
-        path("file_apps", "files"),
-        path("credentials_file", "files"),
-        path("log_path", "files"),
-        path("pkey", "files"),
-        path("cert", "files"),
-        path("file_state", "files"),
-
-        // Advanced
-        integer("fec_percentage", "advanced", tier::advanced, ALL, 20, 1, 255),
-        integer("qp", "advanced", tier::advanced, ALL, 28, 0, 255),
-        integer("min_threads", "advanced", tier::advanced, ALL, 2, 1, 256),
-        boolean("limit_framerate", "advanced", tier::advanced, ALL, true),
-        boolean("envvar_compatibility_mode", "advanced", tier::advanced, ALL, false),
-        boolean("legacy_ordering", "advanced", tier::advanced, ALL, false),
-        boolean("ignore_encoder_probe_failure", "advanced", tier::advanced, ALL, false),
-        integer("hevc_mode", "advanced", tier::advanced, ALL, 0, 0, 3),
-        integer("av1_mode", "advanced", tier::advanced, ALL, 0, 0, 3),
-        choice("capture", "advanced", tier::advanced, W | L, "", {{""}, {"ddx", W}, {"wgc", W}, {"nvfbc", L}, {"wlr", L}, {"kms", L}, {"x11", L}}),
-        choice("encoder", "advanced", tier::advanced, ALL, "", {{""}, {"nvenc", W | L}, {"quicksync", W | L}, {"amdvce", W}, {"vaapi", L}, {"videotoolbox", M}, {"software"}}),
+        // Apps and commands
+        special("global_prep_cmd", "apps", type_e::prep_commands, tier::dangerous, json::array()),
+        special("global_state_cmd", "apps", type_e::prep_commands, tier::dangerous, json::array()),
+        special("server_cmd", "apps", type_e::server_commands, tier::dangerous, json::array()),
+        boolean("envvar_compatibility_mode", "apps", tier::advanced, ALL, false),
+        boolean("legacy_ordering", "apps", tier::advanced, ALL, false),
 
         // NVIDIA NVENC
         integer("nvenc_preset", "nv", tier::advanced, W | L, 1, 1, 7),
@@ -193,6 +200,14 @@ namespace config::schema {
         // Software encoding
         choice("sw_preset", "sw", tier::advanced, ALL, "superfast", {{"ultrafast"}, {"superfast"}, {"veryfast"}, {"faster"}, {"fast"}, {"medium"}, {"slow"}, {"slower"}, {"veryslow"}}),
         choice("sw_tune", "sw", tier::advanced, ALL, "zerolatency", {{"film"}, {"animation"}, {"grain"}, {"stillimage"}, {"fastdecode"}, {"zerolatency"}}),
+
+        // Files
+        path("file_apps", "files"),
+        path("file_state", "files"),
+        path("credentials_file", "files"),
+        path("log_path", "files"),
+        path("pkey", "files"),
+        path("cert", "files"),
       };
     }
 
@@ -810,6 +825,35 @@ namespace config::schema {
       return {};
     };
 
+    const std::string platform_name = current_platform() == platform::windows ? "windows" :
+                                      current_platform() == platform::macos   ? "macos" :
+                                                                                "linux";
+    // Each language in its own name, so it can be found whatever the current locale is.
+    static const std::map<std::string, std::string, std::less<>> language_names {
+      {"bg", "Български (Bulgarian)"},
+      {"cs", "Čeština (Czech)"},
+      {"de", "Deutsch (German)"},
+      {"en", "English"},
+      {"en_GB", "English (UK)"},
+      {"en_US", "English (US)"},
+      {"es", "Español (Spanish)"},
+      {"fr", "Français (French)"},
+      {"hu", "Magyar (Hungarian)"},
+      {"it", "Italiano (Italian)"},
+      {"ja", "日本語 (Japanese)"},
+      {"ko", "한국어 (Korean)"},
+      {"pl", "Polski (Polish)"},
+      {"pt", "Português (Portuguese)"},
+      {"pt_BR", "Português do Brasil (Brazilian Portuguese)"},
+      {"ru", "Русский (Russian)"},
+      {"sv", "Svenska (Swedish)"},
+      {"tr", "Türkçe (Turkish)"},
+      {"uk", "Українська (Ukrainian)"},
+      {"vi", "Tiếng Việt (Vietnamese)"},
+      {"zh", "简体中文 (Chinese, Simplified)"},
+      {"zh_TW", "繁體中文 (Chinese, Traditional)"},
+    };
+
     json list = json::array();
     for (const auto &setting : settings()) {
       json platforms = json::array();
@@ -836,9 +880,48 @@ namespace config::schema {
         {"label", "config."s + std::string {setting.key}},
         {"description", "config."s + std::string {setting.key} + "_desc"},
       };
-      auto title = text(std::string {setting.key});
-      item["title"] = title.empty() ? std::string {setting.key} : title;
-      item["help"] = text(std::string {setting.key} + "_desc");
+      const std::string key {setting.key};
+      auto title = text(key);
+      item["title"] = title.empty() ? key : title;
+      auto help = text(key + "_desc");
+      if (help.empty()) {
+        // Some settings only have a platform-specific explanation.
+        help = text(key + "_desc_" + platform_name);
+        if (help.empty() && current_platform() != platform::windows) {
+          help = text(key + "_desc_unix");
+        }
+      }
+      item["help"] = help;
+      if (!setting.depends_on.empty()) {
+        item["depends_on"] = {{"key", setting.depends_on}, {"values", setting.depends_on_values}};
+      }
+
+      // Readable names for the allowed values, where the locale has them (config.<key>_<value>).
+      json value_titles = json::object();
+      if (setting.type == type_e::choice) {
+        for (const auto &value : choices(setting)) {
+          if (setting.key == "locale"sv) {
+            if (auto it = language_names.find(value); it != language_names.end()) {
+              value_titles[value] = it->second;
+            }
+            continue;
+          }
+          auto name = text(key + "_" + (value.empty() ? "auto"s : value));
+          if (!name.empty()) {
+            value_titles[value] = name;
+          }
+        }
+      } else if (setting.type == type_e::integer && setting.max && *setting.max - *setting.min <= 10) {
+        for (auto n = (long long) *setting.min; n <= (long long) *setting.max; ++n) {
+          auto name = text(key + "_" + std::to_string(n));
+          if (!name.empty()) {
+            value_titles[std::to_string(n)] = name;
+          }
+        }
+      }
+      if (!value_titles.empty()) {
+        item["value_titles"] = std::move(value_titles);
+      }
       if (setting.min) {
         item["min"] = *setting.min;
       }
@@ -851,23 +934,40 @@ namespace config::schema {
       list.push_back(std::move(item));
     }
 
-    const char *platform_name = current_platform() == platform::windows ? "windows" : current_platform() == platform::macos ? "macos" :
-                                                                                                                              "linux";
-    // Same names as the web UI's settings tabs.
-    const json categories = json::array({
-      {{"id", "general"}, {"title", "General"}},
-      {{"id", "input"}, {"title", "Input"}},
-      {{"id", "av"}, {"title", "Audio/Video"}},
-      {{"id", "network"}, {"title", "Network"}},
-      {{"id", "files"}, {"title", "Config Files"}},
-      {{"id", "advanced"}, {"title", "Advanced"}},
-      {{"id", "nv"}, {"title", "NVIDIA NVENC Encoder"}},
-      {{"id", "qsv"}, {"title", "Intel QuickSync Encoder"}},
-      {{"id", "amd"}, {"title", "AMD AMF Encoder"}},
-      {{"id", "vt"}, {"title", "VideoToolbox Encoder"}},
-      {{"id", "vaapi"}, {"title", "VA-API Encoder"}},
-      {{"id", "sw"}, {"title", "Software Encoder"}},
-    });
+    // In display order; "group" puts related categories together under one heading.
+    struct category_t {
+      const char *id;
+      const char *title;  ///< When the locale has no config.category_<id>.
+      const char *group;
+    };
+
+    const category_t category_list[] = {
+      {"general", "General", ""},
+      {"display", "Display", ""},
+      {"video", "Video", ""},
+      {"audio", "Audio", ""},
+      {"input", "Input", ""},
+      {"network", "Network and pairing", ""},
+      {"apps", "Apps and commands", ""},
+      {"nv", "NVIDIA NVENC", "encoders"},
+      {"qsv", "Intel Quick Sync", "encoders"},
+      {"amd", "AMD AMF", "encoders"},
+      {"vt", "Apple VideoToolbox", "encoders"},
+      {"vaapi", "VA-API", "encoders"},
+      {"sw", "Software encoder", "encoders"},
+      {"files", "Files", ""},
+    };
+    json categories = json::array();
+    for (const auto &category : category_list) {
+      auto title = text("category_"s + category.id);
+      json item {{"id", category.id}, {"title", title.empty() ? std::string {category.title} : title}};
+      if (*category.group) {
+        auto group_title = text("category_group_"s + category.group);
+        item["group"] = category.group;
+        item["group_title"] = group_title.empty() ? "Encoders"s : group_title;
+      }
+      categories.push_back(std::move(item));
+    }
 
     return {
       {"version", 1},

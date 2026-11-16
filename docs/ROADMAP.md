@@ -1,6 +1,6 @@
 # Norishine architecture decisions and roadmap
 
-Status key: **done**, **in progress**, **planned**. Updated 2026-11-15. Evidence for the
+Status key: **done**, **in progress**, **planned**. Updated 2026-11-16. Evidence for the
 decisions is in [PHASE1-RESEARCH.md](PHASE1-RESEARCH.md).
 
 ## Decisions
@@ -117,10 +117,21 @@ deliberately broken, but is not verified until CI exists for it.
   state, credentials and apps files, and tests for all of it. config.cpp still parses the
   file itself; a test keeps its keys and the schema identical. No visible UI change yet;
   this is what both the new web UI and Norilight build on.
-- **M2** New settings UI on the schema: Norilight-matched theme, categories reworked,
-  full-text search, Basic / Advanced, confirmation for dangerous settings,
-  restart-required indication. Remove dead settings (`dd_wa_hdr_toggle`), fix
-  missing strings, regroup misplaced ones.
+- **M2** New settings UI on the schema (**done**): the settings page is rebuilt from
+  `GET /api/v1/config/schema` and saves with `PATCH /api/v1/config`
+  (`src_assets/common/assets/web/settings/`), on a shared Norilight-matched theme and
+  header (`web/ui/`, light and dark). Categories reworked into General, Display, Video,
+  Audio, Input, Network and pairing, Apps and commands, the encoders and Files. Search
+  covers every setting (titles, help and value names); Basic / Advanced switch;
+  confirmation before saving dangerous settings; per-key errors from the host shown at
+  each setting with a summary; a restart notice with a restart button; reset to default
+  per setting; settings that depend on another are indented and say when they have no
+  effect. Real editors for commands, key mappings and display mode remapping. The schema
+  gained optional `depends_on`, `value_titles` and category groups (additive); every
+  setting now has English help text and every choice a readable name (tested), and the
+  dead `dd_wa_hdr_toggle` strings are gone. Other pages keep their layout until M3; they
+  share the new header colours. Pages stay separate HTML entries rather than one
+  vue-router app, since the host serves each page at its own path.
 - **M3** Remaining pages: apps, clients and permissions, pairing, status and active
   sessions, logs and troubleshooting. Login hardening and CSRF.
 - **M4** State file split and migrations; import from Apollo.

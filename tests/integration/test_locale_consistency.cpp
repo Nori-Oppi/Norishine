@@ -19,6 +19,7 @@
 #include <nlohmann/json.hpp>
 
 // local includes
+#include "src/config_schema.h"
 #include "src/file_handler.h"
 
 namespace fs = std::filesystem;
@@ -48,28 +49,22 @@ protected:
     return locales;
   }
 
-  // Extract locale options from General.vue
+  // Locales the settings page offers: the schema's choices for "locale", with their names.
+  // (Named extractGeneralVueLocales after the old settings tab that listed them.)
   static std::map<std::string, std::string, std::less<>> extractGeneralVueLocales() {
     std::map<std::string, std::string, std::less<>> locales;
-    const std::string content = file_handler::read_file("src_assets/common/assets/web/configs/tabs/General.vue");
-
-    // Find the locale select section specifically
-    const std::regex localeSelectPattern("id=\"locale\"[^>]*>([^<]*(?:<option[^>]*>[^<]*</option>[^<]*)*)</select>");
-
-    if (std::smatch selectMatch; std::regex_search(content, selectMatch, localeSelectPattern)) {
-      const std::string localeSection = selectMatch[1].str();
-
-      // Extract option elements with locale codes and display names from the locale section
-      const std::regex optionPattern(R"delimiter(<option\s+value="([^"]+)">([^<]+)</option>)delimiter");
-      std::sregex_iterator iter(localeSection.begin(), localeSection.end(), optionPattern);
-
-      for (const std::sregex_iterator end; iter != end; ++iter) {
-        const std::string localeCode = (*iter)[1].str();
-        const std::string displayName = (*iter)[2].str();
-        locales[localeCode] = displayName;
+    const auto schema = config::schema::describe("en", "no-locale-files/");
+    for (const auto &setting : schema["settings"]) {
+      if (setting["key"] != "locale") {
+        continue;
+      }
+      for (const auto &code : setting["choices"]) {
+        const auto name = setting["value_titles"].value(code.get<std::string>(), "");
+        if (!name.empty()) {
+          locales[code.get<std::string>()] = name;
+        }
       }
     }
-
     return locales;
   }
 
