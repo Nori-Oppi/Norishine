@@ -72,7 +72,7 @@ TEST(ConfigSchemaTests, IntegersAndRanges) {
   EXPECT_EQ(text_ok("max_bitrate", 50000), "50000");
   EXPECT_EQ(text_ok("max_bitrate", "50000"), "50000");
   EXPECT_EQ(text_ok("max_bitrate", 50000.0), "50000");
-  text_error("max_bitrate", -1);
+  EXPECT_NE(text_error("max_bitrate", -1).find("at least 0"), std::string::npos);
   text_error("max_bitrate", 1.5);
   text_error("max_bitrate", "12abc");
   EXPECT_EQ(text_ok("port", 49989), "49989");

@@ -261,6 +261,9 @@ namespace config::schema {
         }
         return json(v == std::floor(v) ? json((long long) v) : json(v)).dump();
       };
+      if (*setting.max >= INT_MAX_D) {
+        return "at least "s + fmt(*setting.min);
+      }
       return "between "s + fmt(*setting.min) + " and "s + fmt(*setting.max);
     }
 
