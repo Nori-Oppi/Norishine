@@ -31,6 +31,7 @@
 #include "globals.h"
 #include "httpcommon.h"
 #include "logging.h"
+#include "manage_api.h"
 #include "network.h"
 #include "nvhttp.h"
 #include "platform/common.h"
@@ -1247,7 +1248,7 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
-    tree.put("root.Norishine.Features", "status,config.schema,config.read,config.write,restart");
+    tree.put("root.Norishine.Features", "status,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
 
     std::ostringstream data;
 
@@ -1374,6 +1375,135 @@ namespace nvhttp {
         proc::proc.terminate();
         platf::restart();
       }).detach();
+    }
+
+    void send_reply(resp_https_t response, const manage_api::reply_t &reply) {
+      send_json(response, reply.code, reply.body);
+    }
+
+    /**
+     * @brief Read a JSON request body; answers 400 or 415 itself when it can't.
+     */
+    bool json_body(resp_https_t response, req_https_t request, nlohmann::json &out) {
+      auto content_type = request->header.find("content-type");
+      if (content_type == request->header.end() || content_type->second.find("application/json") == std::string::npos) {
+        send_json(response, SimpleWeb::StatusCode::client_error_unsupported_media_type, {{"status", false}, {"error", "Content-Type must be application/json"}});
+        return false;
+      }
+      manage_api::reply_t error;
+      if (!manage_api::parse_body(request->content.string(), out, error)) {
+        send_reply(response, error);
+        return false;
+      }
+      return true;
+    }
+
+    std::string path_id(req_https_t request) {
+      return request->path_match.size() > 1 ? request->path_match[1].str() : std::string {};
+    }
+
+    void apps_list(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, read_perm, "read the app list")) {
+        send_reply(response, manage_api::list_apps());
+      }
+    }
+
+    void apps_create(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      nlohmann::json body;
+      if (allowed(response, request, PERM::manage_write, "change apps") && json_body(response, request, body)) {
+        send_reply(response, manage_api::create_app(body));
+      }
+    }
+
+    void apps_replace(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      nlohmann::json body;
+      if (allowed(response, request, PERM::manage_write, "change apps") && json_body(response, request, body)) {
+        send_reply(response, manage_api::replace_app(path_id(request), body));
+      }
+    }
+
+    void apps_delete(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, PERM::manage_write, "change apps")) {
+        send_reply(response, manage_api::delete_app(path_id(request)));
+      }
+    }
+
+    void apps_order(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      nlohmann::json body;
+      if (allowed(response, request, PERM::manage_write, "change apps") && json_body(response, request, body)) {
+        send_reply(response, manage_api::order_apps(body));
+      }
+    }
+
+    void apps_launch(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, PERM::manage_write, "start apps on the host")) {
+        BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] starts an app"sv;
+        send_reply(response, manage_api::launch_app(path_id(request)));
+      }
+    }
+
+    void apps_close(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, PERM::manage_write, "close the running app")) {
+        BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] closes the running app"sv;
+        send_reply(response, manage_api::close_app());
+      }
+    }
+
+    void devices_list(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, read_perm, "read the paired devices")) {
+        send_reply(response, manage_api::list_devices(get_verified_cert(request)->uuid));
+      }
+    }
+
+    void devices_patch(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      nlohmann::json body;
+      if (allowed(response, request, PERM::manage_write, "change paired devices") && json_body(response, request, body)) {
+        auto self = get_verified_cert(request);
+        auto reply = manage_api::patch_device(path_id(request), body, self->uuid);
+        if (reply.code == SimpleWeb::StatusCode::success_ok) {
+          BOOST_LOG(info) << "Management API: ["sv << self->name << "] changed device ["sv << reply.body["device"].value("name", ""s) << ']';
+        }
+        send_reply(response, reply);
+      }
+    }
+
+    void devices_unpair(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, PERM::manage_write, "remove paired devices")) {
+        BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] removes a paired device"sv;
+        send_reply(response, manage_api::unpair_device(path_id(request)));
+      }
+    }
+
+    void devices_disconnect(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, PERM::manage_write, "end streams")) {
+        BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] ends a stream"sv;
+        send_reply(response, manage_api::disconnect_device(path_id(request)));
+      }
+    }
+
+    void displays_list(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, read_perm, "read the displays")) {
+        send_reply(response, manage_api::list_displays());
+      }
+    }
+
+    void displays_reset(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, PERM::manage_write, "reset display changes")) {
+        send_reply(response, manage_api::reset_displays());
+      }
     }
   }  // namespace api
 
@@ -2150,6 +2280,19 @@ namespace nvhttp {
     https_server.resource["^/api/v1/config$"]["GET"] = api::config_get;
     https_server.resource["^/api/v1/config$"]["PATCH"] = api::config_patch;
     https_server.resource["^/api/v1/restart$"]["POST"] = api::restart;
+    https_server.resource["^/api/v1/apps$"]["GET"] = api::apps_list;
+    https_server.resource["^/api/v1/apps$"]["POST"] = api::apps_create;
+    https_server.resource["^/api/v1/apps/order$"]["POST"] = api::apps_order;
+    https_server.resource["^/api/v1/apps/close$"]["POST"] = api::apps_close;
+    https_server.resource["^/api/v1/apps/([^/]+)$"]["PUT"] = api::apps_replace;
+    https_server.resource["^/api/v1/apps/([^/]+)$"]["DELETE"] = api::apps_delete;
+    https_server.resource["^/api/v1/apps/([^/]+)/launch$"]["POST"] = api::apps_launch;
+    https_server.resource["^/api/v1/devices$"]["GET"] = api::devices_list;
+    https_server.resource["^/api/v1/devices/([^/]+)$"]["PATCH"] = api::devices_patch;
+    https_server.resource["^/api/v1/devices/([^/]+)$"]["DELETE"] = api::devices_unpair;
+    https_server.resource["^/api/v1/devices/([^/]+)/disconnect$"]["POST"] = api::devices_disconnect;
+    https_server.resource["^/api/v1/displays$"]["GET"] = api::displays_list;
+    https_server.resource["^/api/v1/displays/reset$"]["POST"] = api::displays_reset;
 
     https_server.config.reuse_address = true;
     https_server.config.address = net::af_to_any_address_string(address_family);

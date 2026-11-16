@@ -4,7 +4,7 @@ Tracked here until fixed. Last checked 2026-11-15 on Windows 11, AMD Radeon 780M
 
 ## Unit tests
 
-All 316 pass locally. Not run locally because they act on the live desktop:
+All 321 pass locally. Not run locally because they act on the live desktop:
 `MouseInputs/*` (moves the real cursor) and `Configurations/AudioTest.*` (opens real
 audio devices). CI runs the full suite.
 

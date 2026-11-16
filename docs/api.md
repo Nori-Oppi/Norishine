@@ -88,11 +88,15 @@ by default, only per device from the web UI (paired devices, "Manage"):
 
 | Permission | Bit | Allows |
 | --- | --- | --- |
-| `manage_read` (Read Host Settings) | `0x10000000` | `GET /api/v1/status`, `GET /api/v1/config/schema`, `GET /api/v1/config` |
-| `manage_write` (Change Host Settings) | `0x20000000` | the above, `PATCH /api/v1/config`, and `POST /api/v1/restart` (settings apply after a restart) |
+| `manage_read` (Read Host Settings) | `0x10000000` | every `GET` below: status, settings, apps, devices, displays |
+| `manage_write` (Change Host Settings) | `0x20000000` | the above, and every call that changes something: settings, `POST /api/v1/restart` (settings apply after a restart), apps, devices, streams, displays |
+
+`manage_write` is full control of the host: settings, app and device commands run
+programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,config.schema,config.read,config.write,restart</Features></Norishine>`,
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+(check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
 requesting device's name and permissions. The schema takes `?locale=` (a value of the
@@ -108,6 +112,33 @@ Host name, version, platform, unique ID, running app (`id`, `uuid`, `name`, or n
 `name`, its `address`, `width`, `height`, `fps`, `bitrate_kbps`, `codec` (`H.264`, `HEVC`,
 `AV1`), `hdr` and `state`. The same object (plus `device`) is what paired clients get from
 `GET /api/v1/status` on the HTTPS port.
+
+## Apps, devices, streams and displays (/api/v1)
+
+The same calls are on the web UI port (signed-in session, CSRF header) and on the HTTPS
+port for paired devices (permissions as above). Answers are JSON with `status`; failures
+have `error` (one message), or `errors` (one message per field) for a 400. An unknown ID
+is 404. Checks: `tests/unit/test_manage_api.cpp`, `scripts/e2e/manage_check.py`.
+
+| Call | Does |
+| --- | --- |
+| `GET /api/v1/apps` | `apps` as stored in `apps.json` (each with `uuid`, and `running`), `running_app` (UUID or `""`) |
+| `POST /api/v1/apps` | Add an app (the body as listed; a `uuid` in it is ignored). Answers its new `uuid` |
+| `PUT /api/v1/apps/{uuid}` | Replace an app. Fields this host doesn't know are kept as they are |
+| `DELETE /api/v1/apps/{uuid}` | Remove an app |
+| `POST /api/v1/apps/order` | `{"order": [uuid, ...]}`: these first, the rest after in their current order |
+| `POST /api/v1/apps/{uuid}/launch` | Start an app on the host without a stream |
+| `POST /api/v1/apps/close` | Close the running app |
+| `GET /api/v1/devices` | `devices`: paired devices as in the web UI (`uuid`, `name`, `perm`, `display_mode`, `do`, `undo`, `connected`, ...), and `this_device` for the one asking |
+| `PATCH /api/v1/devices/{uuid}` | Change some of `name`, `display_mode`, `perm`, `enable_legacy_ordering`, `allow_client_commands`, `always_use_virtual_display`, `do`, `undo`. Answers the `device`. A device can't change its own `perm` (403) |
+| `DELETE /api/v1/devices/{uuid}` | Unpair a device (it may be the one asking) |
+| `POST /api/v1/devices/{uuid}/disconnect` | End the device's stream; `disconnected` says whether it had one |
+| `GET /api/v1/displays` | `displays`: `id`, `name`, `friendly_name`, `active`, `selected` (the `output_name` setting), and for active ones `width`, `height`, `refresh_rate`, `scale`, `primary`, `hdr` (null if unknown) |
+| `POST /api/v1/displays/reset` | Forget display changes Norishine would otherwise undo later |
+
+Adding, changing, reordering or removing apps reloads the app list, which closes a
+running app, as saving in the web UI does; the answer says so in `closed_running_app`.
+Active streams are in `GET /api/v1/status` (`sessions`).
 
 ## POST /api/covers/upload
 @copydoc confighttp::uploadCover()

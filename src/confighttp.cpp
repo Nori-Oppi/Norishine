@@ -35,6 +35,7 @@
 #include "globals.h"
 #include "httpcommon.h"
 #include "logging.h"
+#include "manage_api.h"
 #include "network.h"
 #include "nvhttp.h"
 #include "platform/common.h"
@@ -1255,6 +1256,36 @@ namespace confighttp {
   }
 
   /**
+   * @brief Serve a management call (src/manage_api.h) to the signed-in web UI.
+   * @param with_body The call takes a JSON body.
+   * @param call Gets the ID from the path (or "") and the body (or null).
+   *
+   * The same calls are on the HTTPS port for paired clients; see docs/api.md.
+   */
+  template<class F>
+  auto managed(bool with_body, F call) {
+    return [with_body, call](resp_https_t response, req_https_t request) {
+      if ((with_body && !validateContentType(response, request, "application/json")) || !authenticate(response, request)) {
+        return;
+      }
+
+      print_req(request);
+
+      nlohmann::json body;
+      if (with_body) {
+        manage_api::reply_t error;
+        if (!manage_api::parse_body(request->content.string(), body, error)) {
+          send_json(response, error.code, error.body);
+          return;
+        }
+      }
+      std::string id = request->path_match.size() > 1 ? request->path_match[1].str() : std::string {};
+      auto reply = call(id, body);
+      send_json(response, reply.code, reply.body);
+    };
+  }
+
+  /**
    * @brief Upload a cover image.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -1880,6 +1911,19 @@ namespace confighttp {
     server.resource["^/api/v1/config/schema$"]["GET"] = getConfigSchema;
     server.resource["^/api/v1/config$"]["GET"] = getConfigV1;
     server.resource["^/api/v1/config$"]["PATCH"] = patchConfigV1;
+    server.resource["^/api/v1/apps$"]["GET"] = managed(false, [](auto &, auto &) { return manage_api::list_apps(); });
+    server.resource["^/api/v1/apps$"]["POST"] = managed(true, [](auto &, auto &body) { return manage_api::create_app(body); });
+    server.resource["^/api/v1/apps/order$"]["POST"] = managed(true, [](auto &, auto &body) { return manage_api::order_apps(body); });
+    server.resource["^/api/v1/apps/close$"]["POST"] = managed(false, [](auto &, auto &) { return manage_api::close_app(); });
+    server.resource["^/api/v1/apps/([^/]+)$"]["PUT"] = managed(true, [](auto &id, auto &body) { return manage_api::replace_app(id, body); });
+    server.resource["^/api/v1/apps/([^/]+)$"]["DELETE"] = managed(false, [](auto &id, auto &) { return manage_api::delete_app(id); });
+    server.resource["^/api/v1/apps/([^/]+)/launch$"]["POST"] = managed(false, [](auto &id, auto &) { return manage_api::launch_app(id); });
+    server.resource["^/api/v1/devices$"]["GET"] = managed(false, [](auto &, auto &) { return manage_api::list_devices({}); });
+    server.resource["^/api/v1/devices/([^/]+)$"]["PATCH"] = managed(true, [](auto &id, auto &body) { return manage_api::patch_device(id, body, {}); });
+    server.resource["^/api/v1/devices/([^/]+)$"]["DELETE"] = managed(false, [](auto &id, auto &) { return manage_api::unpair_device(id); });
+    server.resource["^/api/v1/devices/([^/]+)/disconnect$"]["POST"] = managed(false, [](auto &id, auto &) { return manage_api::disconnect_device(id); });
+    server.resource["^/api/v1/displays$"]["GET"] = managed(false, [](auto &, auto &) { return manage_api::list_displays(); });
+    server.resource["^/api/v1/displays/reset$"]["POST"] = managed(false, [](auto &, auto &) { return manage_api::reset_displays(); });
     server.resource["^/api/configLocale$"]["GET"] = getLocale;
     server.resource["^/api/restart$"]["POST"] = restart;
     server.resource["^/api/quit$"]["POST"] = quit;

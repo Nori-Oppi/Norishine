@@ -1,8 +1,9 @@
 """End-to-end check of the client management API (/api/v1 on the HTTPS port) on a dev host.
 
 Usage: python manage_check.py <host> <port> <webuser> <webpass>
-Run it against a dev host only: it unpairs every client first and changes settings (and
-puts them back). Needs `pip install cryptography`.
+Run it against a dev host only: it unpairs every client first, changes settings, apps and
+devices (and puts them back). It doesn't start apps or reset display changes. Needs
+`pip install cryptography`.
 """
 import json
 import ssl
@@ -108,6 +109,92 @@ stranger = Client(host, port, 'e2e-stranger')
 s, r = api(stranger, 'GET', '/api/v1/status')
 # nvhttp's verify-failed path answers in GameStream XML with status_code 401.
 check('unpaired certificate refused', isinstance(r, str) and 'status_code="401"' in r, (s, r))
+
+# Apps, devices, sessions and displays (roadmap M7).
+features = (client.https('serverinfo').findtext('Norishine/Features') or '').split(',')
+check('serverinfo lists the M7 features', all(f in features for f in ['apps', 'apps.write', 'devices', 'devices.write', 'sessions.write', 'displays']), features)
+
+set_perm(web, 'e2e-manager', perm | MANAGE_READ)
+s, r = api(client, 'GET', '/api/v1/apps')
+check('apps listed with manage_read', s == 200 and isinstance(r.get('apps'), list) and 'running_app' in r, (s, r))
+original_order = [a['uuid'] for a in r.get('apps', [])]
+s, r = api(client, 'GET', '/api/v1/devices')
+me = [d for d in r.get('devices', []) if d.get('this_device')]
+check('devices listed, the requesting one marked', s == 200 and len(me) == 1 and me[0]['name'] == 'e2e-manager', (s, r))
+s, r = api(client, 'GET', '/api/v1/displays')
+check('displays listed', s == 200 and isinstance(r.get('displays'), list) and 'output_name' in r, (s, r))
+for method, path, body in [('POST', '/api/v1/apps', {'name': 'x'}), ('POST', '/api/v1/apps/close', None),
+                           ('POST', '/api/v1/displays/reset', None), ('PATCH', '/api/v1/devices/%s' % me[0]['uuid'] if me else '/api/v1/devices/x', {'name': 'y'}),
+                           ('DELETE', '/api/v1/apps/x', None)]:
+    s, r = api(client, method, path, body)
+    check('%s %s refused with only manage_read' % (method, path.split('/')[3]), s == 403, (s, r))
+
+set_perm(web, 'e2e-manager', perm | MANAGE_WRITE)
+s, r = api(client, 'POST', '/api/v1/apps', {'name': ' ', 'exit-timeout': 'soon', 'prep-cmd': [{'do': 5}]})
+check('invalid app gives per-field errors', s == 400 and {'name', 'exit-timeout', 'prep-cmd'} <= set(r.get('errors', {})), (s, r))
+s, r = api(client, 'POST', '/api/v1/apps', {'name': 'E2E app', 'cmd': '', 'detached': [], 'exit-timeout': 5, 'uuid': 'ignored'})
+uid = r.get('uuid', '')
+check('app added', s == 200 and len(uid) == 36 and uid != 'ignored' and r.get('closed_running_app') is False, (s, r))
+s, r = api(client, 'GET', '/api/v1/apps')
+added = next((a for a in r.get('apps', []) if a['uuid'] == uid), None)
+check('added app listed, empty lists dropped', added is not None and added['name'] == 'E2E app' and 'detached' not in added, added)
+s, r = api(client, 'PUT', '/api/v1/apps/' + uid, {'name': 'E2E app renamed', 'uuid': 'other'})
+check('replacing with another ID refused', s == 400 and 'uuid' in r.get('errors', {}), (s, r))
+s, r = api(client, 'PUT', '/api/v1/apps/' + uid, dict(added, name='E2E app renamed'))
+check('app replaced (listed form round-trips)', s == 200, (s, r))
+s, r = api(client, 'GET', '/api/v1/apps')
+check('replaced app listed', any(a['uuid'] == uid and a['name'] == 'E2E app renamed' for a in r.get('apps', [])), r)
+s, r = api(client, 'PUT', '/api/v1/apps/00000000-0000-0000-0000-000000000000', {'name': 'x'})
+check('replacing an unknown app is 404', s == 404, (s, r))
+s, r = api(client, 'POST', '/api/v1/apps/order', {'order': [uid]})
+s2, r2 = api(client, 'GET', '/api/v1/apps')
+check('apps reordered', s == 200 and r2['apps'][0]['uuid'] == uid and len(r2['apps']) == len(original_order) + 1, (s, r))
+s, r = api(client, 'POST', '/api/v1/apps/order', {'order': 'first'})
+check('invalid order refused', s == 400, (s, r))
+s, r = api(client, 'DELETE', '/api/v1/apps/' + uid)
+s2, r2 = api(client, 'GET', '/api/v1/apps')
+check('app removed, original order back', s == 200 and [a['uuid'] for a in r2['apps']] == original_order, (s, r, r2))
+s, r = api(client, 'DELETE', '/api/v1/apps/' + uid)
+check('removing it again is 404', s == 404, (s, r))
+s, r = api(client, 'POST', '/api/v1/apps/00000000-0000-0000-0000-000000000000/launch')
+check('starting an unknown app is 404', s == 404, (s, r))
+
+other = Client(host, port, 'e2e-other')
+ok, detail = pair_via_webui(other, web)
+check('second client pairs', ok, detail)
+s, r = api(client, 'GET', '/api/v1/devices')
+theirs = next((d for d in r.get('devices', []) if d['name'] == 'e2e-other'), None)
+mine = next((d for d in r.get('devices', []) if d.get('this_device')), None)
+check('second device listed, not marked', theirs is not None and not theirs['this_device'], r)
+if theirs and mine:
+    s, r = api(client, 'PATCH', '/api/v1/devices/' + theirs['uuid'], {'name': 'e2e-other-renamed', 'perm': theirs['perm'] | MANAGE_READ, 'do': [{'cmd': 'echo hi', 'elevated': False}]})
+    check('other device changed', s == 200 and r['device']['name'] == 'e2e-other-renamed' and r['device']['perm'] & MANAGE_READ and r['device']['do'][0]['cmd'] == 'echo hi'
+          and r['device']['display_mode'] == theirs['display_mode'], (s, r))
+    s, r = api(other, 'GET', '/api/v1/status')
+    check('granted permission works at once', s == 200, (s, r))
+    s, r = api(client, 'PATCH', '/api/v1/devices/' + theirs['uuid'], {'bogus': 1, 'do': [{'cmd': 1}], 'perm': -1})
+    check('invalid device change gives per-field errors', s == 400 and {'bogus', 'do', 'perm'} <= set(r.get('errors', {})), (s, r))
+    s, r = api(client, 'PATCH', '/api/v1/devices/' + mine['uuid'], {'perm': 0})
+    check('a device can\'t change its own permissions', s == 403, (s, r))
+    s, r = api(client, 'PATCH', '/api/v1/devices/' + mine['uuid'], {'name': 'e2e-manager', 'perm': mine['perm']})
+    check('...but can rename itself', s == 200, (s, r))
+    s, r = api(client, 'POST', '/api/v1/devices/%s/disconnect' % theirs['uuid'])
+    check('disconnecting a device without a stream', s == 200 and r.get('disconnected') is False, (s, r))
+    s, r = api(client, 'DELETE', '/api/v1/devices/' + theirs['uuid'])
+    s2, r2 = api(client, 'GET', '/api/v1/devices')
+    check('other device unpaired', s == 200 and all(d['uuid'] != theirs['uuid'] for d in r2['devices']), (s, r))
+    s, r = api(client, 'DELETE', '/api/v1/devices/' + theirs['uuid'])
+    check('unpairing it again is 404', s == 404, (s, r))
+s, r = api(client, 'POST', '/api/v1/apps/close')
+check('close the running app (none running)', s == 200, (s, r))
+
+# The web UI gets the same calls with its session.
+s, r = web.call('GET', '/api/v1/apps')
+check('web UI: apps', s == 200 and [a['uuid'] for a in r['apps']] == original_order, (s, r))
+s, r = web.call('GET', '/api/v1/devices')
+check('web UI: devices, none marked as itself', s == 200 and not any(d['this_device'] for d in r['devices']), (s, r))
+s, r = web.call('POST', '/api/v1/apps', {'name': ''})
+check('web UI: validation', s == 400 and 'name' in r.get('errors', {}), (s, r))
 
 web.call('POST', '/api/clients/unpair-all', {})
 failed = [n for n, ok in results if not ok]
