@@ -81,6 +81,8 @@ TEST(ConfigSchemaTests, EveryDefaultPassesValidation) {
 
 TEST(ConfigSchemaTests, Booleans) {
   EXPECT_EQ(text_ok("headless_mode", true), "enabled");
+  EXPECT_EQ(text_ok("headless_mode", "Enabled"), "enabled") << "the parser ignores case";
+  EXPECT_EQ(text_ok("headless_mode", "FALSE"), "disabled");
   EXPECT_EQ(text_ok("headless_mode", false), "disabled");
   EXPECT_EQ(text_ok("headless_mode", "on"), "enabled");
   EXPECT_EQ(text_ok("headless_mode", "disabled"), "disabled");

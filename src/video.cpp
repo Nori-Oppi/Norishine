@@ -1570,7 +1570,14 @@ namespace video {
         case 0:
           // 10-bit h264 encoding is not supported by our streaming protocol
           assert(!config.dynamicRange);
-          ctx->profile = (config.chromaSamplingType == 1) ? AV_PROFILE_H264_HIGH_444_PREDICTIVE : AV_PROFILE_H264_HIGH;
+          if (config.chromaSamplingType == 1) {
+            ctx->profile = AV_PROFILE_H264_HIGH_444_PREDICTIVE;
+          } else if (video_format.name == "h264_amf"sv && config::video.amd.amd_coder == 2 /* AMF_VIDEO_ENCODER_CALV */) {
+            // AMF only uses CAVLC with the Constrained Baseline profile; with High it keeps CABAC.
+            ctx->profile = AV_PROFILE_H264_CONSTRAINED_BASELINE;
+          } else {
+            ctx->profile = AV_PROFILE_H264_HIGH;
+          }
           break;
 
         case 1:
@@ -1980,17 +1987,6 @@ namespace video {
     bool missing_frame_timestamp_warning_logged = false;
 
     while (true) {
-      // Break out of the encoding loop if any of the following are true:
-      // a) The stream is ending
-      // b) Sunshine is quitting
-      // c) The capture side is waiting to reinit and we've encoded at least one frame
-      //
-      // If we have to reinit before we have received any captured frames, we will encode
-      // the blank dummy frame just to let Moonlight know that we're alive.
-      if (shutdown_event->peek() || !images->running() || (reinit_event.peek() && frame_nr > 1)) {
-        break;
-      }
-
       bool requested_idr_frame = false;
 
       while (invalidate_ref_frames_events->peek()) {
@@ -2047,12 +2043,30 @@ namespace video {
         }
       }
 
+      // Break out of the encoding loop if any of the following are true:
+      // a) The stream is ending
+      // b) Sunshine is quitting
+      // c) The capture side is waiting to reinit and we've encoded at least one frame
+      //
+      // If we have to reinit before we have received any captured frames, we will encode
+      // the blank dummy frame just to let Moonlight know that we're alive.
+      //
+      // Ensure that this check occurs as close as possible to the encode call to prevent packets
+      // in flight after encoder teardown.
+      if (shutdown_event->peek() || !images->running() || (reinit_event.peek() && frame_nr > 1)) {
+        break;
+      }
+
       if (encode(frame_nr++, *session, packets, channel_data, frame_timestamp)) {
         BOOST_LOG(error) << "Could not encode video packet"sv;
         break;
       }
 
       session->request_normal_frame();
+
+      // While streaming check to see if the mouse is present and enable Mouse Keys to force the cursor to appear
+      // This is useful for KVM switch scenarios where mouse may disappear during streaming
+      platf::enable_mouse_keys();
     }
   }
 
@@ -2440,11 +2454,30 @@ namespace video {
     }
   }
 
+  /**
+   * @brief Downgrade a request for HDR to SDR when the chosen encoder can't encode HDR,
+   *        instead of failing the stream.
+   */
+  config_t resolve_dynamic_range(const encoder_t &encoder, config_t config) {
+    if (!config.dynamicRange) {
+      return config;
+    }
+    const auto &video_format = encoder.codec_from_config(config);
+    if (video_format[encoder_t::DYNAMIC_RANGE]) {
+      return config;
+    }
+    BOOST_LOG(warning) << video_format.name << ": dynamic range not supported, falling back to SDR"sv;
+    config.dynamicRange = 0;
+    return config;
+  }
+
   void capture(
     safe::mail_t mail,
     config_t config,
     void *channel_data
   ) {
+    config = resolve_dynamic_range(*chosen_encoder, config);
+
     auto idr_events = mail->event<bool>(mail::idr);
 
     idr_events->raise(true);

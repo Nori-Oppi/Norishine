@@ -918,7 +918,7 @@ namespace config {
   }
 
   bool to_bool(std::string &boolean) {
-    std::for_each(std::begin(boolean), std::end(boolean), [](char ch) {
+    std::transform(std::begin(boolean), std::end(boolean), std::begin(boolean), [](unsigned char ch) {
       return (char) std::tolower(ch);
     });
 
@@ -1151,13 +1151,6 @@ namespace config {
   }
 
   void apply_config(std::unordered_map<std::string, std::string> &&vars) {
-#ifndef __ANDROID__
-    // TODO: Android can possibly support this
-    if (!fs::exists(stream.file_apps.c_str())) {
-      fs::copy_file(SUNSHINE_ASSETS_DIR "/apps.json", stream.file_apps);
-    }
-#endif
-
     for (auto &[name, val] : vars) {
     #ifdef _WIN32
       BOOST_LOG(info) << "config: ["sv << name << "] -- ["sv << utf8ToAcp(val) << ']';
@@ -1315,16 +1308,28 @@ namespace config {
     int_between_f(vars, "wan_encryption_mode", stream.wan_encryption_mode, {0, 2});
 
     path_f(vars, "file_apps", stream.file_apps);
+#ifndef __ANDROID__
+    // TODO: Android can possibly support this
+    if (!fs::exists(stream.file_apps.c_str())) {
+      fs::copy_file(SUNSHINE_ASSETS_DIR "/apps.json", stream.file_apps);
+      fs::permissions(
+        stream.file_apps,
+        fs::perms::owner_read | fs::perms::owner_write,
+        fs::perm_options::add
+      );
+    }
+#endif
+
     int_between_f(vars, "fec_percentage", stream.fec_percentage, {1, 255});
 
     map_int_int_f(vars, "keybindings"s, input.keybindings);
 
     // This config option will only be used by the UI
     // When editing in the config file itself, use "keybindings"
-    bool map_rightalt_to_win = false;
-    bool_f(vars, "key_rightalt_to_key_win", map_rightalt_to_win);
+    input.key_rightalt_to_key_win = false;
+    bool_f(vars, "key_rightalt_to_key_win", input.key_rightalt_to_key_win);
 
-    if (map_rightalt_to_win) {
+    if (input.key_rightalt_to_key_win) {
       input.keybindings.emplace(0xA5, 0x5B);
     }
 
