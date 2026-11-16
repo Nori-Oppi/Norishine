@@ -8,6 +8,7 @@
 #include <atomic>
 #include <memory>
 #include <list>
+#include <vector>
 
 // local includes
 #include "crypto.h"
@@ -20,6 +21,10 @@
 // Resolve circular dependencies
 namespace stream {
   struct session_t;
+
+  namespace session {
+    struct info_t;
+  }
 }
 
 namespace rtsp_stream {
@@ -82,6 +87,11 @@ namespace rtsp_stream {
 
   std::list<std::string>
   get_all_session_uuids();
+
+  /**
+   * @brief Details of every active streaming session.
+   */
+  std::vector<stream::session::info_t> get_all_session_info();
 
   /**
    * @brief Terminates all running streaming sessions.

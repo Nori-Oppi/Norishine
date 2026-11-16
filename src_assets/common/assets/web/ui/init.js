@@ -1,3 +1,4 @@
+import '../csrf'
 import i18n from '../locale'
 import { applyStoredTheme } from './theme'
 

@@ -2,20 +2,19 @@
 import { computed } from 'vue'
 import { clone } from './model'
 
-// Editor for prep_commands ({do, undo, elevated}) and server_commands ({name, cmd, elevated}).
+// Editor for a list of commands: rows of text fields, an optional "Run as administrator"
+// (Windows only), reordering and removal. Used for settings, apps and devices.
 const props = defineProps({
   value: { type: Array, default: () => [] },
-  kind: { type: String, required: true },  // "prep_commands" or "server_commands"
-  windows: Boolean,  // "Run as administrator" only exists on Windows
+  // Text fields per row: [{name, label}]. A single field named "" edits plain strings.
+  fields: { type: Array, required: true },
+  elevated: Boolean,  // show "Run as administrator"
+  addLabel: { type: String, default: 'settings.add_command' },
   disabled: Boolean,
-  idPrefix: { type: String, required: true },
 })
 const emit = defineEmits(['update'])
 
-const fields = computed(() => props.kind === 'prep_commands'
-  ? [{ name: 'do', label: 'settings.cmd_do' }, { name: 'undo', label: 'settings.cmd_undo' }]
-  : [{ name: 'name', label: 'settings.cmd_name' }, { name: 'cmd', label: 'settings.cmd_cmd' }])
-
+const plain = computed(() => props.fields.length === 1 && props.fields[0].name === '')
 const rows = computed(() => Array.isArray(props.value) ? props.value : [])
 
 function change(mutate) {
@@ -23,28 +22,46 @@ function change(mutate) {
   mutate(next)
   emit('update', next)
 }
-
 function add() {
-  change((list) => list.push(props.kind === 'prep_commands' ? { do: '', undo: '', elevated: false } : { name: '', cmd: '', elevated: false }))
+  change((list) => {
+    if (plain.value) {
+      list.push('')
+      return
+    }
+    const item = Object.fromEntries(props.fields.map((f) => [f.name, '']))
+    if (props.elevated) {
+      item.elevated = false
+    }
+    list.push(item)
+  })
 }
 function move(i, delta) {
   change((list) => list.splice(i + delta, 0, list.splice(i, 1)[0]))
+}
+function setField(i, name, value) {
+  change((list) => {
+    if (plain.value) {
+      list[i] = value
+    } else {
+      list[i][name] = value
+    }
+  })
 }
 </script>
 
 <template>
   <div class="list-editor">
     <div v-for="(row, i) in rows" :key="i" class="entry">
-      <div class="entry-fields">
+      <div class="entry-fields" :style="{ '--cols': fields.length }">
         <label v-for="f in fields" :key="f.name" class="entry-field">
-          <span class="small muted">{{ $t(f.label) }}</span>
-          <input type="text" class="field mono" :value="row[f.name]" :disabled="disabled" spellcheck="false"
-                 @input="change((list) => list[i][f.name] = $event.target.value)">
+          <span v-if="f.label" class="small muted">{{ $t(f.label) }}</span>
+          <input type="text" class="field mono" :value="plain ? row : row[f.name]" :disabled="disabled" spellcheck="false"
+                 :aria-label="f.label ? $t(f.label) : null" @input="setField(i, f.name, $event.target.value)">
         </label>
       </div>
       <div class="entry-side">
-        <label v-if="windows" class="elevated small">
-          <input type="checkbox" :checked="!!row.elevated" :disabled="disabled"
+        <label v-if="elevated && !plain" class="elevated small">
+          <input type="checkbox" :checked="row.elevated === true || row.elevated === 'true'" :disabled="disabled"
                  @change="change((list) => list[i].elevated = $event.target.checked)">
           {{ $t('settings.cmd_elevated') }}
         </label>
@@ -60,7 +77,7 @@ function move(i, delta) {
     </div>
     <p v-if="rows.length === 0" class="small muted empty">{{ $t('settings.no_entries') }}</p>
     <button type="button" class="btn btn-small" :disabled="disabled" @click="add">
-      <i class="fas fa-plus" aria-hidden="true"></i> {{ $t('settings.add_command') }}
+      <i class="fas fa-plus" aria-hidden="true"></i> {{ $t(addLabel) }}
     </button>
   </div>
 </template>
@@ -71,7 +88,7 @@ function move(i, delta) {
   width: 100%; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
   padding: 10px 12px; border: 1px solid var(--row-divider); border-radius: 6px;
 }
-.entry-fields { flex: 1 1 360px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.entry-fields { flex: 1 1 360px; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px; }
 .entry-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .entry-side { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .elevated { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); white-space: nowrap; }

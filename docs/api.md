@@ -2,8 +2,19 @@
 
 Sunshine has a RESTful API which can be used to interact with the service.
 
-Unless otherwise specified, authentication is required for all API calls. You can authenticate using
-basic authentication with the admin username and password.
+Unless otherwise specified, every call needs a signed-in session: `POST /api/login` with
+`{"username": ..., "password": ...}` sets two cookies, `auth` (HttpOnly, the session) and
+`csrf` (readable by the pages). Every call that changes something (any method other than
+GET) must also send the `csrf` value in an `X-CSRF-Token` header, and a browser `Origin`, if
+present, must be this server; otherwise the answer is 403. `POST /api/logout` ends the
+session. Several browsers can be signed in at once; sessions last 15 days and end when the
+host restarts or the password changes.
+
+After five failed sign-ins from one address, further attempts from it get 429 with
+`Retry-After` for 30 seconds, doubling with each further failure up to 15 minutes; a
+successful sign-in or an hour without failures resets it. Passwords are stored as
+PBKDF2-HMAC-SHA256; a password stored by Apollo or Sunshine (one round of SHA-256) still
+works and is converted at the next sign-in.
 
 @htmlonly
 <script src="api.js"></script>
@@ -88,6 +99,15 @@ requesting device's name and permissions. The schema takes `?locale=` (a value o
 `locale` setting) and gives each setting a readable `title` and `help`, plus category
 names, for clients without the web UI's locale files. `scripts/e2e/manage_check.py` checks all of it
 against a dev host.
+
+## GET /api/v1/status
+@copydoc confighttp::getStatusV1()
+
+Host name, version, platform, unique ID, running app (`id`, `uuid`, `name`, or null) and
+`active_sessions`, plus `sessions`: one entry per stream with the device's `uuid` and
+`name`, its `address`, `width`, `height`, `fps`, `bitrate_kbps`, `codec` (`H.264`, `HEVC`,
+`AV1`), `hdr` and `state`. The same object (plus `device`) is what paired clients get from
+`GET /api/v1/status` on the HTTPS port.
 
 ## POST /api/covers/upload
 @copydoc confighttp::uploadCover()

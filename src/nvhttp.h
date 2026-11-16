@@ -331,6 +331,11 @@ namespace nvhttp {
   nlohmann::json get_all_clients();
 
   /**
+   * @brief Host status for the management API: name, version, running app and active streams.
+   */
+  nlohmann::json host_status();
+
+  /**
    * @brief Remove all paired clients.
    * @examples
    * nvhttp::erase_all_clients();

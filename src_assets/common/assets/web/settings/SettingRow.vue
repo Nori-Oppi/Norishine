@@ -22,6 +22,9 @@ const props = defineProps({
 })
 const emit = defineEmits(['update', 'reset'])
 
+const PREP_FIELDS = [{ name: 'do', label: 'settings.cmd_do' }, { name: 'undo', label: 'settings.cmd_undo' }]
+const SERVER_FIELDS = [{ name: 'name', label: 'settings.cmd_name' }, { name: 'cmd', label: 'settings.cmd_cmd' }]
+
 const s = computed(() => props.setting)
 const id = computed(() => 'setting-' + s.value.key)
 const wide = computed(() => LIST_TYPES.includes(s.value.type))
@@ -86,8 +89,9 @@ const textValue = computed(() => props.value === null || props.value === undefin
     </div>
 
     <div v-if="wide" class="row-editor" role="group" :aria-labelledby="id + '-label'">
-      <CommandList v-if="s.type === 'prep_commands' || s.type === 'server_commands'" :kind="s.type" :value="value"
-                   :windows="platform === 'windows'" :id-prefix="id" @update="emit('update', $event)" />
+      <CommandList v-if="s.type === 'prep_commands' || s.type === 'server_commands'" :value="value"
+                   :fields="s.type === 'prep_commands' ? PREP_FIELDS : SERVER_FIELDS"
+                   :elevated="platform === 'windows'" @update="emit('update', $event)" />
       <KeybindingsEditor v-else-if="s.type === 'keybindings'" :value="value" @update="emit('update', $event)" />
       <ModeRemappingEditor v-else-if="s.type === 'mode_remapping'" :value="value" :active-group="remapGroup"
                            @update="emit('update', $event)" />
