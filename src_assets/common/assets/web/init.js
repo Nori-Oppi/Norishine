@@ -1,3 +1,4 @@
+import './csrf'
 import i18n from './locale'
 
 // must import even if not implicitly using here

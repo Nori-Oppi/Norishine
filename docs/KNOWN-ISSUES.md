@@ -37,5 +37,9 @@ Vibepollo is installed. Remaining:
   default ports, so whichever starts second cannot stream. Uninstall Norishine first.
 - Apollo's and Vibepollo's own uninstallers (run when replacing them) also delete a
   `SunshineSvc` service, which would remove a Sunshine install on the same PC.
+- Norishine stores the web UI password with a stronger hash than Apollo and Vibepollo
+  (converted at the first sign-in). If you go back to Apollo or Vibepollo with Norishine's
+  carried-back settings, set a new web UI password there (`sunshine.exe --creds <user>
+  <password>`, or delete the credentials from its state file).
 - NVIDIA only: the global-profile undo file is `%ProgramData%\Sunshine\nvprefs_undo.json`
   for Sunshine, Apollo, Vibepollo and Norishine alike.

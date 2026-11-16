@@ -27,6 +27,7 @@
 #include "crypto.h"
 #include "file_handler.h"
 #include "httpcommon.h"
+#include "web_auth.h"
 #include "logging.h"
 #include "network.h"
 #include "nvhttp.h"
@@ -87,7 +88,7 @@ namespace http {
     auto salt = crypto::rand_alphabet(16);
     outputTree["username"] = username;
     outputTree["salt"] = salt;
-    outputTree["password"] = util::hex(crypto::hash(password + salt)).to_string();
+    outputTree["password"] = web_auth::hash_password(password, salt);
     if (file_handler::write_file(file.c_str(), outputTree.dump(4))) {
       BOOST_LOG(error) << "error writing to the credentials file, perhaps try this again as an administrator?"sv;
       return -1;

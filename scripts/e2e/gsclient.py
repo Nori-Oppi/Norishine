@@ -49,13 +49,17 @@ class WebUI:
             urllib.request.HTTPCookieProcessor(self.jar))
         r = self.call('POST', '/api/login', {'username': user, 'password': password}, raw=True)
         if not any(c.name == 'auth' for c in self.jar):
-            raise RuntimeError('web UI login failed: %r' % r)
+            raise RuntimeError('web UI login failed: %r' % (r,))
+        # Changes must carry the session's CSRF token.
+        self.csrf = next((c.value for c in self.jar if c.name == 'csrf'), '')
 
     def call(self, method, path, body=None, raw=False):
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method=method)
         if data is not None:
             req.add_header('Content-Type', 'application/json')
+        if method not in ('GET', 'HEAD') and getattr(self, 'csrf', ''):
+            req.add_header('X-CSRF-Token', self.csrf)
         try:
             with self.opener.open(req, timeout=15) as resp:
                 text = resp.read().decode()

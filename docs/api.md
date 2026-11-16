@@ -2,8 +2,19 @@
 
 Sunshine has a RESTful API which can be used to interact with the service.
 
-Unless otherwise specified, authentication is required for all API calls. You can authenticate using
-basic authentication with the admin username and password.
+Unless otherwise specified, every call needs a signed-in session: `POST /api/login` with
+`{"username": ..., "password": ...}` sets two cookies, `auth` (HttpOnly, the session) and
+`csrf` (readable by the pages). Every call that changes something (any method other than
+GET) must also send the `csrf` value in an `X-CSRF-Token` header, and a browser `Origin`, if
+present, must be this server; otherwise the answer is 403. `POST /api/logout` ends the
+session. Several browsers can be signed in at once; sessions last 15 days and end when the
+host restarts or the password changes.
+
+After five failed sign-ins from one address, further attempts from it get 429 with
+`Retry-After` for 30 seconds, doubling with each further failure up to 15 minutes; a
+successful sign-in or an hour without failures resets it. Passwords are stored as
+PBKDF2-HMAC-SHA256; a password stored by Apollo or Sunshine (one round of SHA-256) still
+works and is converted at the next sign-in.
 
 @htmlonly
 <script src="api.js"></script>

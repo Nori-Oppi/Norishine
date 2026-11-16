@@ -67,6 +67,8 @@ set(SUNSHINE_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/config.cpp"
         "${CMAKE_SOURCE_DIR}/src/config_schema.h"
         "${CMAKE_SOURCE_DIR}/src/config_schema.cpp"
+        "${CMAKE_SOURCE_DIR}/src/web_auth.h"
+        "${CMAKE_SOURCE_DIR}/src/web_auth.cpp"
         "${CMAKE_SOURCE_DIR}/src/display_device.h"
         "${CMAKE_SOURCE_DIR}/src/display_device.cpp"
         "${CMAKE_SOURCE_DIR}/src/entry_handler.cpp"

@@ -20,6 +20,14 @@ const themes = ['auto', 'light', 'dark']
 const theme = ref(storedTheme())
 const themeIcon = { auto: 'fa-circle-half-stroke', light: 'fa-sun', dark: 'fa-moon' }
 
+async function signOut() {
+  try {
+    await fetch('./api/logout', { method: 'POST', credentials: 'include' })
+  } finally {
+    location.href = './login'
+  }
+}
+
 function nextTheme() {
   theme.value = themes[(themes.indexOf(theme.value) + 1) % themes.length]
   setTheme(theme.value)
@@ -45,6 +53,10 @@ function nextTheme() {
                 :title="$t('navbar.toggle_theme') + ': ' + $t('navbar.theme_' + theme)">
           <i class="fas fa-fw" :class="themeIcon[theme]" aria-hidden="true"></i>
           <span class="visually-hidden">{{ $t('navbar.toggle_theme') }}: {{ $t('navbar.theme_' + theme) }}</span>
+        </button>
+        <button type="button" class="theme-button" @click="signOut" :title="$t('navbar.logout')">
+          <i class="fas fa-fw fa-right-from-bracket" aria-hidden="true"></i>
+          <span class="visually-hidden">{{ $t('navbar.logout') }}</span>
         </button>
       </div>
     </header>

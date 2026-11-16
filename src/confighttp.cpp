@@ -41,6 +41,7 @@
 #include "process.h"
 #include "utility.h"
 #include "uuid.h"
+#include "web_auth.h"
 
 #ifdef _WIN32
   #include "platform/windows/utils.h"
@@ -62,9 +63,9 @@ namespace confighttp {
     REMOVE  ///< Remove client
   };
 
-  // SESSION COOKIE
-  std::string sessionCookie;
-  static std::chrono::time_point<std::chrono::steady_clock> cookie_creation_time;
+  // Signed-in browsers, and failed sign-ins per address.
+  web_auth::sessions_t sessions {std::chrono::duration_cast<std::chrono::seconds>(SESSION_EXPIRE_DURATION)};
+  web_auth::login_limiter_t login_limiter;
 
   /**
    * @brief Log the request details.
@@ -141,15 +142,59 @@ namespace confighttp {
    * @return The value if found, empty string otherwise.
    */
   std::string getCookieValue(const std::string& cookieString, const std::string& key) {
-    std::string keyWithEqual = key + "=";
-    std::size_t startPos = cookieString.find(keyWithEqual);
-    if (startPos == std::string::npos)
-      return "";
-    startPos += keyWithEqual.length();
-    std::size_t endPos = cookieString.find(";", startPos);
-    if (endPos == std::string::npos)
-      return cookieString.substr(startPos);
-    return cookieString.substr(startPos, endPos - startPos);
+    // "a=1; auth=xyz; b=2": match whole names only.
+    std::size_t pos = 0;
+    while (pos < cookieString.size()) {
+      auto end = cookieString.find(';', pos);
+      if (end == std::string::npos) {
+        end = cookieString.size();
+      }
+      auto part = std::string_view {cookieString}.substr(pos, end - pos);
+      while (!part.empty() && part.front() == ' ') {
+        part.remove_prefix(1);
+      }
+      if (part.size() > key.size() && part.starts_with(key) && part[key.size()] == '=') {
+        return std::string {part.substr(key.size() + 1)};
+      }
+      pos = end + 1;
+    }
+    return "";
+  }
+
+  /**
+   * @brief Send a 403 Forbidden response with a JSON error.
+   */
+  void send_forbidden(resp_https_t response, const std::string &error) {
+    nlohmann::json tree;
+    tree["status_code"] = 403;
+    tree["status"] = false;
+    tree["error"] = error;
+    const SimpleWeb::CaseInsensitiveMultimap headers {
+      {"Content-Type", "application/json"},
+      {"X-Frame-Options", "DENY"},
+      {"Content-Security-Policy", "frame-ancestors 'none';"}
+    };
+    response->write(SimpleWeb::StatusCode::client_error_forbidden, tree.dump(), headers);
+  }
+
+  /**
+   * @brief Whether a request that changes something comes from the web UI's own pages.
+   *
+   * Browsers send Origin on cross-site requests; it must name this server. Requests
+   * without Origin (scripts, older browsers on same-origin requests) are allowed here and
+   * still need the CSRF token when signed in.
+   */
+  bool sameOrigin(req_https_t request) {
+    auto origin = request->header.find("origin");
+    if (origin == request->header.end()) {
+      return true;
+    }
+    auto host = request->header.find("host");
+    return host != request->header.end() && boost::iequals(origin->second, "https://" + host->second);
+  }
+
+  bool changesState(req_https_t request) {
+    return request->method != "GET" && request->method != "HEAD";
   }
 
   /**
@@ -196,21 +241,24 @@ namespace confighttp {
         send_unauthorized(response, request);
       }
     });
-    if (sessionCookie.empty())
-      return false;
-    // Check for expiry
-    if (std::chrono::steady_clock::now() - cookie_creation_time > SESSION_EXPIRE_DURATION) {
-      sessionCookie.clear();
-      return false;
-    }
     auto cookies = request->header.find("cookie");
     if (cookies == request->header.end())
       return false;
-    auto authCookie = getCookieValue(cookies->second, "auth");
-    if (authCookie.empty() ||
-        util::hex(crypto::hash(authCookie + config::sunshine.salt)).to_string() != sessionCookie)
+    auto csrf = sessions.find(getCookieValue(cookies->second, "auth"));
+    if (!csrf)
       return false;
     fg.disable();
+
+    // Changes also need the session's CSRF token, which other sites can't read.
+    if (changesState(request)) {
+      auto header = request->header.find("x-csrf-token");
+      if (!sameOrigin(request) || header == request->header.end() || !web_auth::equal_secret(header->second, *csrf)) {
+        auto address = net::addr_to_normalized_string(request->remote_endpoint().address());
+        BOOST_LOG(info) << "Web UI: ["sv << address << "] -- missing or wrong CSRF token for "sv << request->path;
+        send_forbidden(response, "Missing or invalid CSRF token. Reload the page and try again.");
+        return false;
+      }
+    }
     return true;
   }
 
@@ -1288,6 +1336,10 @@ namespace confighttp {
   void savePassword(resp_https_t response, req_https_t request) {
     if ((!config::sunshine.username.empty() && !authenticate(response, request)) || !validateContentType(response, request, "application/json"))
       return;
+    if (!sameOrigin(request)) {
+      send_forbidden(response, "Cross-site request refused");
+      return;
+    }
     print_req(request);
     std::vector<std::string> errors;
     std::stringstream ss;
@@ -1305,15 +1357,14 @@ namespace confighttp {
       if (newUsername.empty()) {
         errors.push_back("Invalid Username");
       } else {
-        auto hash = util::hex(crypto::hash(password + config::sunshine.salt)).to_string();
         if (config::sunshine.username.empty() ||
-            (boost::iequals(username, config::sunshine.username) && hash == config::sunshine.password)) {
+            (boost::iequals(username, config::sunshine.username) && web_auth::verify_password(password, config::sunshine.salt, config::sunshine.password))) {
           if (newPassword.empty() || newPassword != confirmPassword)
             errors.push_back("Password Mismatch");
           else {
             http::save_user_creds(config::sunshine.credentials_file, newUsername, newPassword);
             http::reload_user_creds(config::sunshine.credentials_file);
-            sessionCookie.clear(); // force re-login
+            sessions.clear();  // everyone signs in again with the new password
             output_tree["status"] = true;
           }
         } else {
@@ -1665,10 +1716,22 @@ namespace confighttp {
     if (!checkIPOrigin(response, request) || !validateContentType(response, request, "application/json")) {
       return;
     }
+    const auto address = net::addr_to_normalized_string(request->remote_endpoint().address());
+    if (!sameOrigin(request)) {
+      send_forbidden(response, "Cross-site request refused");
+      return;
+    }
 
-    auto fg = util::fail_guard([&]{
-      response->write(SimpleWeb::StatusCode::client_error_unauthorized);
-    });
+    if (auto wait = login_limiter.wait_time(address); wait.count() > 0) {
+      BOOST_LOG(warning) << "Web UI: ["sv << address << "] -- sign-in refused, too many failed attempts"sv;
+      nlohmann::json tree {{"status", false}, {"error", std::format("Too many failed sign-ins. Try again in {} seconds.", wait.count())}, {"retry_after", wait.count()}};
+      const SimpleWeb::CaseInsensitiveMultimap headers {
+        {"Content-Type", "application/json"},
+        {"Retry-After", std::to_string(wait.count())},
+      };
+      response->write(SimpleWeb::StatusCode::client_error_too_many_requests, tree.dump(), headers);
+      return;
+    }
 
     try {
       std::stringstream ss;
@@ -1676,24 +1739,58 @@ namespace confighttp {
       nlohmann::json input_tree = nlohmann::json::parse(ss.str());
       std::string username = input_tree.value("username", "");
       std::string password = input_tree.value("password", "");
-      std::string hash = util::hex(crypto::hash(password + config::sunshine.salt)).to_string();
-      if (!boost::iequals(username, config::sunshine.username) || hash != config::sunshine.password)
+      // Always run the password check, so a wrong username takes as long as a wrong password.
+      bool password_ok = web_auth::verify_password(password, config::sunshine.salt, config::sunshine.password);
+      if (config::sunshine.username.empty() || !boost::iequals(username, config::sunshine.username) || !password_ok) {
+        login_limiter.failed(address);
+        BOOST_LOG(warning) << "Web UI: ["sv << address << "] -- failed sign-in"sv;
+        send_json(response, SimpleWeb::StatusCode::client_error_unauthorized, {{"status", false}, {"error", "Wrong username or password"}});
         return;
-      std::string sessionCookieRaw = crypto::rand_alphabet(64);
-      sessionCookie = util::hex(crypto::hash(sessionCookieRaw + config::sunshine.salt)).to_string();
-      cookie_creation_time = std::chrono::steady_clock::now();
-      const SimpleWeb::CaseInsensitiveMultimap headers {
-        { "Set-Cookie", "auth=" + sessionCookieRaw + "; Secure; SameSite=Strict; Max-Age=2592000; Path=/" }
+      }
+      login_limiter.succeeded(address);
+
+      // Passwords stored by Apollo or older versions move to the stronger hash now.
+      if (web_auth::is_legacy_hash(config::sunshine.password)) {
+        if (http::save_user_creds(config::sunshine.credentials_file, config::sunshine.username, password) == 0) {
+          http::reload_user_creds(config::sunshine.credentials_file);
+          BOOST_LOG(info) << "Web UI: stored the password with a stronger hash"sv;
+        }
+      }
+
+      auto session = sessions.create();
+      const auto max_age = std::to_string(std::chrono::duration_cast<std::chrono::seconds>(SESSION_EXPIRE_DURATION).count());
+      SimpleWeb::CaseInsensitiveMultimap headers {
+        {"Content-Type", "application/json"},
       };
-      response->write(headers);
-      fg.disable();
+      headers.emplace("Set-Cookie", "auth=" + session.token + "; Secure; HttpOnly; SameSite=Strict; Max-Age=" + max_age + "; Path=/");
+      // Readable by the pages, which send it back in X-CSRF-Token.
+      headers.emplace("Set-Cookie", "csrf=" + session.csrf + "; Secure; SameSite=Strict; Max-Age=" + max_age + "; Path=/");
+      response->write(nlohmann::json {{"status", true}, {"csrf_token", session.csrf}}.dump(), headers);
     } catch (std::exception &e) {
-      BOOST_LOG(warning) << "Web UI Login failed: ["sv << net::addr_to_normalized_string(request->remote_endpoint().address())
-                               << "]: "sv << e.what();
-      response->write(SimpleWeb::StatusCode::server_error_internal_server_error);
-      fg.disable();
+      BOOST_LOG(warning) << "Web UI Login failed: ["sv << address << "]: "sv << e.what();
+      bad_request(response, request, "Invalid request");
+    }
+  }
+
+  /**
+   * @brief Sign out: end this browser's session.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   *
+   * @api_examples{/api/logout| POST| null}
+   */
+  void logout(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
       return;
     }
+    auto cookies = request->header.find("cookie");
+    sessions.remove(getCookieValue(cookies->second, "auth"));
+    SimpleWeb::CaseInsensitiveMultimap headers {
+      {"Content-Type", "application/json"},
+    };
+    headers.emplace("Set-Cookie", "auth=; Secure; HttpOnly; SameSite=Strict; Max-Age=0; Path=/");
+    headers.emplace("Set-Cookie", "csrf=; Secure; SameSite=Strict; Max-Age=0; Path=/");
+    response->write(nlohmann::json {{"status", true}}.dump(), headers);
   }
 
   /**
@@ -1725,7 +1822,8 @@ namespace confighttp {
     server.resource["^/welcome/?$"]["GET"] = getWelcomePage;
     server.resource["^/login/?$"]["GET"] = getLoginPage;
     server.resource["^/troubleshooting/?$"]["GET"] = getTroubleshootingPage;
-    server.resource["^/api/login"]["POST"] = login;
+    server.resource["^/api/login$"]["POST"] = login;
+    server.resource["^/api/logout$"]["POST"] = logout;
     server.resource["^/api/pin$"]["GET"] = getPendingPairings;
     server.resource["^/api/pin$"]["DELETE"] = cancelPairing;
     server.resource["^/api/pin$"]["POST"] = savePin;

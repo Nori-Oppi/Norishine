@@ -536,9 +536,7 @@
     "category_files": "Files",
     "category_group_encoders": "Encoders"
   },
-  "login": {
-    "save_password": "Remember Password"
-  },
+  "login": {},
   "index": {
     "description": "Norishine is a self-hosted game stream host for Moonlight.",
     "download": "Download",
@@ -561,7 +559,8 @@
     "theme_dark": "Dark",
     "theme_light": "Light",
     "toggle_theme": "Theme",
-    "troubleshoot": "Troubleshooting"
+    "troubleshoot": "Troubleshooting",
+    "logout": "Sign out"
   },
   "password": {
     "confirm_password": "Confirm Password",
@@ -739,5 +738,19 @@
     "more_categories": "Turn on advanced settings to see {n} more category. | Turn on advanced settings to see {n} more categories.",
     "result_count": "No settings found | 1 setting found | {n} settings found",
     "remap_in_use": "In use"
+  },
+  "account": {
+    "title": "Sign in to Norishine",
+    "sign_in": "Sign in",
+    "welcome_title": "Welcome to Norishine",
+    "welcome_text": "Create the account you'll use to manage this host from a browser. Keep the password safe: it can't be shown again, only reset on this PC.",
+    "confirm": "Confirm password",
+    "create": "Create account and sign in",
+    "wrong": "Wrong username or password.",
+    "locked": "Too many failed sign-ins. Wait a moment and try again.",
+    "mismatch": "The passwords don't match.",
+    "too_short": "Use at least 8 characters.",
+    "failed": "Sign-in failed (HTTP {status}).",
+    "unreachable": "Couldn't reach the host."
   }
 }

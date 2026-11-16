@@ -31,6 +31,9 @@
           <li class="nav-item">
             <ThemeToggle/>
           </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#" @click.prevent="signOut"><i class="fas fa-fw fa-right-from-bracket"></i> {{ $t('navbar.logout') }}</a>
+          </li>
         </ul>
       </div>
     </div>
@@ -44,6 +47,15 @@ export default {
   components: { ThemeToggle },
   created() {
     console.log("Header mounted!")
+  },
+  methods: {
+    async signOut() {
+      try {
+        await fetch('./api/logout', { method: 'POST', credentials: 'include' })
+      } finally {
+        location.href = './login'
+      }
+    },
   },
   mounted() {
     let el = document.querySelector("a[href='" + document.location.pathname + "']");
