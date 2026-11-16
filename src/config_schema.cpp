@@ -14,6 +14,7 @@
 // local includes
 #include "config.h"
 #include "config_schema.h"
+#include "confighttp.h"
 #include "file_handler.h"
 #include "nvhttp.h"
 #include "platform/common.h"
@@ -260,6 +261,9 @@ namespace config::schema {
         }
         return json(v == std::floor(v) ? json((long long) v) : json(v)).dump();
       };
+      if (*setting.max >= INT_MAX_D) {
+        return "at least "s + fmt(*setting.min);
+      }
       return "between "s + fmt(*setting.min) + " and "s + fmt(*setting.max);
     }
 
@@ -777,7 +781,35 @@ namespace config::schema {
     return "unknown";
   }
 
-  json describe() {
+  json describe(std::string_view locale, const std::string &locale_dir) {
+    // Only known locale names reach the file system.
+    auto known = choices(*find("locale"));
+    std::string chosen {locale};
+    if (std::find(known.begin(), known.end(), chosen) == known.end()) {
+      chosen = config::sunshine.locale;
+    }
+    if (std::find(known.begin(), known.end(), chosen) == known.end()) {
+      chosen = "en";
+    }
+    const std::string dir = locale_dir.empty() ? std::string {WEB_DIR "assets/locale/"} : locale_dir;
+    auto load = [&dir](const std::string &name) {
+      auto parsed = json::parse(file_handler::read_file((dir + name + ".json").c_str()), nullptr, false);
+      if (parsed.is_object() && parsed.contains("config") && parsed["config"].is_object()) {
+        return parsed["config"];
+      }
+      return json::object();
+    };
+    const json strings = load(chosen);
+    const json english = chosen == "en" ? strings : load("en");
+    auto text = [&](const std::string &id) -> std::string {
+      for (const auto *source : {&strings, &english}) {
+        if (auto it = source->find(id); it != source->end() && it->is_string() && !it->get<std::string>().empty()) {
+          return it->get<std::string>();
+        }
+      }
+      return {};
+    };
+
     json list = json::array();
     for (const auto &setting : settings()) {
       json platforms = json::array();
@@ -804,6 +836,9 @@ namespace config::schema {
         {"label", "config."s + std::string {setting.key}},
         {"description", "config."s + std::string {setting.key} + "_desc"},
       };
+      auto title = text(std::string {setting.key});
+      item["title"] = title.empty() ? std::string {setting.key} : title;
+      item["help"] = text(std::string {setting.key} + "_desc");
       if (setting.min) {
         item["min"] = *setting.min;
       }
@@ -818,9 +853,27 @@ namespace config::schema {
 
     const char *platform_name = current_platform() == platform::windows ? "windows" : current_platform() == platform::macos ? "macos" :
                                                                                                                               "linux";
+    // Same names as the web UI's settings tabs.
+    const json categories = json::array({
+      {{"id", "general"}, {"title", "General"}},
+      {{"id", "input"}, {"title", "Input"}},
+      {{"id", "av"}, {"title", "Audio/Video"}},
+      {{"id", "network"}, {"title", "Network"}},
+      {{"id", "files"}, {"title", "Config Files"}},
+      {{"id", "advanced"}, {"title", "Advanced"}},
+      {{"id", "nv"}, {"title", "NVIDIA NVENC Encoder"}},
+      {{"id", "qsv"}, {"title", "Intel QuickSync Encoder"}},
+      {{"id", "amd"}, {"title", "AMD AMF Encoder"}},
+      {{"id", "vt"}, {"title", "VideoToolbox Encoder"}},
+      {{"id", "vaapi"}, {"title", "VA-API Encoder"}},
+      {{"id", "sw"}, {"title", "Software Encoder"}},
+    });
+
     return {
       {"version", 1},
       {"platform", platform_name},
+      {"locale", chosen},
+      {"categories", categories},
       {"settings", std::move(list)},
     };
   }

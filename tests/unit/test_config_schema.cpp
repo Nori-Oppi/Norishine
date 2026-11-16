@@ -72,7 +72,7 @@ TEST(ConfigSchemaTests, IntegersAndRanges) {
   EXPECT_EQ(text_ok("max_bitrate", 50000), "50000");
   EXPECT_EQ(text_ok("max_bitrate", "50000"), "50000");
   EXPECT_EQ(text_ok("max_bitrate", 50000.0), "50000");
-  text_error("max_bitrate", -1);
+  EXPECT_NE(text_error("max_bitrate", -1).find("at least 0"), std::string::npos);
   text_error("max_bitrate", 1.5);
   text_error("max_bitrate", "12abc");
   EXPECT_EQ(text_ok("port", 49989), "49989");
@@ -196,6 +196,40 @@ TEST(ConfigSchemaTests, Describe) {
       EXPECT_EQ(s["tier"], "dangerous");
     }
   }
+}
+
+TEST(ConfigSchemaTests, DescribeWithReadableStrings) {
+  // Locale files are copied next to the tests (tests/CMakeLists.txt).
+  const std::string dir = "src_assets/common/assets/web/public/assets/locale/";
+  auto find_setting = [](const json &schema, std::string_view key) {
+    for (const auto &s : schema["settings"]) {
+      if (s["key"] == key) {
+        return s;
+      }
+    }
+    return json();
+  };
+
+  auto english = describe("en", dir);
+  EXPECT_EQ(english["locale"], "en");
+  EXPECT_EQ(find_setting(english, "max_bitrate")["title"], "Maximum Bitrate");
+  EXPECT_FALSE(find_setting(english, "headless_mode")["help"].get<std::string>().empty());
+  ASSERT_EQ(english["categories"].size(), 12u);
+  EXPECT_EQ(english["categories"][0]["title"], "General");
+
+  // German has no headless_mode string: English fills the gap.
+  auto german = describe("de", dir);
+  EXPECT_EQ(german["locale"], "de");
+  EXPECT_EQ(find_setting(german, "headless_mode")["title"], "Headless Mode");
+
+  // Unknown locales never reach the file system; they fall back.
+  auto other = describe("../../secrets", dir);
+  EXPECT_NE(other["locale"], "../../secrets");
+
+  // No locale files at all: the key is the title.
+  auto bare = describe("en", "no-such-directory/");
+  EXPECT_EQ(find_setting(bare, "max_bitrate")["title"], "max_bitrate");
+  EXPECT_EQ(find_setting(bare, "max_bitrate")["help"], "");
 }
 
 TEST(ConfigUpdateTextTests, ReplacesInPlaceAndKeepsComments) {
