@@ -40,6 +40,15 @@ test_sunshine.exe --gtest_filter=-MouseInputs/*:Configurations/AudioTest.*
 
 All tests pass; see [KNOWN-ISSUES.md](KNOWN-ISSUES.md) for the suites skipped locally.
 
+## Nightly builds
+
+`.github/workflows/nightly.yml` runs daily at 20:17 Amsterdam time. When `master` has
+new commits since the last nightly, it builds, tests and packages the installer through
+`ci.yml` with a version such as `nightly-20261116-be295d3`, then replaces the rolling
+`nightly` pre-release with `Norishine-Windows-x64-<version>-Setup.exe`. Start it by hand
+from the Actions tab (Nightly, Run workflow) to build even when nothing changed. Runs
+from other branches build but don't publish.
+
 ## Running a development host next to an installed one
 
 Do not install development builds as a service. Run `build/sunshine.exe` with its own

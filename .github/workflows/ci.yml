@@ -9,6 +9,13 @@ on:
       - 'baseline/**'
   pull_request:
   workflow_dispatch:
+  # The nightly workflow calls this one to build, test and package a named version.
+  workflow_call:
+    inputs:
+      version:
+        description: 'Version to build, such as nightly-20261116-be295d3. Empty uses the git-based version.'
+        type: string
+        default: ''
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -66,8 +73,14 @@ jobs:
       - name: Configure
         env:
           PROCESSOR_ARCHITECTURE: AMD64
+          VERSION: ${{ inputs.version }}
         run: |
           export PATH="$PATH:$(cygpath "$NODEJS_PATH")"
+          if [ -n "${VERSION}" ]; then
+            # Read by cmake/prep/build_version.cmake: the version shown in the web UI,
+            # logs and the installer.
+            export BRANCH="${GITHUB_REF_NAME}" BUILD_VERSION="${VERSION}" COMMIT="${GITHUB_SHA}"
+          fi
           cmake -B build -G Ninja -S . -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
       - name: Build
