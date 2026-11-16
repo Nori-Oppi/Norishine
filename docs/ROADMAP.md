@@ -129,7 +129,11 @@ deliberately broken, but is not verified until CI exists for it.
 - **M5** Capability element in serverinfo; client-certificate authentication for
   `/api/v1`; management permission bits and the UI to grant them (**done**: see
   `docs/api.md`, "Management API for paired clients").
-- **M6** Norilight: host status and read-only settings view, then editing.
+- **M6** Norilight: host status and read-only settings view, then editing (**done**:
+  readable titles, help text and categories in the schema with `?locale=`,
+  `POST /api/v1/restart`, and a Host Settings page in Norilight that shows the status,
+  edits the settings with per-key errors and confirmation for dangerous ones, and
+  restarts the host; settings with lists or scripts stay read-only there).
 - **M7** Apps, clients, displays and active sessions managed from Norilight.
 
 ### Phase 5: diagnostics and optimisation
