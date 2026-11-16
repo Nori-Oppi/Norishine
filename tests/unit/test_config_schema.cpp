@@ -46,6 +46,29 @@ TEST(ConfigSchemaTests, KeysAreUniqueAndComplete) {
   EXPECT_EQ(find("dd_wa_hdr_toggle"), nullptr) << "dead setting: config.cpp never reads it";
 }
 
+TEST(ConfigSchemaTests, DependenciesPointToEarlierSettings) {
+  std::set<std::string_view> seen;
+  for (const auto &s : settings()) {
+    if (!s.depends_on.empty()) {
+      const auto *other = find(s.depends_on);
+      ASSERT_NE(other, nullptr) << s.key;
+      EXPECT_TRUE(seen.contains(s.depends_on)) << s.key << " should come after " << s.depends_on;
+      EXPECT_EQ(other->category, s.category) << s.key;
+      EXPECT_FALSE(s.depends_on_values.empty()) << s.key;
+      for (const auto &value : s.depends_on_values) {
+        EXPECT_TRUE(to_config_text(*other, value).error.empty()) << s.key << ": " << value.dump();
+      }
+    }
+    seen.insert(s.key);
+  }
+  auto schema = describe();
+  for (const auto &s : schema["settings"]) {
+    if (s["key"] == "dd_manual_resolution") {
+      EXPECT_EQ(s["depends_on"], json({{"key", "dd_resolution_option"}, {"values", {"manual"}}}));
+    }
+  }
+}
+
 TEST(ConfigSchemaTests, EveryDefaultPassesValidation) {
   for (const auto &s : settings()) {
     if (!available(s)) {
@@ -214,8 +237,30 @@ TEST(ConfigSchemaTests, DescribeWithReadableStrings) {
   EXPECT_EQ(english["locale"], "en");
   EXPECT_EQ(find_setting(english, "max_bitrate")["title"], "Maximum Bitrate");
   EXPECT_FALSE(find_setting(english, "headless_mode")["help"].get<std::string>().empty());
-  ASSERT_EQ(english["categories"].size(), 12u);
+  ASSERT_EQ(english["categories"].size(), 14u);
   EXPECT_EQ(english["categories"][0]["title"], "General");
+
+  // Every setting on this platform has an explanation and a known category, and every
+  // choice has a readable name.
+  std::set<std::string> category_ids;
+  for (const auto &category : english["categories"]) {
+    category_ids.insert(category["id"].get<std::string>());
+  }
+  for (const auto &s : english["settings"]) {
+    EXPECT_TRUE(category_ids.contains(s["category"].get<std::string>())) << s["key"];
+    if (!s["available"].get<bool>()) {
+      continue;
+    }
+    EXPECT_FALSE(s["help"].get<std::string>().empty()) << s["key"] << " has no help text";
+    EXPECT_NE(s["title"], s["key"]) << s["key"] << " has no title";
+    if (s["type"] == "choice" && s["key"] != "gamepad") {
+      for (const auto &choice : s["choices"]) {
+        EXPECT_TRUE(s.contains("value_titles") && s["value_titles"].contains(choice.get<std::string>())) << s["key"] << " = " << choice;
+      }
+    }
+  }
+  EXPECT_EQ(find_setting(english, "hevc_mode")["value_titles"].size(), 4u);
+  EXPECT_EQ(find_setting(english, "locale")["value_titles"]["de"], "Deutsch (German)");
 
   // German has no headless_mode string: English fills the gap.
   auto german = describe("de", dir);

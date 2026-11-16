@@ -69,7 +69,7 @@ namespace config::schema {
    */
   struct setting_t {
     std::string_view key;
-    std::string_view category;  ///< Same ids as the web UI tabs (general, input, av, ...).
+    std::string_view category;  ///< One of the ids in describe()'s "categories" list.
     type_e type;
     tier_e tier;
     unsigned platforms;
@@ -78,6 +78,8 @@ namespace config::schema {
     std::optional<double> max {};
     std::vector<choice_t> choices {};  ///< For choice settings; "" means automatic.
     bool restart_required = true;  ///< Settings are read at startup, so all need a restart for now.
+    std::string_view depends_on {};  ///< Only has an effect when this other setting...
+    std::vector<nlohmann::json> depends_on_values {};  ///< ...has one of these values.
   };
 
   /**
