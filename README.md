@@ -13,8 +13,14 @@ commands, and carries Sunshine's security fixes forward.
 
 ## Status
 
-Early development. Nothing here is released, and the code is currently Apollo with
-project changes on top. See:
+Early development. There are no stable releases yet, and the code is currently Apollo
+with project changes on top.
+
+Nightly builds of `master` are published as the
+[Nightly pre-release](https://github.com/azijnwater/Norishine/releases/tag/nightly).
+They are built and tested automatically but are otherwise untested, and unsigned.
+
+See:
 
 - [Roadmap and architecture decisions](docs/ROADMAP.md)
 - [Phase 1 research](docs/PHASE1-RESEARCH.md)

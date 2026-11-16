@@ -1,0 +1,100 @@
+---
+# Norishine nightly builds: the Windows installer.
+#
+# Runs every night and publishes the result to the rolling "nightly"
+# pre-release, replacing the previous build. Nights without new commits on
+# master are skipped. Start a build by hand from the Actions tab
+# ("Run workflow") to build even when nothing changed.
+#
+# The build, tests and installer come from ci.yml, so a nightly is built
+# exactly like every CI run, only with a nightly version name.
+name: Nightly
+permissions: {}
+
+on:
+  schedule:
+    # 20:17 Amsterdam time every day, the same time as Norilight's nightly. Off the
+    # hour because GitHub delays or drops scheduled runs most often at :00.
+    - cron: '17 20 * * *'
+      timezone: 'Europe/Amsterdam'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Skip nights without new commits
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LAST_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/nightly" --jq '.object.sha' 2>/dev/null || true)
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ "${LAST_SHA}" = "${GITHUB_SHA}" ]; then
+            echo "Nightly is already at ${GITHUB_SHA}; nothing to build."
+            echo "should_build=false" >> "${GITHUB_OUTPUT}"
+          else
+            echo "should_build=true" >> "${GITHUB_OUTPUT}"
+          fi
+          echo "version=nightly-$(date -u +%Y%m%d)-$(echo ${GITHUB_SHA} | cut -c1-7)" >> "${GITHUB_OUTPUT}"
+
+  build:
+    needs: check
+    if: needs.check.outputs.should_build == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+    with:
+      version: ${{ needs.check.outputs.version }}
+
+  publish:
+    needs: [check, build]
+    # Runs from other branches (to test this workflow) build but never replace the release
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: installer-windows
+          path: installer
+
+      - name: Name the installer after the version
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          ls -la installer
+          count=$(ls installer/*.exe | wc -l)
+          if [ "${count}" -ne 1 ]; then
+            echo "::error::Expected one installer, found ${count}"
+            exit 1
+          fi
+          mkdir out
+          mv installer/*.exe "out/Norishine-Windows-x64-${VERSION}-Setup.exe"
+
+      - name: Replace the nightly pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          gh release delete nightly --repo "${GITHUB_REPOSITORY}" --cleanup-tag --yes || true
+          gh release create nightly out/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --target "${GITHUB_SHA}" \
+            --prerelease \
+            --title "Nightly (${VERSION})" \
+            --notes "Automatic build of master at ${GITHUB_SHA}, made $(date -u '+%Y-%m-%d %H:%M UTC').
+
+          This build is untested beyond the automatic tests, and unsigned.
+
+          **Windows:** download and run the **Setup.exe**. If Apollo or Vibepollo is installed, the installer offers to replace it (recommended) or to run next to it on a different port. Settings carry over either way."
