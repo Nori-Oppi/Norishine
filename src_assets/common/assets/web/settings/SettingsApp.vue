@@ -222,7 +222,7 @@ async function restart() {
   if (back) {
     restartNeeded.value = false
     notice.value = { kind: 'ok', text: t('settings.restarted') }
-    // A restart ends the web UI session; load() goes to the login page if needed.
+    // Sessions survive the restart; load() still goes to the login page if this one ended.
     await load()
     notice.value = { kind: 'ok', text: t('settings.restarted') }
   } else {

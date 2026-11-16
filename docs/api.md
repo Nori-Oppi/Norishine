@@ -7,8 +7,8 @@ Unless otherwise specified, every call needs a signed-in session: `POST /api/log
 `csrf` (readable by the pages). Every call that changes something (any method other than
 GET) must also send the `csrf` value in an `X-CSRF-Token` header, and a browser `Origin`, if
 present, must be this server; otherwise the answer is 403. `POST /api/logout` ends the
-session. Several browsers can be signed in at once; sessions last 15 days and end when the
-host restarts or the password changes.
+session. Several browsers can be signed in at once; sessions last 15 days, survive restarts of the host
+(`state/sessions.json`, token hashes only) and end when the password changes.
 
 After five failed sign-ins from one address, further attempts from it get 429 with
 `Retry-After` for 30 seconds, doubling with each further failure up to 15 minutes; a

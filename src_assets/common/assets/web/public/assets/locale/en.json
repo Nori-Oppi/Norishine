@@ -743,7 +743,7 @@
     "force_close_desc": "Use this when a client says an app is still running. Streams of it end.",
     "force_close_done": "The running app was closed.",
     "restart": "Restart Norishine",
-    "restart_desc": "Streams on this host stop and you sign in again afterwards.",
+    "restart_desc": "Streams on this host stop while it restarts.",
     "restart_confirm": "Restart Norishine?",
     "dd_reset": "Forget display changes",
     "dd_reset_desc": "Use this if Norishine keeps trying to put back display settings it changed for a stream. Your displays are not changed now; set them in Windows yourself if needed.",

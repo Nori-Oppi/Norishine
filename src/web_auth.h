@@ -6,11 +6,15 @@
 
 // standard includes
 #include <chrono>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
+
+// lib includes
+#include <nlohmann/json.hpp>
 
 namespace web_auth {
   using clock = std::chrono::steady_clock;
@@ -44,9 +48,14 @@ namespace web_auth {
 
   /**
    * @brief Signed-in browser sessions. Tokens are only kept as hashes.
+   *
+   * Times are wall-clock times, so sessions can be saved and stay valid across a restart
+   * of the host (see to_json(), load() and on_change()).
    */
   class sessions_t {
   public:
+    using wall_clock = std::chrono::system_clock;
+
     struct created_t {
       std::string token;  ///< Goes in the HttpOnly session cookie.
       std::string csrf;  ///< Must come back in the X-CSRF-Token header on changes.
@@ -54,29 +63,47 @@ namespace web_auth {
 
     explicit sessions_t(std::chrono::seconds lifetime, std::size_t max_sessions = 32);
 
-    created_t create(clock::time_point now = clock::now());
+    created_t create(wall_clock::time_point now = wall_clock::now());
 
     /**
      * @brief The CSRF token of a valid session, or nothing when the token is unknown or expired.
      */
-    std::optional<std::string> find(std::string_view token, clock::time_point now = clock::now());
+    std::optional<std::string> find(std::string_view token, wall_clock::time_point now = wall_clock::now());
 
     void remove(std::string_view token);
     void clear();
     std::size_t size();
 
+    /**
+     * @brief The sessions for saving: [{"hash", "csrf", "created"}] (token hashes only).
+     */
+    nlohmann::json to_json();
+
+    /**
+     * @brief Replace the sessions with saved ones, dropping expired and malformed entries.
+     */
+    void load(const nlohmann::json &saved, wall_clock::time_point now = wall_clock::now());
+
+    /**
+     * @brief Called with to_json() after every change (sign-in, sign-out, password change).
+     */
+    void on_change(std::function<void(const nlohmann::json &)> callback);
+
   private:
     struct session_t {
       std::string csrf;
-      clock::time_point created;
+      wall_clock::time_point created;
     };
 
     std::chrono::seconds lifetime;
     std::size_t max_sessions;
     std::mutex mutex;
     std::map<std::string, session_t, std::less<>> by_hash;
+    std::function<void(const nlohmann::json &)> changed;
 
-    void expire(clock::time_point now);
+    bool expire(wall_clock::time_point now);
+    nlohmann::json to_json_locked() const;
+    void notify(const nlohmann::json &content);
   };
 
   /**
