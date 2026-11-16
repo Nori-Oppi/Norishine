@@ -557,7 +557,9 @@
     "toggle_theme": "Theme",
     "troubleshoot": "Troubleshooting",
     "logout": "Sign out",
-    "clients": "Devices"
+    "clients": "Devices",
+    "menu": "Menu",
+    "change_password": "Change password"
   },
   "permissions": {
     "input_controller": "Controller Input",
