@@ -145,7 +145,18 @@ deliberately broken, but is not verified until CI exists for it.
   matching Origin), per-address lockout after failed sign-ins, PBKDF2 password hashes
   (old ones converted at the next sign-in), sign out, and no more passwords kept in the
   browser (`src/web_auth.*`, tested).
-- **M4** State file split and migrations; import from Apollo.
+- **M4** State file split and migrations; import from Apollo (**done**). Import from an
+  Apollo or Vibepollo install, and carrying settings back on uninstall, were done first
+  (`src_assets/windows/misc/migration/other-hosts.ps1`). The state now has versions and
+  one-way migrations (`src/state_store.*`): version 1 splits `sunshine_state.json` into
+  `state/host.json` (unique ID), `state/pairing.json` (paired devices) and
+  `state/credentials.json` (web UI account) on first start, keeping the old file as
+  `sunshine_state.json.v0.bak`; settings stay in `sunshine.conf`. An unreadable file is
+  never overwritten (nothing is saved that run), an interrupted migration completes on
+  the next start, files from a newer version are used as they are, and a separate
+  `credentials_file` stays where it is. Unique ID, pairings and the account carry over;
+  tested from Apollo-format files and on a dev host. The uninstaller's carry-back rebuilds
+  an Apollo-readable `sunshine_state.json`. Password hashes moved to PBKDF2 in M3.
 
 ### Phase 4: Nori integration
 - **M5** Capability element in serverinfo; client-certificate authentication for

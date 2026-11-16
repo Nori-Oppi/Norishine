@@ -36,6 +36,7 @@
 #include "platform/common.h"
 #include "process.h"
 #include "rtsp.h"
+#include "state_store.h"
 #include "stream.h"
 #include "system_tray.h"
 #include "utility.h"
@@ -211,24 +212,11 @@ namespace nvhttp {
   }
 
   void save_state() {
-    nlohmann::json root = nlohmann::json::object();
-    // If the state file exists, try to read it.
-    if (fs::exists(config::nvhttp.file_state)) {
-      try {
-        std::ifstream in(config::nvhttp.file_state);
-        in >> root;
-      } catch (std::exception &e) {
-        BOOST_LOG(error) << "Couldn't read "sv << config::nvhttp.file_state << ": "sv << e.what();
-        return;
-      }
+    // Never write state that could not be migrated (see state_store::init).
+    if (!state_store::writable()) {
+      return;
     }
-
-    // Erase any previous "root" key.
-    root.erase("root");
-
-    // Create a new "root" object and set the unique id.
-    root["root"] = nlohmann::json::object();
-    root["root"]["uniqueid"] = http::unique_id;
+    const auto &files = state_store::paths();
 
     client_t &client = client_root;
     nlohmann::json named_cert_nodes = nlohmann::json::array();
@@ -282,11 +270,20 @@ namespace nvhttp {
       }
     }
 
-    root["root"]["named_devices"] = named_cert_nodes;
-
-    if (file_handler::write_file(config::nvhttp.file_state.c_str(), root.dump(4))) {
-      BOOST_LOG(error) << "Couldn't write "sv << config::nvhttp.file_state;
-      return;
+    // Keep any other entries of the files (written by newer versions, for example).
+    auto pairing = state_store::read(files.pairing);
+    auto host = state_store::read(files.host);
+    if (!pairing || !host) {
+      return;  // Unreadable: leave it for the user to look at rather than overwrite it.
+    }
+    pairing->erase("devices");  // converted into named_devices when loaded
+    (*pairing)["named_devices"] = named_cert_nodes;
+    (*host)["uniqueid"] = http::unique_id;
+    if (!state_store::write(files.pairing, *pairing)) {
+      BOOST_LOG(error) << "Couldn't write "sv << files.pairing.string();
+    }
+    if (!state_store::write(files.host, *host)) {
+      BOOST_LOG(error) << "Couldn't write "sv << files.host.string();
     }
   }
 
@@ -306,37 +303,30 @@ namespace nvhttp {
   }
 
   void load_state() {
-    if (!fs::exists(config::nvhttp.file_state)) {
-      BOOST_LOG(info) << "File "sv << config::nvhttp.file_state << " doesn't exist"sv;
-      generate_and_save_unique_id();
-      return;
-    }
-
-    nlohmann::json tree;
-    try {
-      std::ifstream in(config::nvhttp.file_state);
-      in >> tree;
-    } catch (std::exception &e) {
-      BOOST_LOG(error) << "Couldn't read "sv << config::nvhttp.file_state << ": "sv << e.what();
-      // Keep a valid ID for this run, but never overwrite a file we could not read.
+    const auto &files = state_store::paths();
+    auto host = state_store::read(files.host);
+    auto pairing = state_store::read(files.pairing);
+    if (!host || !pairing || !state_store::writable()) {
+      // Keep a valid ID for this run, but never overwrite files we could not read.
       if (http::unique_id.empty()) {
         http::uuid = uuid_util::uuid_t::generate();
         http::unique_id = http::uuid.string();
       }
-      return;
+      if (!host || !pairing) {
+        return;
+      }
     }
 
-    // The file can exist without "root.uniqueid", for example when it only holds the web UI
-    // credentials. Generate one then, and save it once any paired clients are loaded:
-    // save_state() rewrites "root" from client_root.
-    const bool has_unique_id = tree.contains("root") && tree["root"].contains("uniqueid");
+    // Without a stored unique ID (a new host) one is made, and saved once any paired
+    // clients are loaded.
+    const bool has_unique_id = host->contains("uniqueid") && (*host)["uniqueid"].is_string();
     if (has_unique_id) {
-      std::string uid = tree["root"]["uniqueid"];
+      std::string uid = (*host)["uniqueid"];
       http::uuid = uuid_util::uuid_t::parse(uid);
       http::unique_id = uid;
     }
 
-    nlohmann::json root = tree.contains("root") ? tree["root"] : nlohmann::json::object();
+    nlohmann::json root = *pairing;
     client_t client;  // Local client to load into
 
     // Import from the old format if available.
@@ -390,7 +380,13 @@ namespace nvhttp {
     client_root = client;
 
     if (!has_unique_id) {
-      generate_and_save_unique_id();
+      if (state_store::writable()) {
+        generate_and_save_unique_id();
+      } else if (http::unique_id.empty()) {
+        // Nothing can be saved this run: keep one ID for the whole run.
+        http::uuid = uuid_util::uuid_t::generate();
+        http::unique_id = http::uuid.string();
+      }
     }
   }
 

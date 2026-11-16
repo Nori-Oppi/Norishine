@@ -85,8 +85,47 @@ function Set-Record([string]$Mode, [string]$Name, [string]$InstallDir) {
     ConvertTo-Json | Set-Content -LiteralPath $RecordFile -Encoding UTF8
 }
 
+# Apollo, Vibepollo and older Norishine keep the state in sunshine_state.json; Norishine
+# splits it into state\host.json, pairing.json and credentials.json on first start.
 function Test-HasState([string]$ConfigDir) {
-  Test-Path -LiteralPath (Join-Path $ConfigDir 'sunshine_state.json')
+  (Test-Path -LiteralPath (Join-Path $ConfigDir 'sunshine_state.json')) -or
+    (Test-Path -LiteralPath (Join-Path $ConfigDir 'state\host.json'))
+}
+
+function Read-JsonFile([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path)) { return $null }
+  try { return [IO.File]::ReadAllText($Path) | ConvertFrom-Json } catch { return $null }
+}
+
+# Rebuilds sunshine_state.json, which Apollo and Vibepollo read, from Norishine's split
+# state: unique ID (so clients still recognise the host) and paired devices. The web UI
+# account is only included while it still has the old password hash; Norishine's stronger
+# hash can't be read by them, and leaving it out makes them ask for a new account instead
+# of refusing every password. The split files are removed so a later Norishine install
+# imports what Apollo or Vibepollo saved meanwhile, not this old copy.
+function Export-LegacyState([string]$ConfigDir) {
+  $stateDir = Join-Path $ConfigDir 'state'
+  $hostState = Read-JsonFile (Join-Path $stateDir 'host.json')
+  if (-not $hostState) { return }
+  $pairing = Read-JsonFile (Join-Path $stateDir 'pairing.json')
+  $account = Read-JsonFile (Join-Path $stateDir 'credentials.json')
+
+  $root = [ordered]@{ uniqueid = $hostState.uniqueid; named_devices = @() }
+  if ($pairing -and $pairing.named_devices) { $root.named_devices = @($pairing.named_devices) }
+  $legacy = [ordered]@{}
+  if ($account -and $account.password -and -not ([string]$account.password).StartsWith('pbkdf2-')) {
+    $legacy.username = $account.username
+    $legacy.password = $account.password
+    $legacy.salt = $account.salt
+  } elseif ($account) {
+    Write-Log 'The web UI password uses a hash Apollo and Vibepollo cannot read; they will ask for a new account.'
+  }
+  $legacy.root = $root
+  $json = ConvertTo-Json -InputObject $legacy -Depth 20
+  [IO.File]::WriteAllText((Join-Path $ConfigDir 'sunshine_state.json'), $json)
+  Remove-Item -LiteralPath $stateDir -Recurse -Force
+  Get-ChildItem -LiteralPath $ConfigDir -Filter 'sunshine_state.json.v0*.bak' -Force | Remove-Item -Force
+  Write-Log "Wrote sunshine_state.json with $(@($root.named_devices).Count) paired device(s)."
 }
 
 # Rewrites absolute paths into one install folder (as written in sunshine.conf and,
@@ -265,6 +304,7 @@ function Copy-ConfigBack($record) {
   }
   Copy-Config $NorishineConfig $target
   Remove-Item -LiteralPath (Join-Path $target 'other_host.json') -Force -ErrorAction SilentlyContinue
+  Export-LegacyState $target
   Set-Content -LiteralPath $marker -Value 'Copy of the Norishine configuration, made when Norishine was uninstalled or upgraded.'
   Update-Paths $target $NorishineRoot $record.install_dir
   Protect-Credentials $target

@@ -66,6 +66,10 @@ cert = <build>/dev/credentials/cacert.pem
 upnp = off
 ```
 
+The host keeps its state in a `state` folder next to `file_state` (here `<build>/dev/state/`:
+`host.json`, `pairing.json`, `credentials.json`); an old single state file there is moved in
+on start and kept as `sunshine_state.json.v0.bak`.
+
 `port = 49989` moves every port away from the defaults (47984-48010), so an installed
 Apollo, Vibepollo or Sunshine keeps working. Create web UI credentials with
 `sunshine.exe <conf> --creds <user> <password>` and copy

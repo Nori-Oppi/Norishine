@@ -27,6 +27,7 @@
 #include "crypto.h"
 #include "file_handler.h"
 #include "httpcommon.h"
+#include "state_store.h"
 #include "web_auth.h"
 #include "logging.h"
 #include "network.h"
@@ -89,6 +90,9 @@ namespace http {
     outputTree["username"] = username;
     outputTree["salt"] = salt;
     outputTree["password"] = web_auth::hash_password(password, salt);
+    if (!outputTree.contains("version") && file == state_store::paths().credentials.string()) {
+      outputTree["version"] = state_store::current_version;
+    }
     if (file_handler::write_file(file.c_str(), outputTree.dump(4))) {
       BOOST_LOG(error) << "error writing to the credentials file, perhaps try this again as an administrator?"sv;
       return -1;
