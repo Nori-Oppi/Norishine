@@ -103,7 +103,7 @@ s, r = api(client, 'PATCH', '/api/v1/config', {'reset': ['max_bitrate']})
 check('reset allowed', s == 200, (s, r))
 s, r = api(client, 'GET', '/api/v1/config/schema?locale=en')
 title = next((x.get('title') for x in r.get('settings', []) if x['key'] == 'max_bitrate'), None)
-check('schema has readable titles', s == 200 and title == 'Maximum Bitrate' and len(r.get('categories', [])) >= 12, (s, title))
+check('schema has readable titles', s == 200 and title == 'Bitrate limit' and len(r.get('categories', [])) >= 12, (s, title))
 
 stranger = Client(host, port, 'e2e-stranger')
 s, r = api(stranger, 'GET', '/api/v1/status')
