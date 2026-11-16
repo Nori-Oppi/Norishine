@@ -1570,7 +1570,14 @@ namespace video {
         case 0:
           // 10-bit h264 encoding is not supported by our streaming protocol
           assert(!config.dynamicRange);
-          ctx->profile = (config.chromaSamplingType == 1) ? AV_PROFILE_H264_HIGH_444_PREDICTIVE : AV_PROFILE_H264_HIGH;
+          if (config.chromaSamplingType == 1) {
+            ctx->profile = AV_PROFILE_H264_HIGH_444_PREDICTIVE;
+          } else if (video_format.name == "h264_amf"sv && config::video.amd.amd_coder == 2 /* AMF_VIDEO_ENCODER_CALV */) {
+            // AMF only uses CAVLC with the Constrained Baseline profile; with High it keeps CABAC.
+            ctx->profile = AV_PROFILE_H264_CONSTRAINED_BASELINE;
+          } else {
+            ctx->profile = AV_PROFILE_H264_HIGH;
+          }
           break;
 
         case 1:
