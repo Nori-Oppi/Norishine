@@ -2454,11 +2454,30 @@ namespace video {
     }
   }
 
+  /**
+   * @brief Downgrade a request for HDR to SDR when the chosen encoder can't encode HDR,
+   *        instead of failing the stream.
+   */
+  config_t resolve_dynamic_range(const encoder_t &encoder, config_t config) {
+    if (!config.dynamicRange) {
+      return config;
+    }
+    const auto &video_format = encoder.codec_from_config(config);
+    if (video_format[encoder_t::DYNAMIC_RANGE]) {
+      return config;
+    }
+    BOOST_LOG(warning) << video_format.name << ": dynamic range not supported, falling back to SDR"sv;
+    config.dynamicRange = 0;
+    return config;
+  }
+
   void capture(
     safe::mail_t mail,
     config_t config,
     void *channel_data
   ) {
+    config = resolve_dynamic_range(*chosen_encoder, config);
+
     auto idr_events = mail->event<bool>(mail::idr);
 
     idr_events->raise(true);
