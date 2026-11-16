@@ -24,6 +24,17 @@ It keeps Apollo's **virtual displays**, **per-device permissions**, **OTP pairin
 host controls inside Norilight. Set up the host in your browser, then adjust its
 streaming settings from the client when you need to.
 
+<table>
+  <tr>
+    <td width="50%"><a href="docs/screenshots/settings.png"><img src="docs/screenshots/settings.png" alt="Web UI settings page: Video category with advanced settings shown"></a><br><strong>Settings</strong>: searchable, grouped, with help beside each setting.</td>
+    <td width="50%"><a href="docs/screenshots/devices.png"><img src="docs/screenshots/devices.png" alt="Web UI devices page: paired devices with short permission summaries"></a><br><strong>Devices</strong>: what each paired device may do, at a glance.</td>
+  </tr>
+  <tr>
+    <td><a href="docs/screenshots/device-permissions.png"><img src="docs/screenshots/device-permissions.png" alt="Editing a paired device: streaming level, input, extras and host management"></a><br><strong>Permissions</strong>: plain choices instead of permission bits.</td>
+    <td><a href="docs/screenshots/apps.png"><img src="docs/screenshots/apps.png" alt="Web UI apps page with Desktop and Steam Big Picture"></a><br><strong>Apps</strong>: reorder, start, edit and remove apps.</td>
+  </tr>
+</table>
+
 
 ## Getting started
 
@@ -84,6 +95,9 @@ device permissions on the host.
 - **See the host's status** and search its settings without opening a browser.
 - **Change settings from the client**, with errors shown beside rejected values.
 - **Restart the host** from the same page when a change needs it.
+- **Manage apps, paired devices and displays** from Norilight's Manage Host page: add,
+  edit, start and reorder apps; change what each device may do, end its stream or
+  unpair it; pick the display to stream.
 - **Use the existing pairing.** Management authenticates with the paired client
   certificate; Norilight doesn't store the host's web administrator password.
 - Settings containing lists or scripts remain editable through the host's web UI.
@@ -97,12 +111,13 @@ device permissions on the host.
   certificate matching, endpoint handling and log redaction. The
   [upstream sync record](docs/UPSTREAM-SYNC.md) records the individual changes.
 
-### More web UI work on the development branch
+### A web UI that's easier to use and harder to break into
 
-On **`phase3/m3`**, the shared theme extends to home/status, applications, pairing,
-clients and permissions, logs and troubleshooting. That branch also adds active-stream
-status, hardened web sign-in and CSRF protection. These changes are separate from the
-settings-page rewrite already included in remote `master`.
+- **Every page rebuilt** in the shared theme: home with the running app and active
+  streams, pairing, devices and permissions, apps, settings, logs and troubleshooting.
+- **Safer sign-in.** Passwords are stored with PBKDF2, every change needs a CSRF token,
+  repeated failed sign-ins are slowed down, and you can sign out. Sign-ins survive a
+  restart of the host.
 
 ## Updating
 
@@ -120,9 +135,6 @@ currently verified here.
 
 Planned, not available yet:
 
-- **Configuration migrations:** separate state files and add versioned migrations (M4).
-- **More controls in Norilight:** manage apps, paired devices, displays and active
-  sessions from the client (M7).
 - **Better diagnostics:** host statistics and per-session metrics (M8).
 - **Guided tuning:** conservative recommendations with preview and rollback (M9).
 - **Measured streaming improvements**, including display recovery after crashes (M10).
@@ -142,8 +154,9 @@ A hung session can still leave an orphaned virtual display. See
 | `m6/host-strings` | Readable schema labels/help and paired-client restart endpoint | Included in remote `master` |
 | `ci/nightly` | Rolling Windows nightly installer built through CI | Included in remote `master` |
 | `phase3/m2-settings-ui` | Schema-driven settings page and shared visual theme | Included in remote `master` |
-| `phase3/m3` | Remaining web pages, active-stream status, sign-in hardening and CSRF | Development branch |
-| `phase3/m4` | Reserved for state-file splitting and migrations | Same committed tip as M3; M4 is not implemented there yet |
+| `phase3/m3` | Remaining web pages, active-stream status, sign-in hardening and CSRF | Included in remote `master` |
+| `phase3/m4` | Split state files with versioned migrations; sign-ins that survive a restart | Included in remote `master` |
+| `phase3/m7-manage-api` | Apps, paired devices, streams and displays in the management API | Included in remote `master` |
 
 Branch review: **16 November 2026**. Availability above describes the reviewed
 commits, rather than a guarantee about an older nightly download.
