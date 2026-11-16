@@ -82,38 +82,33 @@ namespace config::schema {
         choice("locale", "general", tier::basic, ALL, "en", {{"bg"}, {"cs"}, {"de"}, {"en"}, {"en_GB"}, {"en_US"}, {"es"}, {"fr"}, {"hu"}, {"it"}, {"ja"}, {"ko"}, {"pl"}, {"pt"}, {"pt_BR"}, {"ru"}, {"sv"}, {"tr"}, {"uk"}, {"vi"}, {"zh"}, {"zh_TW"}}),
         boolean("system_tray", "general", tier::basic, ALL, true),
         depends(boolean("hide_tray_controls", "general", tier::advanced, ALL, false), "system_tray", {true}),
-        boolean("notify_pre_releases", "general", tier::basic, ALL, false),
-        integer("min_log_level", "general", tier::advanced, ALL, 2, 0, 6),
+        boolean("notify_pre_releases", "general", tier::advanced, ALL, false),
 
         // Display
         boolean("headless_mode", "display", tier::basic, W, false),
-        text("output_name", "display", tier::advanced, ALL),
+        text("output_name", "display", tier::basic, ALL),
         text("adapter_name", "display", tier::advanced, W | L),
         text("fallback_mode", "display", tier::advanced, ALL),
         boolean("double_refreshrate", "display", tier::advanced, W, false),
         boolean("isolated_virtual_display_option", "display", tier::advanced, W, false),
-        choice("dd_configuration_option", "display", tier::advanced, W, "disabled", {{"disabled"}, {"verify_only"}, {"ensure_active"}, {"ensure_primary"}, {"ensure_only_display"}}),
-        dd(choice("dd_resolution_option", "display", tier::advanced, W, "auto", dd_auto_manual)),
-        depends(text("dd_manual_resolution", "display", tier::advanced, W), "dd_resolution_option", {"manual"}),
-        dd(choice("dd_refresh_rate_option", "display", tier::advanced, W, "auto", dd_auto_manual)),
-        depends(text("dd_manual_refresh_rate", "display", tier::advanced, W), "dd_refresh_rate_option", {"manual"}),
+        choice("dd_configuration_option", "display", tier::basic, W, "disabled", {{"disabled"}, {"verify_only"}, {"ensure_active"}, {"ensure_primary"}, {"ensure_only_display"}}),
+        dd(choice("dd_resolution_option", "display", tier::basic, W, "auto", dd_auto_manual)),
+        depends(text("dd_manual_resolution", "display", tier::basic, W), "dd_resolution_option", {"manual"}),
+        dd(choice("dd_refresh_rate_option", "display", tier::basic, W, "auto", dd_auto_manual)),
+        depends(text("dd_manual_refresh_rate", "display", tier::basic, W), "dd_refresh_rate_option", {"manual"}),
+        dd(choice("dd_hdr_option", "display", tier::basic, W, "auto", {{"disabled"}, {"auto"}})),
         dd({"dd_mode_remapping", "display", type_e::mode_remapping, tier::advanced, W, json {{"mixed", json::array()}, {"resolution_only", json::array()}, {"refresh_rate_only", json::array()}}}),
         dd(integer("dd_config_revert_delay", "display", tier::advanced, W, 3000, 0, INT_MAX_D)),
         dd(boolean("dd_config_revert_on_disconnect", "display", tier::advanced, W, false)),
-        choice("dd_hdr_option", "display", tier::advanced, W, "auto", {{"disabled"}, {"auto"}}),
-        integer("dd_wa_hdr_toggle_delay", "display", tier::advanced, W, 0, 0, 3000),
 
         // Video
-        integer("max_bitrate", "video", tier::basic, ALL, 0, 0, INT_MAX_D),
+        integer("max_bitrate", "video", tier::advanced, ALL, 0, 0, INT_MAX_D),
         number("minimum_fps_target", "video", tier::advanced, ALL, 0, 0, 1000),
         boolean("limit_framerate", "video", tier::advanced, ALL, true),
         choice("encoder", "video", tier::advanced, ALL, "", {{""}, {"nvenc", W | L}, {"quicksync", W | L}, {"amdvce", W}, {"vaapi", L}, {"videotoolbox", M}, {"software"}}),
         choice("capture", "video", tier::advanced, W | L, "", {{""}, {"ddx", W}, {"wgc", W}, {"nvfbc", L}, {"wlr", L}, {"kms", L}, {"x11", L}}),
         integer("hevc_mode", "video", tier::advanced, ALL, 0, 0, 3),
         integer("av1_mode", "video", tier::advanced, ALL, 0, 0, 3),
-        integer("qp", "video", tier::advanced, ALL, 28, 0, 255),
-        integer("min_threads", "video", tier::advanced, ALL, 2, 1, 256),
-        boolean("ignore_encoder_probe_failure", "video", tier::advanced, ALL, false),
 
         // Audio
         boolean("stream_audio", "audio", tier::basic, ALL, true),
@@ -132,7 +127,7 @@ namespace config::schema {
         depends(boolean("ds4_back_as_touchpad_click", "input", tier::advanced, ALL, true), "controller", {true}),
         depends(boolean("ds5_inputtino_randomize_mac", "input", tier::advanced, L, true), "controller", {true}),
         depends(integer("back_button_timeout", "input", tier::advanced, ALL, -1, -1, INT_MAX_D), "controller", {true}),
-        depends(boolean("forward_rumble", "input", tier::basic, ALL, true), "controller", {true}),
+        depends(boolean("forward_rumble", "input", tier::advanced, ALL, true), "controller", {true}),
         boolean("keyboard", "input", tier::basic, ALL, true),
         depends(integer("key_repeat_delay", "input", tier::advanced, ALL, 500, 0, INT_MAX_D), "keyboard", {true}),
         depends(number("key_repeat_frequency", "input", tier::advanced, ALL, 24.9, 0, 1000), "keyboard", {true}),
@@ -142,10 +137,9 @@ namespace config::schema {
         boolean("mouse", "input", tier::basic, ALL, true),
         depends(boolean("high_resolution_scrolling", "input", tier::advanced, ALL, true), "mouse", {true}),
         depends(boolean("native_pen_touch", "input", tier::advanced, W, true), "mouse", {true}),
-        boolean("enable_input_only_mode", "input", tier::advanced, ALL, false),
 
         // Network and pairing
-        boolean("enable_pairing", "network", tier::advanced, ALL, true),
+        boolean("enable_pairing", "network", tier::basic, ALL, true),
         boolean("enable_discovery", "network", tier::advanced, ALL, true),
         boolean("upnp", "network", tier::advanced, ALL, false),
         choice("address_family", "network", tier::advanced, ALL, "ipv4", {{"ipv4"}, {"both"}}),
@@ -161,15 +155,13 @@ namespace config::schema {
         special("global_prep_cmd", "apps", type_e::prep_commands, tier::dangerous, json::array()),
         special("global_state_cmd", "apps", type_e::prep_commands, tier::dangerous, json::array()),
         special("server_cmd", "apps", type_e::server_commands, tier::dangerous, json::array()),
-        boolean("envvar_compatibility_mode", "apps", tier::advanced, ALL, false),
-        boolean("legacy_ordering", "apps", tier::advanced, ALL, false),
+        boolean("enable_input_only_mode", "apps", tier::advanced, ALL, false),
 
         // NVIDIA NVENC
         integer("nvenc_preset", "nv", tier::advanced, W | L, 1, 1, 7),
         choice("nvenc_twopass", "nv", tier::advanced, W | L, "quarter_res", {{"disabled"}, {"quarter_res"}, {"full_res"}}),
         boolean("nvenc_spatial_aq", "nv", tier::advanced, W | L, false),
         integer("nvenc_vbv_increase", "nv", tier::advanced, W | L, 0, 0, 400),
-        boolean("nvenc_realtime_hags", "nv", tier::advanced, W, true),
         boolean("nvenc_latency_over_power", "nv", tier::advanced, W, true),
         boolean("nvenc_opengl_vulkan_on_dxgi", "nv", tier::advanced, W, true),
         boolean("nvenc_h264_cavlc", "nv", tier::advanced, W | L, false),
@@ -198,8 +190,18 @@ namespace config::schema {
         boolean("vaapi_strict_rc_buffer", "vaapi", tier::advanced, L, false),
 
         // Software encoding
+        integer("min_threads", "sw", tier::advanced, ALL, 2, 1, 256),
         choice("sw_preset", "sw", tier::advanced, ALL, "superfast", {{"ultrafast"}, {"superfast"}, {"veryfast"}, {"faster"}, {"fast"}, {"medium"}, {"slow"}, {"slower"}, {"veryslow"}}),
         choice("sw_tune", "sw", tier::advanced, ALL, "zerolatency", {{"film"}, {"animation"}, {"grain"}, {"stillimage"}, {"fastdecode"}, {"zerolatency"}}),
+
+        // Fixes for specific problems
+        integer("dd_wa_hdr_toggle_delay", "fixes", tier::advanced, W, 0, 0, 3000),
+        boolean("nvenc_realtime_hags", "fixes", tier::advanced, W, true),
+        integer("qp", "fixes", tier::advanced, ALL, 28, 0, 255),
+        boolean("ignore_encoder_probe_failure", "fixes", tier::advanced, ALL, false),
+        boolean("envvar_compatibility_mode", "fixes", tier::advanced, ALL, false),
+        boolean("legacy_ordering", "fixes", tier::advanced, ALL, false),
+        integer("min_log_level", "fixes", tier::advanced, ALL, 2, 0, 6),
 
         // Files
         path("file_apps", "files"),
@@ -858,6 +860,20 @@ namespace config::schema {
       {"zh_TW", "繁體中文 (Chinese, Traditional)"},
     };
 
+    // Units of numeric settings, for display ("kbps" can be shown as Mbps).
+    static const std::map<std::string_view, std::string_view> units {
+      {"max_bitrate", "kbps"},
+      {"minimum_fps_target", "fps"},
+      {"dd_config_revert_delay", "ms"},
+      {"dd_wa_hdr_toggle_delay", "ms"},
+      {"back_button_timeout", "ms"},
+      {"key_repeat_delay", "ms"},
+      {"key_repeat_frequency", "per_second"},
+      {"ping_timeout", "ms"},
+      {"fec_percentage", "percent"},
+      {"nvenc_vbv_increase", "percent"},
+    };
+
     json list = json::array();
     for (const auto &setting : settings()) {
       json platforms = json::array();
@@ -922,6 +938,20 @@ namespace config::schema {
             value_titles[std::to_string(n)] = name;
           }
         }
+      } else if ((setting.type == type_e::integer || setting.type == type_e::number) && setting.min) {
+        // A wide range: only its special values ("0" for no limit, "-1" for off) have names.
+        for (long long n : {(long long) *setting.min, 0LL}) {
+          if (n < *setting.min || (setting.max && n > *setting.max)) {
+            continue;
+          }
+          auto name = text(key + "_" + std::to_string(n));
+          if (!name.empty()) {
+            value_titles[std::to_string(n)] = name;
+          }
+        }
+      }
+      if (auto unit = units.find(setting.key); unit != units.end()) {
+        item["unit"] = unit->second;
       }
       if (!value_titles.empty()) {
         item["value_titles"] = std::move(value_titles);
@@ -943,32 +973,40 @@ namespace config::schema {
       const char *id;
       const char *title;  ///< When the locale has no config.category_<id>.
       const char *group;
+      bool expert;  ///< Rarely needed: UIs may tuck it away even with advanced settings shown.
     };
 
     const category_t category_list[] = {
-      {"general", "General", ""},
-      {"display", "Display", ""},
-      {"video", "Video", ""},
-      {"audio", "Audio", ""},
-      {"input", "Input", ""},
-      {"network", "Network and pairing", ""},
-      {"apps", "Apps and commands", ""},
-      {"nv", "NVIDIA NVENC", "encoders"},
-      {"qsv", "Intel Quick Sync", "encoders"},
-      {"amd", "AMD AMF", "encoders"},
-      {"vt", "Apple VideoToolbox", "encoders"},
-      {"vaapi", "VA-API", "encoders"},
-      {"sw", "Software encoder", "encoders"},
-      {"files", "Files", ""},
+      {"general", "General", "", false},
+      {"display", "Display", "", false},
+      {"video", "Video", "", false},
+      {"audio", "Audio", "", false},
+      {"input", "Input", "", false},
+      {"network", "Network and pairing", "", false},
+      {"apps", "Commands", "", false},
+      {"fixes", "Fixes for specific problems", "", true},
+      {"files", "Files and certificates", "", true},
+      {"nv", "NVIDIA NVENC", "encoders", true},
+      {"qsv", "Intel Quick Sync", "encoders", true},
+      {"amd", "AMD AMF", "encoders", true},
+      {"vt", "Apple VideoToolbox", "encoders", true},
+      {"vaapi", "VA-API", "encoders", true},
+      {"sw", "Software encoder", "encoders", true},
     };
     json categories = json::array();
     for (const auto &category : category_list) {
       auto title = text("category_"s + category.id);
       json item {{"id", category.id}, {"title", title.empty() ? std::string {category.title} : title}};
+      if (auto description = text("category_"s + category.id + "_desc"); !description.empty()) {
+        item["description"] = description;
+      }
+      if (category.expert) {
+        item["expert"] = true;
+      }
       if (*category.group) {
         auto group_title = text("category_group_"s + category.group);
         item["group"] = category.group;
-        item["group_title"] = group_title.empty() ? "Encoders"s : group_title;
+        item["group_title"] = group_title.empty() ? "Encoder tuning"s : group_title;
       }
       categories.push_back(std::move(item));
     }

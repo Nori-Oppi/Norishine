@@ -69,9 +69,16 @@ Optional fields, added later (clients must not require them):
   integer, `""` for automatic). Choices always have them; integers with a few named values
   (`hevc_mode`, `min_log_level`, ...) have one per value and can be shown as a list.
 
+- `value_titles` on wide numeric ranges: only their special values are named, such as
+  `{"0": "No limit"}` for `max_bitrate` or `{"-1": "Off"}` for `back_button_timeout`.
+- `unit`: `kbps`, `ms`, `percent`, `fps` or `per_second`, for display (a UI may show `kbps`
+  as Mbps; the stored value stays in kbps).
+
 `categories` lists `id` and `title` in display order; related categories also have `group`
-and `group_title` (the encoder categories, under "Encoders"). Category ids and the order of
-settings can change between versions, so render them from the schema rather than by name.
+and `group_title` (the encoder categories, under "Encoder tuning"). Optional: `description`
+(one line) and `expert: true` for categories few people need (encoder tuning, fixes, files),
+which a UI may tuck away. Category ids and the order of settings can change between
+versions, so render them from the schema rather than by name.
 
 ## GET /api/v1/config
 @copydoc confighttp::getConfigV1()

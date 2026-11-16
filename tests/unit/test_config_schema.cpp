@@ -237,10 +237,30 @@ TEST(ConfigSchemaTests, DescribeWithReadableStrings) {
 
   auto english = describe("en", dir);
   EXPECT_EQ(english["locale"], "en");
-  EXPECT_EQ(find_setting(english, "max_bitrate")["title"], "Maximum Bitrate");
+  EXPECT_EQ(find_setting(english, "max_bitrate")["title"], "Bitrate limit");
   EXPECT_FALSE(find_setting(english, "headless_mode")["help"].get<std::string>().empty());
-  ASSERT_EQ(english["categories"].size(), 14u);
+  ASSERT_EQ(english["categories"].size(), 15u);
   EXPECT_EQ(english["categories"][0]["title"], "General");
+  EXPECT_FALSE(english["categories"][0].contains("expert"));
+  EXPECT_FALSE(english["categories"][0]["description"].get<std::string>().empty());
+
+  // Optional fields added later: units, names for special values, expert categories.
+  auto bitrate = find_setting(english, "max_bitrate");
+  EXPECT_EQ(bitrate["unit"], "kbps");
+  EXPECT_EQ(bitrate["value_titles"]["0"], "No limit");
+  EXPECT_EQ(bitrate["value_titles"].size(), 1u) << "only the special value is named";
+  EXPECT_EQ(find_setting(english, "back_button_timeout")["value_titles"]["-1"], "Off");
+  EXPECT_EQ(find_setting(english, "minimum_fps_target")["value_titles"]["0"], "Automatic");
+  EXPECT_FALSE(find_setting(english, "port").contains("value_titles"));
+  bool fixes_expert = false;
+  for (const auto &category : english["categories"]) {
+    if (category["id"] == "fixes") {
+      fixes_expert = category.value("expert", false);
+    }
+  }
+  EXPECT_TRUE(fixes_expert);
+  // HDR is only changed when the host prepares the display.
+  EXPECT_EQ(find_setting(english, "dd_hdr_option")["depends_on"]["key"], "dd_configuration_option");
 
   // Every setting on this platform has an explanation and a known category, and every
   // choice has a readable name.
@@ -267,7 +287,7 @@ TEST(ConfigSchemaTests, DescribeWithReadableStrings) {
   // German has no headless_mode string: English fills the gap.
   auto german = describe("de", dir);
   EXPECT_EQ(german["locale"], "de");
-  EXPECT_EQ(find_setting(german, "headless_mode")["title"], "Headless Mode");
+  EXPECT_EQ(find_setting(german, "headless_mode")["title"], "Stream to a virtual display");
 
   // Unknown locales never reach the file system; they fall back.
   auto other = describe("../../secrets", dir);

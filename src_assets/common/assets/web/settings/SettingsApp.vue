@@ -22,6 +22,10 @@ const requestError = ref('')
 const saving = ref(false)
 const notice = ref(null)  // {kind: 'ok' | 'restart' | 'restarting' | 'error', text}
 const confirmList = ref(null)
+const confirmCancel = ref(null)
+const restartAfterConfirm = ref(false)
+const streamWarning = ref(0)  // Active streams that "Save and restart" would end; asks first.
+const displays = ref(null)
 const query = ref('')
 const category = ref('general')
 const highlightKey = ref('')
@@ -147,6 +151,7 @@ async function load() {
     unknown.value = values.unknown || {}
     discard()
     openFromHash()
+    api('./api/v1/displays').then((d) => { displays.value = d.displays || null }).catch(() => { displays.value = null })
   } catch (e) {
     if (e.status !== 401) {
       loadError.value = e.message
@@ -156,17 +161,32 @@ async function load() {
   }
 }
 
-function save(confirmed = false) {
+const needsRestart = computed(() => [...changedKeys.value].some((k) => byKey.value[k]?.restart_required))
+
+async function save(confirmed = false, andRestart = false) {
   if (changeCount.value === 0 || saving.value) {
     return
   }
   const dangerous = [...changedKeys.value].map((k) => byKey.value[k]).filter((s) => s && s.tier === 'dangerous')
   if (dangerous.length && !confirmed) {
     confirmList.value = dangerous.map((s) => s.title)
+    restartAfterConfirm.value = andRestart
     return
   }
   confirmList.value = null
-  doSave()
+  if (andRestart && !streamWarning.value) {
+    // Restarting ends every stream: say so first.
+    const status = await api('./api/v1/status').catch(() => null)
+    if (status && status.active_sessions > 0) {
+      streamWarning.value = status.active_sessions
+      return
+    }
+  }
+  streamWarning.value = 0
+  const ok = await doSave()
+  if (ok && andRestart) {
+    await restart()
+  }
 }
 
 async function doSave() {
@@ -195,6 +215,7 @@ async function doSave() {
     notice.value = restartNeeded.value
       ? { kind: 'restart', text: t('settings.saved_restart') }
       : { kind: 'ok', text: t('settings.saved') }
+    return true
   } catch (e) {
     if (e.status === 400 && e.body && e.body.errors) {
       const errs = { ...e.body.errors }
@@ -214,6 +235,7 @@ async function doSave() {
   } finally {
     saving.value = false
   }
+  return false
 }
 
 async function restart() {
@@ -285,8 +307,9 @@ function onKey(e) {
     e.preventDefault()
     save()
   }
-  if (e.key === 'Escape' && confirmList.value) {
+  if (e.key === 'Escape' && (confirmList.value || streamWarning.value)) {
     confirmList.value = null
+    streamWarning.value = 0
   }
 }
 function onBeforeUnload(e) {
@@ -295,6 +318,14 @@ function onBeforeUnload(e) {
     e.returnValue = t('settings.leave')
   }
 }
+
+// The risky choice is never the default: focus Cancel when a confirmation opens.
+watch(() => !!confirmList.value || !!streamWarning.value, async (open) => {
+  if (open) {
+    await nextTick()
+    confirmCancel.value?.focus()
+  }
+})
 
 onMounted(() => {
   load()
@@ -338,6 +369,7 @@ const rowProps = (s, inSearch) => ({
   platform: schema.value?.platform || '',
   remapGroup: remapGroup.value,
   highlighted: highlightKey.value === s.key,
+  displays: displays.value,
 })
 </script>
 
@@ -358,9 +390,10 @@ const rowProps = (s, inSearch) => ({
             </a>
           </template>
         </nav>
-        <p v-if="hiddenCategoryCount > 0" class="small muted sidebar-note">
+        <button v-if="hiddenCategoryCount > 0" type="button" class="link-button small sidebar-note"
+                @click="showAdvanced = true">
           {{ $t('settings.more_categories', { n: hiddenCategoryCount }, hiddenCategoryCount) }}
-        </p>
+        </button>
       </aside>
 
       <main class="content">
@@ -448,6 +481,7 @@ const rowProps = (s, inSearch) => ({
 
           <section v-else-if="currentCategory" class="section">
             <h2 class="visually-hidden">{{ currentCategory.title }}</h2>
+            <p v-if="currentCategory.description" class="muted category-desc">{{ currentCategory.description }}</p>
             <div class="card">
               <SettingRow v-for="s in currentCategory.settings" :key="s.key" v-bind="rowProps(s, false)"
                           @update="update(s, $event)" @reset="reset(s)" />
@@ -462,9 +496,12 @@ const rowProps = (s, inSearch) => ({
       <div class="savebar-inner">
         <span class="grow">{{ $t('settings.unsaved', { n: changeCount }, changeCount) }}</span>
         <button type="button" class="btn" :disabled="saving" @click="discard">{{ $t('settings.discard') }}</button>
-        <button type="button" class="btn btn-primary" :disabled="saving" @click="save()">
+        <button v-if="needsRestart" type="button" class="btn" :disabled="saving" @click="save(false, false)">
+          {{ $t('settings.save_only') }}
+        </button>
+        <button type="button" class="btn btn-primary" :disabled="saving" @click="save(false, needsRestart)">
           <i v-if="saving" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-          {{ saving ? $t('settings.saving') : $t('settings.save') }}
+          {{ saving ? $t('settings.saving') : needsRestart ? $t('settings.save_restart') : $t('settings.save') }}
         </button>
       </div>
     </div>
@@ -478,8 +515,21 @@ const rowProps = (s, inSearch) => ({
           <li v-for="name in confirmList" :key="name">{{ name }}</li>
         </ul>
         <div class="actions">
-          <button type="button" class="btn" @click="confirmList = null">{{ $t('settings.cancel') }}</button>
-          <button type="button" class="btn btn-primary" @click="save(true)" autofocus>{{ $t('settings.confirm_save') }}</button>
+          <button ref="confirmCancel" type="button" class="btn" @click="confirmList = null">{{ $t('settings.cancel') }}</button>
+          <button type="button" class="btn btn-primary" @click="save(true, restartAfterConfirm)">{{ $t('settings.confirm_save') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- "Save and restart" while someone is streaming -->
+    <div v-if="streamWarning" class="dialog-backdrop" @click.self="streamWarning = 0">
+      <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="streams-title" aria-describedby="streams-body">
+        <h2 id="streams-title">{{ $t('settings.restart_streams_title') }}</h2>
+        <p id="streams-body" class="muted">{{ $t('settings.restart_streams', { n: streamWarning }, streamWarning) }}</p>
+        <div class="actions">
+          <button ref="confirmCancel" type="button" class="btn" @click="streamWarning = 0">{{ $t('settings.cancel') }}</button>
+          <button type="button" class="btn" @click="streamWarning = 0; save(true, false)">{{ $t('settings.save_only') }}</button>
+          <button type="button" class="btn btn-primary" @click="save(true, true)">{{ $t('settings.save_restart') }}</button>
         </div>
       </div>
     </div>
@@ -509,6 +559,10 @@ const rowProps = (s, inSearch) => ({
 .search { position: relative; flex: 1 1 280px; }
 .search i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 13px; }
 .search .field { padding-left: 32px; }
+.category-desc { margin: 0 0 12px; }
+.link-button { border: 0; background: none; padding: 2px 0; color: var(--accent); font: inherit; cursor: pointer; font-weight: 500; }
+.link-button:hover { text-decoration: underline; }
+.sidebar-note { text-align: left; margin-top: 12px; padding: 0 12px; }
 .advanced-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-secondary); font-size: 14px; }
 .category-select { display: none; }
 
