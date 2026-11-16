@@ -2,7 +2,7 @@
 
 # Norishine
 
-Norishine is the streaming host of the Nori project. It pairs with
+Norishine is the streaming host for Norilight and other moonlight clients. It pairs with
 [Norilight](https://github.com/azijnwater/Norilight) and stays compatible with
 Moonlight, Artemis and other clients of the GameStream protocol.
 
