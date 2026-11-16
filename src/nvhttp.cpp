@@ -1296,29 +1296,9 @@ namespace nvhttp {
       }
 
       auto named_cert_p = get_verified_cert(request);
-      nlohmann::json app = nullptr;
-      if (int id = proc::proc.running(); id > 0) {
-        auto uuid = proc::proc.get_running_app_uuid();
-        std::string name;
-        for (const auto &ctx : proc::proc.get_apps()) {
-          if (ctx.uuid == uuid) {
-            name = ctx.name;
-          }
-        }
-        app = {{"id", id}, {"uuid", uuid}, {"name", name}};
-      }
-
-      send_json(response, SimpleWeb::StatusCode::success_ok, {
-        {"status", true},
-        {"api_version", API_VERSION},
-        {"hostname", config::nvhttp.sunshine_name},
-        {"version", PROJECT_VERSION},
-        {"platform", SUNSHINE_PLATFORM},
-        {"uniqueid", http::unique_id},
-        {"running_app", app},
-        {"active_sessions", rtsp_stream::session_count()},
-        {"device", {{"name", named_cert_p->name}, {"permissions", (uint32_t) named_cert_p->perm}}},
-      });
+      auto tree = host_status();
+      tree["device"] = {{"name", named_cert_p->name}, {"permissions", (uint32_t) named_cert_p->perm}};
+      send_json(response, SimpleWeb::StatusCode::success_ok, tree);
     }
 
     void config_schema(resp_https_t response, req_https_t request) {
@@ -1394,6 +1374,50 @@ namespace nvhttp {
       }).detach();
     }
   }  // namespace api
+
+  nlohmann::json host_status() {
+    nlohmann::json app = nullptr;
+    if (int id = proc::proc.running(); id > 0) {
+      auto uuid = proc::proc.get_running_app_uuid();
+      std::string name;
+      for (const auto &ctx : proc::proc.get_apps()) {
+        if (ctx.uuid == uuid) {
+          name = ctx.name;
+        }
+      }
+      app = {{"id", id}, {"uuid", uuid}, {"name", name}};
+    }
+
+    static const char *codecs[] = {"H.264", "HEVC", "AV1"};
+    static const char *states[] = {"stopped", "stopping", "starting", "running"};
+    nlohmann::json sessions = nlohmann::json::array();
+    for (const auto &s : rtsp_stream::get_all_session_info()) {
+      sessions.push_back({
+        {"uuid", s.uuid},
+        {"name", s.name},
+        {"address", s.address},
+        {"width", s.width},
+        {"height", s.height},
+        {"fps", s.fps},
+        {"bitrate_kbps", s.bitrate_kbps},
+        {"codec", s.codec >= 0 && s.codec < 3 ? codecs[s.codec] : "unknown"},
+        {"hdr", s.hdr},
+        {"state", states[(int) s.state & 3]},
+      });
+    }
+
+    return {
+      {"status", true},
+      {"api_version", API_VERSION},
+      {"hostname", config::nvhttp.sunshine_name},
+      {"version", PROJECT_VERSION},
+      {"platform", SUNSHINE_PLATFORM},
+      {"uniqueid", http::unique_id},
+      {"running_app", app},
+      {"active_sessions", rtsp_stream::session_count()},
+      {"sessions", sessions},
+    };
+  }
 
   nlohmann::json get_all_clients() {
     nlohmann::json named_cert_nodes = nlohmann::json::array();

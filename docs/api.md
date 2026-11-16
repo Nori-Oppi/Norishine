@@ -100,6 +100,15 @@ requesting device's name and permissions. The schema takes `?locale=` (a value o
 names, for clients without the web UI's locale files. `scripts/e2e/manage_check.py` checks all of it
 against a dev host.
 
+## GET /api/v1/status
+@copydoc confighttp::getStatusV1()
+
+Host name, version, platform, unique ID, running app (`id`, `uuid`, `name`, or null) and
+`active_sessions`, plus `sessions`: one entry per stream with the device's `uuid` and
+`name`, its `address`, `width`, `height`, `fps`, `bitrate_kbps`, `codec` (`H.264`, `HEVC`,
+`AV1`), `hdr` and `state`. The same object (plus `device`) is what paired clients get from
+`GET /api/v1/status` on the HTTPS port.
+
 ## POST /api/covers/upload
 @copydoc confighttp::uploadCover()
 

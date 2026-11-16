@@ -2032,6 +2032,22 @@ namespace stream {
       return session.state.load(std::memory_order_relaxed);
     }
 
+    info_t describe(session_t &session) {
+      info_t result;
+      result.uuid = session.device_uuid;
+      result.name = session.device_name;
+      auto address = session.video.peer.address();
+      result.address = address.is_unspecified() ? session.control.expected_peer_address : address.to_string();
+      result.width = session.config.monitor.width;
+      result.height = session.config.monitor.height;
+      result.fps = session.config.monitor.encodingFramerate > 0 ? session.config.monitor.encodingFramerate : session.config.monitor.framerate;
+      result.bitrate_kbps = session.config.monitor.bitrate;
+      result.codec = session.config.monitor.videoFormat;
+      result.hdr = session.config.monitor.dynamicRange != 0;
+      result.state = state(session);
+      return result;
+    }
+
     inline bool send(session_t& session, const std::string_view &payload) {
       return session.broadcast_ref->control_server.send(payload, session.control.peer);
     }

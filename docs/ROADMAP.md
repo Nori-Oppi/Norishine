@@ -132,8 +132,19 @@ deliberately broken, but is not verified until CI exists for it.
   dead `dd_wa_hdr_toggle` strings are gone. Other pages keep their layout until M3; they
   share the new header colours. Pages stay separate HTML entries rather than one
   vue-router app, since the host serves each page at its own path.
-- **M3** Remaining pages: apps, clients and permissions, pairing, status and active
-  sessions, logs and troubleshooting. Login hardening and CSRF.
+- **M3** Remaining pages, login hardening and CSRF (**done**). Every page now uses the
+  M2 theme and shell, and Bootstrap is gone from the web UI: home with host status, the
+  running app and active streams (device, address, resolution, frame rate, codec, HDR,
+  bitrate) with close and disconnect (`GET /api/v1/status`, now also with `sessions` for
+  paired clients); pairing by PIN from the client or one-time PIN from the host; a new
+  Devices page with permissions as plain choices (streaming level, input, extras, host
+  management), per-device display mode and commands; apps with an editor, cover search,
+  reordering, launch and close; troubleshooting with a live, filterable log and the
+  close / restart / display-reset / quit actions; account page. Sign-in: several
+  sessions at once, HttpOnly session cookie, CSRF token required on every change (and a
+  matching Origin), per-address lockout after failed sign-ins, PBKDF2 password hashes
+  (old ones converted at the next sign-in), sign out, and no more passwords kept in the
+  browser (`src/web_auth.*`, tested).
 - **M4** State file split and migrations; import from Apollo.
 
 ### Phase 4: Nori integration

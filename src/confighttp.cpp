@@ -1151,6 +1151,20 @@ namespace confighttp {
   }
 
   /**
+   * @brief Host status: name, version, running app and active streams.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   *
+   * @api_examples{/api/v1/status| GET| null}
+   */
+  void getStatusV1(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+    send_response(response, nvhttp::host_status());
+  }
+
+  /**
    * @brief Get the settings schema: every setting with its type, default and limits.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -1817,6 +1831,7 @@ namespace confighttp {
     server.resource["^/$"]["GET"] = getIndexPage;
     server.resource["^/pin/?$"]["GET"] = getPinPage;
     server.resource["^/apps/?$"]["GET"] = getAppsPage;
+    server.resource["^/clients/?$"]["GET"] = getClientsPage;
     server.resource["^/config/?$"]["GET"] = getConfigPage;
     server.resource["^/password/?$"]["GET"] = getPasswordPage;
     server.resource["^/welcome/?$"]["GET"] = getWelcomePage;
@@ -1837,6 +1852,7 @@ namespace confighttp {
     server.resource["^/api/logs$"]["GET"] = getLogs;
     server.resource["^/api/config$"]["GET"] = getConfig;
     server.resource["^/api/config$"]["POST"] = saveConfig;
+    server.resource["^/api/v1/status$"]["GET"] = getStatusV1;
     server.resource["^/api/v1/config/schema$"]["GET"] = getConfigSchema;
     server.resource["^/api/v1/config$"]["GET"] = getConfigV1;
     server.resource["^/api/v1/config$"]["PATCH"] = patchConfigV1;

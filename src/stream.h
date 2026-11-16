@@ -56,5 +56,23 @@ namespace stream {
     void join(session_t &session);
     state_e state(session_t &session);
     inline bool send(session_t& session, const std::string_view &payload);
+
+    /**
+     * @brief What the management pages show about a running stream.
+     */
+    struct info_t {
+      std::string uuid;  ///< The paired client's UUID.
+      std::string name;  ///< The paired client's name.
+      std::string address;  ///< The client's IP address.
+      int width = 0;
+      int height = 0;
+      int fps = 0;
+      int bitrate_kbps = 0;
+      int codec = 0;  ///< 0 H.264, 1 HEVC, 2 AV1
+      bool hdr = false;
+      state_e state = state_e::STOPPED;
+    };
+
+    info_t describe(session_t &session);
   }  // namespace session
 }  // namespace stream

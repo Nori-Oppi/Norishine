@@ -616,6 +616,17 @@ namespace rtsp_stream {
       return nullptr;
     }
 
+    std::vector<stream::session::info_t> get_all_session_info() {
+      std::vector<stream::session::info_t> list;
+      auto lg = _session_slots.lock();
+      for (auto &slot : *_session_slots) {
+        if (slot) {
+          list.push_back(stream::session::describe(*slot));
+        }
+      }
+      return list;
+    }
+
     std::list<std::string>
     get_all_session_uuids() {
       std::list<std::string> uuids;
@@ -663,6 +674,10 @@ namespace rtsp_stream {
 
   std::list<std::string> get_all_session_uuids() {
     return server.get_all_session_uuids();
+  }
+
+  std::vector<stream::session::info_t> get_all_session_info() {
+    return server.get_all_session_info();
   }
 
   void terminate_sessions() {
