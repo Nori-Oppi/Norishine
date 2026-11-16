@@ -18,6 +18,7 @@
 #include "main.h"
 #include "nvhttp.h"
 #include "process.h"
+#include "state_store.h"
 #include "system_tray.h"
 #include "upnp.h"
 #include "uuid.h"
@@ -181,6 +182,9 @@ int main(int argc, char *argv[]) {
     BOOST_LOG(info) << "config: '"sv << name << "' = "sv << val;
   }
   config::modified_config_settings.clear();
+
+  // Before anything reads or writes the paired devices or the web UI account.
+  state_store::init();
 
   if (!config::sunshine.cmd.name.empty()) {
     auto fn = cmd_to_func.find(config::sunshine.cmd.name);

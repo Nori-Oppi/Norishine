@@ -41,5 +41,11 @@ Vibepollo is installed. Remaining:
   (converted at the first sign-in). If you go back to Apollo or Vibepollo with Norishine's
   carried-back settings, set a new web UI password there (`sunshine.exe --creds <user>
   <password>`, or delete the credentials from its state file).
+- Since the state split (M4), a Norishine build from before it no longer finds the paired
+  devices and web UI account after a newer one ran: they are in `config\state\`, and the
+  old file is `sunshine_state.json.v0.bak`. To go back, rename that file to
+  `sunshine_state.json`. Carrying settings back to Apollo or Vibepollo on uninstall
+  rebuilds the file for them (without the web UI account if its password was changed or
+  used in Norishine, since they can't read the new hash: they then ask for a new one).
 - NVIDIA only: the global-profile undo file is `%ProgramData%\Sunshine\nvprefs_undo.json`
   for Sunshine, Apollo, Vibepollo and Norishine alike.
