@@ -1,23 +1,29 @@
 # Known issues
 
-Tracked here until fixed. Last checked 2026-11-15 on Windows 11, AMD Radeon 780M.
+Tracked here until fixed. Last checked 2026-11-15 on Windows 11, AMD Radeon 780M; updated
+2026-11-17.
 
 ## Unit tests
 
-All 321 pass locally. Not run locally because they act on the live desktop:
+All pass locally. Not run locally because they act on the live desktop:
 `MouseInputs/*` (moves the real cursor) and `Configurations/AudioTest.*` (opens real
 audio devices). CI runs the full suite.
 
 ## Host
 
-- `QOSAddSocketToFlow() failed: 1168` warnings on loopback streams. Expected for
-  127.0.0.1; check on a real network.
-- Rare: when a session hangs on shutdown ("Hang detected! Session failed to terminate"), the
-  host exits without removing its SudoVDA virtual display. On a headless PC the desktop
-  then stays on that orphaned display, and the next session streams a second, empty
-  one. Restarting the service does not remove it while another process keeps the
-  SudoVDA watchdog alive; it has to be removed through the driver by its GUID (the
-  client's UUID for Desktop).
+No open host issues. Fixed on 2026-11-17:
+
+- SudoVDA displays left behind when a session hung on shutdown ("Hang detected! Session
+  failed to terminate"). Norishine lists the displays it creates in
+  `config\state\virtual_displays.txt`, removes them before a forced exit, and removes any
+  still listed from an earlier run when it starts.
+- `QOSAddSocketToFlow() failed: 1168` warnings: QoS is skipped for loopback addresses.
+- `POST /api/apps/close` answered 400 when sent without a body or `Content-Type`. Calls
+  without a body no longer need one, and closing the app also ends its streams at once.
+- Devices paired after the first are **Watch only** by design (see
+  [Devices and permissions](GUIDE.md#devices-and-permissions)); launching from them now
+  answers "Permission denied. Change this device's permissions on the host's Devices
+  page." and the host logs it.
 
 ## Installer next to Apollo, Vibepollo or Sunshine
 
@@ -31,21 +37,25 @@ Norishine's `bin` folder (`norishine.cmd`) goes on the system `PATH`, and the le
 `src_assets/windows/misc/migration/other-hosts.ps1`. Shared drivers: an existing SudoVDA
 device is kept (its driver is only updated in place when ours is newer), ViGEmBus is kept
 when 1.17 or later, and uninstalling does not offer to remove either while Apollo or
-Vibepollo is installed. Remaining:
+Vibepollo is installed.
 
-- Installing Apollo or Vibepollo again while Norishine is still installed: both use the
-  default ports, so whichever starts second cannot stream. Uninstall Norishine first.
-- Apollo's and Vibepollo's own uninstallers (run when replacing them) also delete a
-  `SunshineSvc` service, which would remove a Sunshine install on the same PC.
-- Norishine stores the web UI password with a stronger hash than Apollo and Vibepollo
-  (converted at the first sign-in). If you go back to Apollo or Vibepollo with Norishine's
-  carried-back settings, set a new web UI password there (`sunshine.exe --creds <user>
-  <password>`, or delete the credentials from its state file).
-- Since the state split (M4), a Norishine build from before it no longer finds the paired
-  devices and web UI account after a newer one ran: they are in `config\state\`, and the
-  old file is `sunshine_state.json.v0.bak`. To go back, rename that file to
-  `sunshine_state.json`. Carrying settings back to Apollo or Vibepollo on uninstall
-  rebuilds the file for them (without the web UI account if its password was changed or
-  used in Norishine, since they can't read the new hash: they then ask for a new one).
+Handled since 2026-11-17:
+
+- Apollo, Vibepollo or Sunshine installed (again) while Norishine is: when its service
+  uses the default port, Norishine moves to port 48989 at its next start and saves that
+  in `sunshine.conf` (replacing that host later removes the line again). Clients that
+  added the host by address need `:48989`.
+- Apollo's and Vibepollo's uninstallers delete a `SunshineSvc` service. When replacing
+  them, the installer saves the settings of any Sunshine service that isn't theirs and
+  puts it back (started again if it was running) if the uninstaller removed it.
+
+Remaining:
+
+- The web UI password: Norishine stores it with a stronger hash (converted at the first
+  sign-in), which Apollo and Vibepollo can't read. The copy carried back to them leaves
+  the account out, so they ask for a new one when their web UI is first opened.
+- Going back to a Norishine build from before the state split (M4): paired devices and the
+  web UI account are in `config\state\` and the old file is `sunshine_state.json.v0.bak`.
+  Rename it to `sunshine_state.json` first.
 - NVIDIA only: the global-profile undo file is `%ProgramData%\Sunshine\nvprefs_undo.json`
   for Sunshine, Apollo, Vibepollo and Norishine alike.

@@ -9,6 +9,7 @@
 #endif
 // standard includes
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -32,6 +33,7 @@
 #include "logging.h"
 #include "platform/common.h"
 #include "process.h"
+#include "state_store.h"
 #include "httpcommon.h"
 #include "system_tray.h"
 #include "utility.h"
@@ -75,9 +77,25 @@ namespace proc {
         onVDisplayWatchdogFailed();
         return;
       }
+
+      // A host that died without removing its displays (a hang on shutdown) left them
+      // in this list. Remove them once, before this run creates any.
+      static std::once_flag leftovers_once;
+      std::call_once(leftovers_once, []() {
+        VDISPLAY::setDisplayListFile(state_store::paths().dir / "virtual_displays.txt");
+        VDISPLAY::removeLeftoverDisplays();
+      });
     }
   }
 #endif
+
+  void remove_virtual_displays() {
+#ifdef _WIN32
+    if (vDisplayDriverStatus == VDISPLAY::DRIVER_STATUS::OK) {
+      VDISPLAY::removeAllDisplays();
+    }
+#endif
+  }
 
   class deinit_t: public platf::deinit_t {
   public:

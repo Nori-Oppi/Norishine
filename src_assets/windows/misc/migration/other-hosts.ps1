@@ -36,6 +36,11 @@ $NorishineConfig = Join-Path $NorishineRoot 'config'
 $RecordFile = Join-Path $NorishineConfig 'other_host.json'
 $SideBySidePort = 48989
 $PortComment = '# Added by the Norishine installer: Apollo or Vibepollo uses the default port'
+# Written by Norishine itself when it finds another host's service on the default port
+# (src/config.cpp, avoid_other_host_port).
+$HostPortComment = '# Added by Norishine: another stream host uses the default port'
+# Sunshine's service names. Apollo's and Vibepollo's uninstallers delete SunshineSvc.
+$SunshineServices = @('SunshineSvc', 'SunshineService')
 $CopyMarker = 'norishine_copy.txt'
 
 function Write-Log([string]$Message) { Write-Host "[other hosts] $Message" }
@@ -222,7 +227,7 @@ function Remove-SideBySidePort([string]$ConfigDir) {
   $lines = @(Get-Content -LiteralPath $conf)
   $kept = @()
   for ($i = 0; $i -lt $lines.Count; $i++) {
-    if ($lines[$i] -eq $PortComment -and $i + 1 -lt $lines.Count -and $lines[$i + 1] -eq "port = $SideBySidePort") {
+    if (($lines[$i] -eq $PortComment -or $lines[$i] -eq $HostPortComment) -and $i + 1 -lt $lines.Count -and $lines[$i + 1] -eq "port = $SideBySidePort") {
       $i++
       continue
     }
@@ -250,8 +255,54 @@ function Remove-StalePathEntries([string]$InstallDir, [string]$Key = 'HKLM:\SYST
   }
 }
 
+# Settings of Sunshine services that don't belong to the host being replaced, so they can
+# be put back if its uninstaller deletes them.
+function Save-SunshineServices([string]$OtherInstallDir) {
+  $saved = @()
+  foreach ($name in $SunshineServices) {
+    $props = Get-ItemProperty -LiteralPath "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -ErrorAction SilentlyContinue
+    if (-not $props -or -not $props.ImagePath) { continue }
+    if ($OtherInstallDir -and $props.ImagePath -like "*$($OtherInstallDir.TrimEnd('\'))\*") { continue }
+    $saved += [pscustomobject]@{
+      Name = $name
+      ImagePath = [string]$props.ImagePath
+      Start = [int]$props.Start
+      Delayed = [int]$props.DelayedAutostart
+      DisplayName = $(if ($props.DisplayName) { [string]$props.DisplayName } else { $name })
+      Description = [string]$props.Description
+      Running = (Get-Service -Name $name -ErrorAction SilentlyContinue).Status -eq 'Running'
+    }
+  }
+  return $saved
+}
+
+function Restore-SunshineServices($Saved) {
+  foreach ($service in @($Saved)) {
+    $key = "HKLM:\SYSTEM\CurrentControlSet\Services\$($service.Name)"
+    # A deleted service disappears once nothing holds it open.
+    for ($i = 0; $i -lt 10 -and (Get-ItemProperty -LiteralPath $key -Name DeleteFlag -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
+    if (Test-Path -LiteralPath $key) { continue }
+
+    $binary = $service.ImagePath
+    if ($binary -match '^\s*"([^"]+)"' -or $binary -match '^\s*(\S+)') { $binary = $Matches[1] }
+    if (-not (Test-Path -LiteralPath $binary)) { continue }
+
+    $startup = switch ($service.Start) { 2 { 'Automatic' } 4 { 'Disabled' } default { 'Manual' } }
+    try {
+      New-Service -Name $service.Name -BinaryPathName $service.ImagePath -DisplayName $service.DisplayName -StartupType $startup | Out-Null
+      if ($service.Description) { Set-ItemProperty -LiteralPath $key -Name Description -Value $service.Description }
+      if ($service.Start -eq 2 -and $service.Delayed -eq 1) { Set-ItemProperty -LiteralPath $key -Name DelayedAutostart -Value 1 -Type DWord }
+      if ($service.Running) { Start-Service -Name $service.Name -ErrorAction SilentlyContinue }
+      Write-Log "Put back the $($service.Name) service, which the uninstaller removed."
+    } catch {
+      Write-Log "Could not put back the $($service.Name) service: $_"
+    }
+  }
+}
+
 function Uninstall-OtherHost($OtherHost) {
   $entry = $OtherHost.Entry
+  $sunshine = Save-SunshineServices $OtherHost.InstallDir
   if ($entry) {
     if ($entry.QuietUninstallString) {
       # Vibepollo: uninstall.exe /quiet (runs msiexec /x with /norestart)
@@ -272,6 +323,7 @@ function Uninstall-OtherHost($OtherHost) {
     if (-not $entry.QuietUninstallString -and (Test-Path -LiteralPath $leftover)) {
       Remove-Item -LiteralPath $leftover -Force -ErrorAction SilentlyContinue
     }
+    Restore-SunshineServices $sunshine
   }
 
   if (-not (Get-OtherHost)) {

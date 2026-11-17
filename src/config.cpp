@@ -1460,6 +1460,105 @@ namespace config {
     ::video::active_av1_mode = video.av1_mode;
   }
 
+#ifdef _WIN32
+  namespace {
+    constexpr int side_by_side_port = 48989;
+    constexpr auto side_by_side_comment = "# Added by Norishine: another stream host uses the default port"sv;
+
+    std::optional<std::wstring> read_service_string(HKEY key, const wchar_t *name) {
+      wchar_t buffer[1024] {};
+      DWORD size = sizeof(buffer) - sizeof(wchar_t);
+      DWORD type = 0;
+      if (RegQueryValueExW(key, name, nullptr, &type, (LPBYTE) buffer, &size) != ERROR_SUCCESS || (type != REG_SZ && type != REG_EXPAND_SZ)) {
+        return std::nullopt;
+      }
+      std::wstring value(buffer);
+      if (type == REG_EXPAND_SZ) {
+        wchar_t expanded[1024] {};
+        if (ExpandEnvironmentStringsW(value.c_str(), expanded, ARRAYSIZE(expanded))) {
+          value = expanded;
+        }
+      }
+      return value;
+    }
+
+    /**
+     * @brief The name of an Apollo, Vibepollo or Sunshine service that streams on the default
+     *        port, when one is installed and not disabled.
+     *
+     * Their services run `<install folder>\tools\sunshinesvc.exe`; the port is read from
+     * `<install folder>\config\sunshine.conf`.
+     */
+    std::optional<std::string> other_host_on_default_port() {
+      wchar_t own_path[MAX_PATH] {};
+      GetModuleFileNameW(nullptr, own_path, ARRAYSIZE(own_path));
+      std::error_code ec;
+      auto own_root = fs::weakly_canonical(fs::path(own_path).parent_path(), ec);
+
+      for (std::string_view service : {"ApolloService"sv, "SunshineService"sv, "SunshineSvc"sv}) {
+        HKEY key;
+        auto path = std::wstring(L"SYSTEM\\CurrentControlSet\\Services\\") + std::wstring(service.begin(), service.end());
+        if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, path.c_str(), 0, KEY_READ, &key) != ERROR_SUCCESS) {
+          continue;
+        }
+        DWORD start = 0;
+        DWORD size = sizeof(start);
+        RegQueryValueExW(key, L"Start", nullptr, nullptr, (LPBYTE) &start, &size);
+        auto image = read_service_string(key, L"ImagePath");
+        RegCloseKey(key);
+        if (start == SERVICE_DISABLED || !image) {
+          continue;
+        }
+
+        auto binary = *image;
+        if (!binary.empty() && binary.front() == L'"') {
+          binary = binary.substr(1, binary.find(L'"', 1) - 1);
+        }
+        auto root = fs::path(binary).parent_path().parent_path();
+        if (!fs::exists(binary, ec) || fs::equivalent(root, own_root, ec)) {
+          continue;
+        }
+
+        auto conf = root / "config" / "sunshine.conf";
+        int port = 47989;
+        if (fs::exists(conf, ec)) {
+          auto other_vars = parse_config(file_handler::read_file(conf.string().c_str()));
+          if (auto it = other_vars.find("port"); it != other_vars.end()) {
+            port = util::from_view(it->second);
+          }
+        }
+        if (port == 47989) {
+          return std::string(service);
+        }
+      }
+      return std::nullopt;
+    }
+
+    /**
+     * @brief Move to the side-by-side port when another host takes the default one (for
+     *        example Apollo installed again after Norishine replaced it). The installer
+     *        does the same when keeping both, and removes the line when replacing the host.
+     */
+    void avoid_other_host_port(std::unordered_map<std::string, std::string> &vars, const std::string &config_file) {
+      if (vars.contains("port")) {
+        return;
+      }
+      auto other = other_host_on_default_port();
+      if (!other) {
+        return;
+      }
+      vars["port"] = std::to_string(side_by_side_port);
+      BOOST_LOG(warning) << *other << " uses the default port; Norishine uses port "sv << side_by_side_port << " (web UI https://localhost:"sv << side_by_side_port + 1 << ')';
+
+      std::ofstream out(config_file, std::ios::app);
+      out << '\n' << side_by_side_comment << "\nport = "sv << side_by_side_port << '\n';
+      if (!out) {
+        BOOST_LOG(warning) << "Couldn't save the port in "sv << config_file;
+      }
+    }
+  }  // namespace
+#endif
+
   int parse(int argc, char *argv[]) {
     std::unordered_map<std::string, std::string> cmd_vars;
 #ifdef _WIN32
@@ -1537,6 +1636,10 @@ namespace config {
       for (auto &[name, value] : cmd_vars) {
         vars.insert_or_assign(std::move(name), std::move(value));
       }
+
+#ifdef _WIN32
+      avoid_other_host_port(vars, sunshine.config_file);
+#endif
 
       // Apply the config. Note: This will try to create any paths
       // referenced in the config, so we may receive exceptions if

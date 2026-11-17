@@ -18,6 +18,7 @@
 #include "manage_api.h"
 #include "nvhttp.h"
 #include "process.h"
+#include "rtsp.h"
 #include "uuid.h"
 
 using namespace std::literals;
@@ -367,6 +368,7 @@ namespace manage_api {
   }
 
   reply_t close_app() {
+    rtsp_stream::terminate_sessions();
     proc::proc.terminate();
     return ok();
   }

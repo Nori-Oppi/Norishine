@@ -192,6 +192,12 @@ namespace proc {
    */
   void terminate_process_group(boost::process::v1::child &proc, boost::process::v1::group &group, std::chrono::seconds exit_timeout);
 
+  /**
+   * @brief Remove the virtual displays this host created, before a forced exit (a hang)
+   *        that skips the normal cleanup. Does nothing on other platforms.
+   */
+  void remove_virtual_displays();
+
   extern proc_t proc;
 
   extern int input_only_app_id;

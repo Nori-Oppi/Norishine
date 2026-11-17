@@ -40,6 +40,7 @@
 #include "nvhttp.h"
 #include "platform/common.h"
 #include "process.h"
+#include "rtsp.h"
 #include "state_store.h"
 #include "utility.h"
 #include "uuid.h"
@@ -312,6 +313,10 @@ namespace confighttp {
   bool validateContentType(resp_https_t response, req_https_t request, const std::string_view& contentType) {
     auto requestContentType = request->header.find("content-type");
     if (requestContentType == request->header.end()) {
+      // Calls without a body (closing the app, for example) need no content type.
+      if (request->content.size() == 0) {
+        return true;
+      }
       bad_request(response, request, "Content type not provided");
       return false;
     }
@@ -334,8 +339,6 @@ namespace confighttp {
       bad_request(response, request, "Content type mismatch");
       return false;
     }
-    return true;
-
     return true;
   }
 
@@ -729,6 +732,8 @@ namespace confighttp {
 
     print_req(request);
 
+    // End the streams too, as a client's cancel does, so clients close at once.
+    rtsp_stream::terminate_sessions();
     proc::proc.terminate();
     nlohmann::json output_tree;
     output_tree["status"] = true;

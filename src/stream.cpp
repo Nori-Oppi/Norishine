@@ -2129,6 +2129,8 @@ namespace stream {
       auto task = []() {
         BOOST_LOG(fatal) << "Hang detected! Session failed to terminate in 10 seconds."sv;
         logging::log_flush();
+        // The process ends here; don't leave its virtual display behind.
+        proc::remove_virtual_displays();
         lifetime::debug_trap();
       };
       auto force_kill = task_pool.pushDelayed(task, 10s).task_id;

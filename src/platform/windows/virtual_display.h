@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <functional>
 #include <vector>
 
@@ -43,6 +44,16 @@ namespace VDISPLAY {
 		const GUID& guid
 	);
 	bool removeVirtualDisplay(const GUID& guid);
+
+	/**
+	 * Displays this host created are listed in a file until removed, so a host that died
+	 * without removing them (a hang on shutdown) can remove them on its next start.
+	 */
+	void setDisplayListFile(const std::filesystem::path& file);
+	/** Remove the displays listed by an earlier run. Call once the driver is open. */
+	void removeLeftoverDisplays();
+	/** Remove every display this run created; for exits that skip the normal cleanup. */
+	void removeAllDisplays();
 
 	std::vector<std::wstring> matchDisplay(std::wstring sMatch);
 }

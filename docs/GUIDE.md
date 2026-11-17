@@ -21,6 +21,9 @@ paired devices, or keep both hosts installed.
 | **Keep both** | Leaves the existing host installed and uses port **48989** for Norishine. |
 | **Uninstall Norishine later** | Keeps a configuration copy for migration back and preserves shared drivers when another host needs them. |
 
+If Apollo, Vibepollo or Sunshine is installed later and uses the default port, Norishine
+moves to port 48989 when it next starts (web UI at `https://localhost:48990`).
+
 Replacement has been tested on one machine. Fresh installation, coexistence and
 migration back still need broader validation. Read the
 [known issues and migration limits](KNOWN-ISSUES.md) before switching hosts.
@@ -59,8 +62,9 @@ opened through another name), change it under the code.
 ## Devices and permissions
 
 The **Devices** page lists paired devices; click one to change it. The first device you
-pair may start apps and send input. Devices paired later may only see apps until you allow
-more.
+pair may start apps and send input. Devices paired later are **Watch only** (they join
+streams others started, without input) until you allow more; starting an app from them
+answers "Permission denied" until then.
 
 **What it can do** sets the usual combinations in one click:
 
