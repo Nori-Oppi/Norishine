@@ -1,6 +1,6 @@
 # Norishine architecture decisions and roadmap
 
-Status key: **done**, **in progress**, **planned**. Updated 2026-11-16. Evidence for the
+Status key: **done**, **in progress**, **planned**. Updated 2026-11-17. Evidence for the
 decisions is in [PHASE1-RESEARCH.md](PHASE1-RESEARCH.md).
 
 ## Decisions
@@ -168,11 +168,11 @@ deliberately broken, but is not verified until CI exists for it.
   `POST /api/v1/restart`, and a Host Settings page in Norilight that shows the status,
   edits the settings with per-key errors and confirmation for dangerous ones, and
   restarts the host; settings with lists or scripts stay read-only there).
-- **M7** Apps, clients, displays and active sessions managed from Norilight. Host side
-  done: `/api/v1` calls for apps (list, add, change, remove, reorder, start, close),
-  paired devices (list, change, unpair, end a stream) and displays (list, reset saved
-  changes), on both ports, checked end to end (`scripts/e2e/manage_check.py`). Norilight
-  pages next.
+- **M7** Apps, clients, displays and active sessions managed from Norilight (**done**):
+  `/api/v1` calls for apps (list, add, change, remove, reorder, start, close), paired
+  devices (list, change, unpair, end a stream) and displays (list, reset saved changes),
+  on both ports, checked end to end (`scripts/e2e/manage_check.py`); Norilight's Manage
+  Host page uses them.
 
 ### Phase 5: diagnostics and optimisation
 - **M8** Host stats and per-session metrics behind the API; repeatable benchmark
