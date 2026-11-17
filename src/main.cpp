@@ -177,6 +177,10 @@ int main(int argc, char *argv[]) {
   // Log publisher metadata
   log_publisher_data();
 
+  if (!config::sunshine.port_moved_for.empty()) {
+    BOOST_LOG(warning) << config::sunshine.port_moved_for << " uses the default port; Norishine uses port "sv << config::sunshine.port << " for this run"sv;
+  }
+
   // Log modified_config_settings
   for (auto &[name, val] : config::modified_config_settings) {
     BOOST_LOG(info) << "config: '"sv << name << "' = "sv << val;
@@ -307,6 +311,7 @@ int main(int argc, char *argv[]) {
     auto task = []() {
       BOOST_LOG(fatal) << "10 seconds passed, yet Sunshine's still running: Forcing shutdown"sv;
       logging::log_flush();
+      proc::remove_virtual_displays();
       lifetime::debug_trap();
     };
 
@@ -324,6 +329,7 @@ int main(int argc, char *argv[]) {
     auto task = []() {
       BOOST_LOG(fatal) << "10 seconds passed, yet Sunshine's still running: Forcing shutdown"sv;
       logging::log_flush();
+      proc::remove_virtual_displays();
       lifetime::debug_trap();
     };
     force_shutdown = task_pool.pushDelayed(task, 10s).task_id;

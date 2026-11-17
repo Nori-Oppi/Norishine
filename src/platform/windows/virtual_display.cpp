@@ -5,6 +5,10 @@
 #include <initguid.h>
 #include <combaseapi.h>
 #include <thread>
+#include <fstream>
+#include <mutex>
+#include <set>
+#include <string>
 
 #include <wrl/client.h>
 #include <dxgi.h>
@@ -21,6 +25,109 @@ namespace VDISPLAY {
 // static const GUID DEFAULT_DISPLAY_GUID = { 0xdff7fd29, 0x5b75, 0x41d1, { 0x97, 0x31, 0xb3, 0x2a, 0x17, 0xa1, 0x71, 0x04 } };
 
 HANDLE SUDOVDA_DRIVER_HANDLE = INVALID_HANDLE_VALUE;
+
+namespace {
+	std::timed_mutex display_list_mutex;
+	std::filesystem::path display_list_file;
+	std::set<std::wstring> created_displays;  // GUIDs as text, {...} form
+
+	std::wstring guidToString(const GUID& guid) {
+		wchar_t text[64] {};
+		StringFromGUID2(guid, text, 64);
+		return text;
+	}
+
+	bool guidFromString(const std::wstring& text, GUID& guid) {
+		return SUCCEEDED(CLSIDFromString(text.c_str(), &guid));
+	}
+
+	// Call with display_list_mutex held.
+	std::set<std::wstring> readDisplayList() {
+		std::set<std::wstring> guids;
+		if (display_list_file.empty()) {
+			return guids;
+		}
+		std::ifstream in(display_list_file);
+		std::string line;
+		while (std::getline(in, line)) {
+			while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) {
+				line.pop_back();
+			}
+			if (!line.empty()) {
+				guids.emplace(line.begin(), line.end());
+			}
+		}
+		return guids;
+	}
+
+	// Call with display_list_mutex held.
+	void writeDisplayList() {
+		if (display_list_file.empty()) {
+			return;
+		}
+		std::error_code ec;
+		if (created_displays.empty()) {
+			std::filesystem::remove(display_list_file, ec);
+			return;
+		}
+		std::filesystem::create_directories(display_list_file.parent_path(), ec);
+		auto temporary = display_list_file;
+		temporary += ".tmp";
+		{
+			std::ofstream out(temporary, std::ios::trunc);
+			for (const auto& guid : created_displays) {
+				out << std::string(guid.begin(), guid.end()) << '\n';
+			}
+			if (!out) {
+				return;
+			}
+		}
+		std::filesystem::rename(temporary, display_list_file, ec);
+	}
+}
+
+void setDisplayListFile(const std::filesystem::path& file) {
+	std::lock_guard lock(display_list_mutex);
+	display_list_file = file;
+}
+
+void removeLeftoverDisplays() {
+	if (SUDOVDA_DRIVER_HANDLE == INVALID_HANDLE_VALUE) {
+		return;
+	}
+	std::lock_guard lock(display_list_mutex);
+	for (const auto& text : readDisplayList()) {
+		GUID guid;
+		if (created_displays.contains(text) || !guidFromString(text, guid)) {
+			continue;
+		}
+		if (RemoveVirtualDisplay(SUDOVDA_DRIVER_HANDLE, guid)) {
+			wprintf(L"[SUDOVDA] Removed virtual display %ls left by an earlier run.\n", text.c_str());
+		}
+	}
+	writeDisplayList();
+}
+
+void removeAllDisplays() {
+	if (SUDOVDA_DRIVER_HANDLE == INVALID_HANDLE_VALUE) {
+		return;
+	}
+	// Runs on a hang: if the list is held up too, leave the displays to the next start.
+	std::unique_lock lock(display_list_mutex, std::defer_lock);
+	if (!lock.try_lock_for(std::chrono::seconds(2))) {
+		return;
+	}
+	for (auto it = created_displays.begin(); it != created_displays.end();) {
+		GUID guid;
+		if (guidFromString(*it, guid) && RemoveVirtualDisplay(SUDOVDA_DRIVER_HANDLE, guid)) {
+			wprintf(L"[SUDOVDA] Removed virtual display %ls before exiting.\n", it->c_str());
+			it = created_displays.erase(it);
+		} else {
+			++it;
+		}
+	}
+	writeDisplayList();
+}
 
 // START ISOLATED DISPLAY DECLARATIONS
 struct positionwidthheight;
@@ -665,6 +772,13 @@ std::wstring createVirtualDisplay(
 		return std::wstring();
 	}
 
+	{
+		// Listed before adding: the display may exist even when adding reports a failure.
+		std::lock_guard lock(display_list_mutex);
+		created_displays.insert(guidToString(guid));
+		writeDisplayList();
+	}
+
 	VIRTUAL_DISPLAY_ADD_OUT output;
 	if (!AddVirtualDisplay(SUDOVDA_DRIVER_HANDLE, width, height, fps, guid, s_client_name, s_client_uid, output)) {
 		printf("[SUDOVDA] Failed to add virtual display.\n");
@@ -695,6 +809,9 @@ bool removeVirtualDisplay(const GUID& guid) {
 
 	if (RemoveVirtualDisplay(SUDOVDA_DRIVER_HANDLE, guid)) {
 		printf("[SUDOVDA] Virtual display removed successfully.\n");
+		std::lock_guard lock(display_list_mutex);
+		created_displays.erase(guidToString(guid));
+		writeDisplayList();
 		return true;
 	} else {
 		return false;

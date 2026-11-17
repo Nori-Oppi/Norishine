@@ -1549,6 +1549,8 @@ namespace nvhttp {
       {"active_sessions", rtsp_stream::session_count()},
       {"sessions", sessions},
       {"encoder", std::string {video::active_encoder_name()}},
+      {"port", net::map_port(PORT_HTTP)},
+      {"port_moved_for", config::sunshine.port_moved_for},
     };
   }
 
@@ -1729,11 +1731,11 @@ namespace nvhttp {
     }
 
     if (!(named_cert_p->perm & perm)) {
-      BOOST_LOG(debug) << "Permission LaunchApp denied for [" << named_cert_p->name << "] (" << (uint32_t)named_cert_p->perm << ")";
+      BOOST_LOG(info) << "Permission LaunchApp denied for [" << named_cert_p->name << "] (" << (uint32_t)named_cert_p->perm << "): change it on the web UI's Devices page";
 
       tree.put("root.resume", 0);
       tree.put("root.<xmlattr>.status_code", 403);
-      tree.put("root.<xmlattr>.status_message", "Permission denied");
+      tree.put("root.<xmlattr>.status_message", "Permission denied. Change this device's permissions on the host's Devices page.");
 
       return;
     }
@@ -1907,11 +1909,11 @@ namespace nvhttp {
 
     auto named_cert_p = get_verified_cert(request);
     if (!(named_cert_p->perm & PERM::_allow_view)) {
-      BOOST_LOG(debug) << "Permission ViewApp denied for [" << named_cert_p->name << "] (" << (uint32_t)named_cert_p->perm << ")";
+      BOOST_LOG(info) << "Permission ViewApp denied for [" << named_cert_p->name << "] (" << (uint32_t)named_cert_p->perm << "): change it on the web UI's Devices page";
 
       tree.put("root.resume", 0);
       tree.put("root.<xmlattr>.status_code", 403);
-      tree.put("root.<xmlattr>.status_message", "Permission denied");
+      tree.put("root.<xmlattr>.status_message", "Permission denied. Change this device's permissions on the host's Devices page.");
 
       return;
     }

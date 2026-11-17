@@ -2,6 +2,7 @@
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppShell from '../ui/AppShell.vue'
 import SealMark from '../ui/SealMark.vue'
+import HelpLink from '../ui/HelpLink.vue'
 import { api } from '../ui/api'
 import { confirmAction, notify } from '../ui/dialogs'
 import ApolloVersion from '../apollo_version'
@@ -148,6 +149,11 @@ const clients = [
           </ul>
           <a href="./troubleshooting#logs">{{ $t('home.view_logs') }}</a>
         </div>
+      </div>
+
+      <div v-if="status && status.port_moved_for" class="notice notice-warning section">
+        <span class="grow">{{ $t('home.port_moved', { port: status.port, other: status.port_moved_for }) }}</span>
+        <HelpLink page="GUIDE.md#coming-from-another-host" :label="$t('help.page')" />
       </div>
 
       <div v-if="update && (update.kind === 'stable' || update.kind === 'pre')" class="notice notice-warning section">

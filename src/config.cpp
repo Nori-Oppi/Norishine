@@ -8,11 +8,13 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <set>
 #include <thread>
 #include <unordered_map>
 #include <utility>
 
 // lib includes
+#include <boost/algorithm/string.hpp>
 #include <boost/asio.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -30,6 +32,7 @@
 #include "utility.h"
 
 #ifdef _WIN32
+  #include <iphlpapi.h>
   #include <shellapi.h>
   #include "platform/windows/utils.h"
 #endif
@@ -601,6 +604,7 @@ namespace config {
     {},  // prep commands
     {},  // state commands
     {},  // server commands
+    {},  // port_moved_for
   };
 
   bool endline(char ch) {
@@ -1460,6 +1464,171 @@ namespace config {
     ::video::active_av1_mode = video.av1_mode;
   }
 
+#ifdef _WIN32
+  namespace {
+    constexpr int default_port = 47989;
+    constexpr int side_by_side_port = 48989;
+
+    /**
+     * @brief Whether a path lies in this Norishine's install folder (the folder of this exe).
+     */
+    bool is_own_install(const fs::path &path) {
+      static const auto own_root = []() {
+        wchar_t own_path[MAX_PATH] {};
+        GetModuleFileNameW(nullptr, own_path, ARRAYSIZE(own_path));
+        std::error_code ec;
+        return fs::weakly_canonical(fs::path(own_path).parent_path(), ec);
+      }();
+      std::error_code ec;
+      auto parent = fs::weakly_canonical(path.parent_path(), ec);
+      return !ec && !own_root.empty() && boost::iequals(parent.wstring(), own_root.wstring());
+    }
+
+    /**
+     * @brief Another program listening on one of the default TCP ports (47984, 47989, 47990,
+     *        48010): its install folder's name ("Apollo") or "another program". This
+     *        Norishine's own processes don't count.
+     */
+    std::optional<std::string> default_port_owner() {
+      std::set<DWORD> owners;
+      auto scan = [&owners](ULONG family) {
+        DWORD size = 0;
+        GetExtendedTcpTable(nullptr, &size, FALSE, family, TCP_TABLE_OWNER_PID_LISTENER, 0);
+        std::vector<std::uint8_t> buffer(size);
+        if (!size || GetExtendedTcpTable(buffer.data(), &size, FALSE, family, TCP_TABLE_OWNER_PID_LISTENER, 0) != NO_ERROR) {
+          return;
+        }
+        auto matches = [](DWORD network_port) {
+          auto port = ntohs((u_short) network_port);
+          return port == default_port - 5 || port == default_port || port == default_port + 1 || port == default_port + 21;
+        };
+        if (family == AF_INET) {
+          auto table = (PMIB_TCPTABLE_OWNER_PID) buffer.data();
+          for (DWORD i = 0; i < table->dwNumEntries; ++i) {
+            if (matches(table->table[i].dwLocalPort)) {
+              owners.insert(table->table[i].dwOwningPid);
+            }
+          }
+        } else {
+          auto table = (PMIB_TCP6TABLE_OWNER_PID) buffer.data();
+          for (DWORD i = 0; i < table->dwNumEntries; ++i) {
+            if (matches(table->table[i].dwLocalPort)) {
+              owners.insert(table->table[i].dwOwningPid);
+            }
+          }
+        }
+      };
+      scan(AF_INET);
+      scan(AF_INET6);
+
+      for (auto pid : owners) {
+        if (pid == GetCurrentProcessId()) {
+          continue;
+        }
+        fs::path image;
+        if (HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)) {
+          wchar_t path[MAX_PATH] {};
+          DWORD length = ARRAYSIZE(path);
+          if (QueryFullProcessImageNameW(process, 0, path, &length)) {
+            image = path;
+          }
+          CloseHandle(process);
+        }
+        if (image.empty()) {
+          return "another program"s;
+        }
+        if (!is_own_install(image)) {
+          return image.parent_path().filename().string();
+        }
+      }
+      return std::nullopt;
+    }
+
+    /**
+     * @brief A running Apollo, Vibepollo or Sunshine service that uses the default port
+     *        (read from `<install folder>\config\sunshine.conf`), for a start where it hasn't
+     *        opened its ports yet.
+     */
+    std::optional<std::string> running_host_service() {
+      SC_HANDLE manager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT);
+      if (!manager) {
+        return std::nullopt;
+      }
+      std::optional<std::string> found;
+      for (std::string_view name : {"ApolloService"sv, "SunshineService"sv, "SunshineSvc"sv}) {
+        SC_HANDLE service = OpenServiceW(manager, std::wstring(name.begin(), name.end()).c_str(), SERVICE_QUERY_STATUS | SERVICE_QUERY_CONFIG);
+        if (!service) {
+          continue;
+        }
+        SERVICE_STATUS status {};
+        bool running = QueryServiceStatus(service, &status) && (status.dwCurrentState == SERVICE_RUNNING || status.dwCurrentState == SERVICE_START_PENDING);
+        std::wstring binary;
+        DWORD size = 0;
+        QueryServiceConfigW(service, nullptr, 0, &size);
+        std::vector<std::uint8_t> buffer(size);
+        if (running && size && QueryServiceConfigW(service, (LPQUERY_SERVICE_CONFIGW) buffer.data(), size, &size)) {
+          binary = ((LPQUERY_SERVICE_CONFIGW) buffer.data())->lpBinaryPathName;
+        }
+        CloseServiceHandle(service);
+        if (binary.empty()) {
+          continue;
+        }
+
+        if (binary.front() == L'"') {
+          binary = binary.substr(1, binary.find(L'"', 1) - 1);
+        }
+        // <install folder>\tools\sunshinesvc.exe
+        auto root = fs::path(binary).parent_path().parent_path();
+        if (is_own_install(root / "sunshine.exe")) {
+          continue;
+        }
+        int port = default_port;
+        std::error_code ec;
+        auto conf = root / "config" / "sunshine.conf";
+        if (fs::exists(conf, ec)) {
+          auto other_vars = parse_config(file_handler::read_file(conf.string().c_str()));
+          if (auto it = other_vars.find("port"); it != other_vars.end()) {
+            port = util::from_view(it->second);
+          }
+        }
+        if (port == default_port) {
+          found = std::string(name);
+          break;
+        }
+      }
+      CloseServiceHandle(manager);
+      return found;
+    }
+
+    /**
+     * @brief Use the side-by-side port for this run when another host has the default
+     *        ports (for example Apollo installed again after Norishine replaced it).
+     *
+     * Only when no port is configured, and not saved: once the other host is gone,
+     * Norishine is back on the default port at its next start. The web UI shows it
+     * (`port_moved_for` in /api/v1/status).
+     */
+    void avoid_other_host_port(std::unordered_map<std::string, std::string> &vars) {
+      if (vars.contains("port")) {
+        return;
+      }
+      auto other = default_port_owner();
+      if (!other || *other == "another program") {
+        // Without administrator rights the owner of a service's port can't be named.
+        if (auto service = running_host_service()) {
+          other = service;
+        }
+      }
+      if (!other) {
+        return;
+      }
+      vars["port"] = std::to_string(side_by_side_port);
+      sunshine.port_moved_for = *other;
+      BOOST_LOG(warning) << *other << " uses the default port; Norishine uses port "sv << side_by_side_port << " until it is gone (web UI https://localhost:"sv << side_by_side_port + 1 << ')';
+    }
+  }  // namespace
+#endif
+
   int parse(int argc, char *argv[]) {
     std::unordered_map<std::string, std::string> cmd_vars;
 #ifdef _WIN32
@@ -1537,6 +1706,10 @@ namespace config {
       for (auto &[name, value] : cmd_vars) {
         vars.insert_or_assign(std::move(name), std::move(value));
       }
+
+#ifdef _WIN32
+      avoid_other_host_port(vars);
+#endif
 
       // Apply the config. Note: This will try to create any paths
       // referenced in the config, so we may receive exceptions if

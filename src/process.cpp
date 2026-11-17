@@ -9,6 +9,9 @@
 #endif
 // standard includes
 #include <filesystem>
+#include <future>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -32,6 +35,7 @@
 #include "logging.h"
 #include "platform/common.h"
 #include "process.h"
+#include "state_store.h"
 #include "httpcommon.h"
 #include "system_tray.h"
 #include "utility.h"
@@ -75,9 +79,37 @@ namespace proc {
         onVDisplayWatchdogFailed();
         return;
       }
+
+      // A host that died without removing its displays (a hang on shutdown) left them
+      // in this list. Remove them once, before this run creates any.
+      static std::once_flag leftovers_once;
+      std::call_once(leftovers_once, []() {
+        VDISPLAY::setDisplayListFile(state_store::paths().dir / "virtual_displays.txt");
+        VDISPLAY::removeLeftoverDisplays();
+      });
     }
   }
 #endif
+
+  void remove_virtual_displays() {
+#ifdef _WIN32
+    if (vDisplayDriverStatus != VDISPLAY::DRIVER_STATUS::OK) {
+      return;
+    }
+    // On its own thread: when the hang is in the driver or display code, removing can
+    // block too, and the forced exit after this must happen anyway. Displays left behind
+    // are removed at the next start.
+    auto done = std::make_shared<std::promise<void>>();
+    auto finished = done->get_future();
+    std::thread([done]() {
+      VDISPLAY::removeAllDisplays();
+      done->set_value();
+    }).detach();
+    if (finished.wait_for(3s) != std::future_status::ready) {
+      BOOST_LOG(warning) << "Removing the virtual displays didn't finish; they're removed at the next start"sv;
+    }
+#endif
+  }
 
   class deinit_t: public platf::deinit_t {
   public:

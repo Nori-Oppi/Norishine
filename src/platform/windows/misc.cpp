@@ -1646,6 +1646,13 @@ namespace platf {
       return nullptr;
     }
 
+    // qWAVE can't make a flow to a loopback address (ERROR_NOT_FOUND, 1168), and there is
+    // no network to prioritize on anyway.
+    if (address.is_loopback() || (address.is_v6() && address.to_v6().is_v4_mapped() && boost::asio::ip::make_address_v4(boost::asio::ip::v4_mapped, address.to_v6()).is_loopback())) {
+      BOOST_LOG(debug) << "Skipping QoS for loopback address "sv << address.to_string();
+      return nullptr;
+    }
+
     static std::once_flag load_qwave_once_flag;
     std::call_once(load_qwave_once_flag, []() {
       // qWAVE is not installed by default on Windows Server, so we load it dynamically
