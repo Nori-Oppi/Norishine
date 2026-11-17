@@ -46,6 +46,20 @@ export const EXTRAS = [
   { bit: P.server_cmd, label: 'devices.server_cmd', help: 'devices.server_cmd_help' },
 ]
 
+// One-click choices for the common cases. Each sets streaming access, input and clipboard,
+// and leaves server commands and host management as they are; the detailed controls stay below.
+const PRESET_MASK = P.access | P.inputs | P.clipboard_set | P.clipboard_read
+export const PRESETS = [
+  { id: 'watch', bits: P.list | P.view, label: 'devices.preset_watch', help: 'devices.preset_watch_help' },
+  { id: 'play', bits: P.list | P.view | P.launch | P.input_controller | P.input_touch, label: 'devices.preset_play', help: 'devices.preset_play_help' },
+  { id: 'full', bits: P.list | P.view | P.launch | P.inputs | P.clipboard_set | P.clipboard_read, label: 'devices.preset_full', help: 'devices.preset_full_help' },
+].map((p) => ({ ...p, apply: (perm) => setLevel(perm, PRESET_MASK, p.bits) }))
+
+/** The preset these permissions match exactly, or '' for a custom mix. */
+export function presetOf(perm) {
+  return PRESETS.find((p) => ((perm & PRESET_MASK) >>> 0) === p.bits)?.id || ''
+}
+
 export function accessLevel(perm) {
   if (perm & P.launch) return 'launch'
   if (perm & P.view) return 'view'
@@ -82,7 +96,7 @@ export function summary(perm) {
     out.push({ key: 'devices.server_cmd', careful: true })
   }
   if (manageLevel(perm) !== 'none') {
-    out.push({ key: 'devices.manage_' + manageLevel(perm), careful: true })
+    out.push({ key: 'devices.sum_manage_' + manageLevel(perm), careful: true })
   }
   return out
 }

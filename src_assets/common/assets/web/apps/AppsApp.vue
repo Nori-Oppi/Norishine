@@ -5,6 +5,7 @@ import { api } from '../ui/api'
 import { confirmAction, notify } from '../ui/dialogs'
 import { clone } from '../settings/model'
 import AppEditor from './AppEditor.vue'
+import RowMenu from '../ui/RowMenu.vue'
 
 const i18n = inject('i18n')
 const t = (...args) => i18n.t(...args)
@@ -30,6 +31,33 @@ const reordered = ref(false)
 const busy = ref(false)
 const dragIndex = ref(-1)
 const dropIndex = ref(-1)
+// Apps whose cover image failed to load (none set, or missing): they get a lettered tile.
+const noCover = ref({})
+const coverVersion = ref(Date.now())
+
+function coverUrl(app) {
+  return `./api/v1/apps/${encodeURIComponent(app.uuid)}/image?v=${coverVersion.value}`
+}
+// A stable colour per app for the lettered tile.
+function tileStyle(app) {
+  let h = 0
+  for (const ch of app.name) {
+    h = (h * 31 + ch.codePointAt(0)) % 360
+  }
+  return { background: `linear-gradient(160deg, hsl(${h} 35% 38%), hsl(${(h + 40) % 360} 30% 20%))` }
+}
+function initial(app) {
+  return ([...app.name.trim()][0] || '?').toUpperCase()
+}
+function rowMenu(app, i) {
+  return [
+    { label: t('settings.move_up'), icon: 'fa-arrow-up', disabled: i === 0, action: () => move(i, -1) },
+    { label: t('settings.move_down'), icon: 'fa-arrow-down', disabled: i === apps.value.length - 1, action: () => move(i, 1) },
+    { label: t('apps2.export'), icon: 'fa-file-export', action: () => exportLauncher(app) },
+    { separator: true },
+    { label: t('apps.delete'), icon: 'fa-trash-can', danger: true, action: () => remove(app) },
+  ]
+}
 
 async function load() {
   try {
@@ -39,6 +67,8 @@ async function load() {
     host.value = { name: r.host_name, uuid: r.host_uuid }
     reordered.value = false
     loadError.value = ''
+    noCover.value = {}
+    coverVersion.value = Date.now()
   } catch (e) {
     if (e.status !== 401) {
       loadError.value = e.message
@@ -54,6 +84,13 @@ onMounted(async () => {
     platform.value = (await api('./api/v1/status')).platform
   } catch { /* fields for other platforms stay visible */ }
 })
+
+// A click anywhere on a row (not on its buttons or the handle) opens the editor.
+function rowClick(e, app) {
+  if (!e.target.closest('button, a, input, .grip, [role="menu"]')) {
+    edit(app)
+  }
+}
 
 function startNew() {
   editing.value = clone(NEW_APP)
@@ -239,24 +276,28 @@ async function saveOrder() {
           <div v-else-if="!apps.length" class="empty-note">{{ $t('apps2.none') }}</div>
           <div v-for="(app, i) in apps" :key="app.uuid" class="list-row app-row" :class="{ dropping: dropIndex === i }"
                draggable="true" @dragstart="onDragStart($event, i)" @dragover="onDragOver($event, i)"
-               @dragleave="dropIndex = -1" @drop="onDrop($event, i)" @dragend="dragIndex = dropIndex = -1">
-            <i class="fas fa-grip-vertical grip" aria-hidden="true"></i>
-            <span class="status-dot" :class="{ on: app.uuid === current }"></span>
+               @dragleave="dropIndex = -1" @drop="onDrop($event, i)" @dragend="dragIndex = dropIndex = -1" @click="rowClick($event, app)">
+            <i class="fas fa-grip-vertical grip" aria-hidden="true" :title="$t('apps2.drag')"></i>
+            <span class="cover" :style="noCover[app.uuid] ? tileStyle(app) : null" aria-hidden="true">
+              <img v-if="!noCover[app.uuid]" :src="coverUrl(app)" alt="" loading="lazy" @error="noCover[app.uuid] = true">
+              <span v-else>{{ initial(app) }}</span>
+            </span>
             <div class="grow">
-              <div class="row-title">{{ app.name }} <span v-if="app.uuid === current" class="badge badge-accent">{{ $t('apps2.running') }}</span></div>
-              <div class="row-sub mono">{{ app.cmd || (app.detached && app.detached[0]) || $t('apps2.no_cmd') }}</div>
+              <div class="row-title">{{ app.name }}</div>
+              <div class="row-sub">
+                <span v-if="app.uuid === current" class="badge badge-ok">{{ $t('apps2.running') }}</span>
+                <span class="mono cmd" :title="app.cmd || ''">{{ app.cmd || (app.detached && app.detached[0]) || $t('apps2.no_cmd') }}</span>
+              </div>
             </div>
             <div class="row-buttons">
-              <button type="button" class="btn btn-icon" :disabled="i === 0" :title="$t('settings.move_up')" @click="move(i, -1)"><i class="fas fa-arrow-up" aria-hidden="true"></i><span class="visually-hidden">{{ $t('settings.move_up') }}</span></button>
-              <button type="button" class="btn btn-icon" :disabled="i === apps.length - 1" :title="$t('settings.move_down')" @click="move(i, 1)"><i class="fas fa-arrow-down" aria-hidden="true"></i><span class="visually-hidden">{{ $t('settings.move_down') }}</span></button>
-              <button v-if="app.uuid === current" type="button" class="btn btn-small btn-danger" :disabled="busy" @click="closeRunning">
+              <button v-if="app.uuid === current" type="button" class="btn btn-small btn-quiet danger" :disabled="busy" @click="closeRunning">
                 <i class="fas fa-stop" aria-hidden="true"></i> {{ $t('home.close') }}
               </button>
-              <button v-else type="button" class="btn btn-small" :disabled="busy" @click="launch(app)">
+              <button v-else type="button" class="btn btn-small btn-quiet" :disabled="busy" @click="launch(app)">
                 <i class="fas fa-play" aria-hidden="true"></i> {{ $t('apps.launch') }}
               </button>
-              <button type="button" class="btn btn-small" @click="edit(app)"><i class="fas fa-pen" aria-hidden="true"></i> {{ $t('devices.edit') }}</button>
-              <button type="button" class="btn btn-icon" :title="$t('apps.delete')" @click="remove(app)"><i class="fas fa-trash-can" aria-hidden="true"></i><span class="visually-hidden">{{ $t('apps.delete') }}</span></button>
+              <button type="button" class="btn btn-small btn-quiet" @click="edit(app)"><i class="fas fa-pen" aria-hidden="true"></i> {{ $t('devices.edit') }}</button>
+              <RowMenu :items="rowMenu(app, i)" :label="$t('apps2.more', { name: app.name })" />
             </div>
           </div>
         </div>
@@ -268,13 +309,24 @@ async function saveOrder() {
 
 <style scoped>
 .list-tools { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0 10px; border-bottom: 1px solid var(--row-divider); flex-wrap: wrap; }
-.app-row { cursor: default; }
+.app-row { cursor: pointer; min-height: 76px; gap: 14px; }
+.app-row:hover .row-title { color: var(--accent); }
+.cover {
+  width: 40px; height: 60px; flex: none; border-radius: 6px; overflow: hidden; background: var(--nav-selected);
+  display: flex; align-items: flex-end; padding: 0; color: #fff; font-weight: 700; font-size: 18px;
+}
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover > span { padding: 0 0 4px 6px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4); }
+.row-sub { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.cmd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.danger { color: var(--error); }
+.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--error) 10%, transparent); }
 .app-row.dropping { box-shadow: inset 0 2px 0 var(--accent); }
 .grip { color: var(--text-disabled); cursor: grab; }
 .row-buttons { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .note { margin-top: 12px; }
 @media (max-width: 700px) {
   .app-row { flex-wrap: wrap; }
-  .row-buttons { width: 100%; justify-content: flex-start; }
+  .row-buttons { width: 100%; justify-content: flex-end; }
 }
 </style>

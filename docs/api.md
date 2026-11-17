@@ -73,12 +73,19 @@ Optional fields, added later (clients must not require them):
   `{"0": "No limit"}` for `max_bitrate` or `{"-1": "Off"}` for `back_button_timeout`.
 - `unit`: `kbps`, `ms`, `percent`, `fps` or `per_second`, for display (a UI may show `kbps`
   as Mbps; the stored value stays in kbps).
+- `section`: the `id` of a sub-heading in `sections` (same category) the setting belongs under.
 
 `categories` lists `id` and `title` in display order; related categories also have `group`
 and `group_title` (the encoder categories, under "Encoder tuning"). Optional: `description`
 (one line) and `expert: true` for categories few people need (encoder tuning, fixes, files),
 which a UI may tuck away. Category ids and the order of settings can change between
 versions, so render them from the schema rather than by name.
+
+Optional, added later: `sections` lists sub-headings inside a category, in display order,
+each with `id`, `category` and `title`. A section with `depends_on` (as for settings) only
+matters while that setting has one of the values; it then also has a `note` saying why,
+which a UI can show while dimming the section (for example "When streaming a monitor" while
+streaming to a virtual display). Settings without a `section` come before the sections.
 
 ## GET /api/v1/config
 @copydoc confighttp::getConfigV1()
@@ -117,7 +124,9 @@ against a dev host.
 Host name, version, platform, unique ID, running app (`id`, `uuid`, `name`, or null) and
 `active_sessions`, plus `sessions`: one entry per stream with the device's `uuid` and
 `name`, its `address`, `width`, `height`, `fps`, `bitrate_kbps`, `codec` (`H.264`, `HEVC`,
-`AV1`), `hdr` and `state`. The same object (plus `device`) is what paired clients get from
+`AV1`), `hdr` and `state`. Optional, added later: `encoder`, the encoder the host chose
+(`nvenc`, `quicksync`, `amdvce`, `vaapi`, `videotoolbox`, `software`, or empty before the
+first check). The same object (plus `device`) is what paired clients get from
 `GET /api/v1/status` on the HTTPS port.
 
 ## Apps, devices, streams and displays (/api/v1)
@@ -146,6 +155,10 @@ is 404. Checks: `tests/unit/test_manage_api.cpp`, `scripts/e2e/manage_check.py`.
 Adding, changing, reordering or removing apps reloads the app list, which closes a
 running app, as saving in the web UI does; the answer says so in `closed_running_app`.
 Active streams are in `GET /api/v1/status` (`sessions`).
+
+The web UI port also has `GET /api/v1/apps/{uuid}/image`: the app's picture as PNG, or 404
+when it has none of its own (the web UI then draws a lettered tile). Paired clients get
+pictures from `/appasset` as before.
 
 ## POST /api/covers/upload
 @copydoc confighttp::uploadCover()

@@ -15,9 +15,63 @@ const pending = ref([])
 const pendingError = ref(false)
 const selected = ref('')
 const pin = ref('')
+// The PIN as four boxes; `pin` stays the single value that is sent.
+const digits = ref(['', '', '', ''])
+const digitBoxes = ref([])
+const pairButton = ref(null)
+watch(digits, (d) => { pin.value = d.join('') }, { deep: true })
+
+function onDigit(i, e) {
+  const value = e.target.value.replace(/\D/g, '')
+  if (value.length > 1) {
+    // Typed over a filled box, or pasted: spread the digits from here on.
+    fillFrom(i, value)
+    return
+  }
+  digits.value[i] = value
+  if (value && i < 3) {
+    digitBoxes.value[i + 1]?.focus()
+  } else if (value && i === 3) {
+    focusPair()
+  }
+}
+// The Pair button only enables once the fourth digit is in, so focus it after that update.
+async function focusPair() {
+  await nextTick()
+  pairButton.value?.focus()
+}
+function fillFrom(i, value) {
+  for (const ch of value.slice(0, 4 - i)) {
+    digits.value[i++] = ch
+  }
+  if (i > 3) {
+    focusPair()
+  } else {
+    digitBoxes.value[i]?.focus()
+  }
+}
+function onDigitKey(i, e) {
+  if (e.key === 'Backspace' && !digits.value[i] && i > 0) {
+    e.preventDefault()
+    digits.value[i - 1] = ''
+    digitBoxes.value[i - 1]?.focus()
+  } else if (e.key === 'ArrowLeft' && i > 0) {
+    digitBoxes.value[i - 1]?.focus()
+  } else if (e.key === 'ArrowRight' && i < 3) {
+    digitBoxes.value[i + 1]?.focus()
+  }
+}
+function onDigitPaste(i, e) {
+  const value = (e.clipboardData?.getData('text') || '').replace(/\D/g, '')
+  if (value) {
+    e.preventDefault()
+    fillFrom(i, value)
+  }
+}
+const pinComplete = computed(() => /^\d{4}$/.test(pin.value))
 const pinName = ref('')
 const pinBusy = ref(false)
-const pinResult = ref(null)  // {ok, text}
+const pinResult = ref(null)  // {ok, text, name}
 let pollTimer = null
 
 async function loadPending() {
@@ -45,11 +99,13 @@ async function sendPin() {
     return
   }
   pinBusy.value = true
+  const request = pending.value.find((p) => p.id === selected.value)
+  const name = pinName.value.trim() || request?.name || ''
   try {
     const r = await api('./api/pin', { method: 'POST', body: { pairing_id: selected.value, pin: pin.value, name: pinName.value } })
     if (r.status === true) {
-      pinResult.value = { ok: true, text: t('pairing.paired') }
-      pin.value = ''
+      pinResult.value = { ok: true, text: t('pairing.paired'), name }
+      digits.value = ['', '', '', '']
       pinName.value = ''
     } else {
       pinResult.value = { ok: false, text: t('pairing.pin_wrong') }
@@ -62,12 +118,34 @@ async function sendPin() {
   }
 }
 
-async function cancelPending() {
-  if (!selected.value) {
+// The Devices page opens the editor for "#<uuid>". The client finishes pairing a moment after
+// the PIN is accepted, so look the new device up (by name) when asked, waiting briefly for it.
+const opening = ref(false)
+async function openNewDevice() {
+  opening.value = true
+  let href = './clients'
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const r = await api('./api/v1/devices')
+      const matches = (r.devices || []).filter((d) => d.name === pinResult.value?.name)
+      if (matches.length === 1) {
+        href = './clients#' + encodeURIComponent(matches[0].uuid)
+        break
+      }
+    } catch {
+      break
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  location.href = href
+}
+
+async function cancelPending(id) {
+  if (!id) {
     return
   }
   try {
-    const r = await api('./api/pin', { method: 'DELETE', body: { pairing_id: selected.value } })
+    const r = await api('./api/pin', { method: 'DELETE', body: { pairing_id: id } })
     notify(r.status ? t('pairing.cancelled') : t('pairing.cancel_failed'), r.status ? 'ok' : 'error')
   } catch {
     notify(t('pairing.cancel_failed'), 'error')
@@ -160,7 +238,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="segmented" role="tablist">
+      <div class="tabs" role="tablist">
         <button type="button" role="tab" :aria-selected="method === 'pin'" :class="{ active: method === 'pin' }" @click="method = 'pin'">
           {{ $t('pairing.pin_tab') }}
         </button>
@@ -169,44 +247,61 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <form v-if="method === 'pin'" class="card-pad form-grid" @submit.prevent="sendPin">
-        <p class="muted step">{{ $t('pairing.pin_steps') }}</p>
-        <div class="form-field">
-          <label for="pairing-device">{{ $t('pairing.device') }}</label>
-          <div class="device-row">
-            <select id="pairing-device" v-model="selected" class="field" :disabled="!pending.length">
-              <option v-if="!pending.length" value="">{{ pendingError ? $t('pairing.load_failed') : $t('pairing.waiting') }}</option>
-              <option v-else-if="pending.length > 1" value="" disabled>{{ $t('pairing.choose_device') }}</option>
-              <option v-for="p in pending" :key="p.id" :value="p.id">
-                {{ p.name || $t('pairing.unknown_device') }} ({{ p.address || $t('pairing.unknown_address') }})
-              </option>
-            </select>
-            <button type="button" class="btn btn-icon" :disabled="!selected" :title="$t('pairing.cancel_request')" @click="cancelPending">
-              <i class="fas fa-xmark" aria-hidden="true"></i><span class="visually-hidden">{{ $t('pairing.cancel_request') }}</span>
+      <template v-if="method === 'pin'">
+        <div v-if="pinResult && pinResult.ok" class="notice notice-ok section" role="status">
+          <span class="grow">{{ pinResult.text }}</span>
+          <a class="btn btn-small btn-primary" href="./clients" :aria-busy="opening ? 'true' : null" @click.prevent="openNewDevice">
+            <i v-if="opening" class="fas fa-spinner fa-spin" aria-hidden="true"></i> {{ $t('pairing.set_permissions') }}
+          </a>
+        </div>
+
+        <!-- Nothing asking yet: say what to do on the device, and that this page is listening. -->
+        <div v-if="!pending.length" class="card-pad listen" role="status">
+          <span class="ring" :class="{ error: pendingError }" aria-hidden="true"><i class="fas" :class="pendingError ? 'fa-triangle-exclamation' : 'fa-link'"></i></span>
+          <div>
+            <h2>{{ pendingError ? $t('pairing.load_failed') : $t('pairing.waiting_title') }}</h2>
+            <p class="muted">{{ $t('pairing.pin_steps') }}</p>
+            <p class="small muted">{{ $t('pairing.waiting_help') }}</p>
+          </div>
+        </div>
+
+        <form v-else class="card-pad form-grid" @submit.prevent="sendPin">
+          <fieldset class="requests">
+            <legend class="form-label">{{ pending.length > 1 ? $t('pairing.choose_device') : $t('pairing.device') }}</legend>
+            <label v-for="p in pending" :key="p.id" class="request" :class="{ active: selected === p.id }">
+              <input v-model="selected" type="radio" name="pairing-request" :value="p.id">
+              <span class="avatar" aria-hidden="true"><i class="fas fa-display"></i></span>
+              <span class="grow">
+                <span class="row-title">{{ p.name || $t('pairing.unknown_device') }}</span>
+                <span class="row-sub mono">{{ p.address || $t('pairing.unknown_address') }}</span>
+              </span>
+              <button type="button" class="btn btn-icon" :title="$t('pairing.cancel_request')" @click.prevent="cancelPending(p.id)">
+                <i class="fas fa-xmark" aria-hidden="true"></i><span class="visually-hidden">{{ $t('pairing.cancel_request') }}</span>
+              </button>
+            </label>
+          </fieldset>
+          <div class="pin-row">
+            <fieldset class="pin-field">
+              <legend class="form-label">{{ $t('pairing.pin_label') }}</legend>
+              <div class="pins">
+                <input v-for="(d, i) in digits" :key="i" :ref="(el) => { digitBoxes[i] = el }" :value="d" class="field pin-box"
+                       inputmode="numeric" autocomplete="one-time-code" maxlength="2" :aria-label="$t('pairing.digit', { n: i + 1 })"
+                       @input="onDigit(i, $event)" @keydown="onDigitKey(i, $event)" @paste="onDigitPaste(i, $event)" @focus="$event.target.select()">
+              </div>
+            </fieldset>
+            <div class="form-field name-field">
+              <label for="pin-name">{{ $t('pairing.name') }}</label>
+              <input id="pin-name" v-model="pinName" class="field" maxlength="128" :placeholder="$t('pairing.name_placeholder')">
+            </div>
+            <button ref="pairButton" type="submit" class="btn btn-primary" :disabled="!selected || !pinComplete || pinBusy">
+              <i v-if="pinBusy" class="fas fa-spinner fa-spin" aria-hidden="true"></i> {{ $t('pairing.pair') }}
             </button>
           </div>
-          <p v-if="!pending.length && !pendingError" class="form-help"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> {{ $t('pairing.waiting_help') }}</p>
-        </div>
-        <div class="two">
-          <div class="form-field">
-            <label for="pin">{{ $t('pairing.pin') }}</label>
-            <input id="pin" v-model="pin" class="field pin-input" inputmode="numeric" pattern="\d{4}" maxlength="4" required autocomplete="off">
+          <div v-if="pinResult && !pinResult.ok" class="notice notice-error" role="status">
+            <span class="grow">{{ pinResult.text }}</span>
           </div>
-          <div class="form-field">
-            <label for="pin-name">{{ $t('pairing.name') }}</label>
-            <input id="pin-name" v-model="pinName" class="field" maxlength="128" :placeholder="$t('pairing.name_placeholder')">
-          </div>
-        </div>
-        <div>
-          <button type="submit" class="btn btn-primary" :disabled="!selected || pinBusy">
-            <i v-if="pinBusy" class="fas fa-spinner fa-spin" aria-hidden="true"></i> {{ $t('pairing.pair') }}
-          </button>
-        </div>
-        <div v-if="pinResult" class="notice" :class="pinResult.ok ? 'notice-ok' : 'notice-error'" role="status">
-          <span class="grow">{{ pinResult.text }}</span>
-          <a v-if="pinResult.ok" class="btn btn-small" href="./clients">{{ $t('pairing.set_permissions') }}</a>
-        </div>
-      </form>
+        </form>
+      </template>
 
       <form v-else class="card-pad form-grid" @submit.prevent="requestOtp">
         <p class="muted step">{{ $t('pairing.otp_steps') }}</p>
@@ -248,16 +343,54 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .page-main.narrow { max-width: 720px; }
-.segmented { display: inline-flex; background: var(--card); border-radius: 8px; padding: 3px; margin-bottom: 14px; }
-.segmented button {
-  border: 0; background: none; color: var(--text-secondary); font: inherit; font-weight: 500;
-  padding: 7px 16px; border-radius: 6px; cursor: pointer;
+/* Norilight-style tabs: an underline marks the current one. */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--divider); margin-bottom: 18px; }
+.tabs button {
+  position: relative; border: 0; background: none; color: var(--text-secondary); font: inherit;
+  padding: 9px 14px; cursor: pointer; border-radius: 6px 6px 0 0;
 }
-.segmented button.active { background: var(--accent-strong); color: var(--on-accent); }
+.tabs button:hover { color: var(--text-primary); background: var(--nav-hover); }
+.tabs button.active { color: var(--text-heading); font-weight: 600; }
+.tabs button.active::after {
+  content: ""; position: absolute; left: 14px; right: 14px; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent);
+}
+.listen { display: flex; gap: 22px; align-items: center; padding: 24px 20px; }
+.listen h2 { margin-bottom: 4px; }
+.listen p { margin: 4px 0 0; }
+.ring {
+  width: 64px; height: 64px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  color: var(--accent); font-size: 24px; background: color-mix(in srgb, var(--accent) 12%, transparent);
+  animation: pulse 2.2s ease-out infinite;
+}
+.ring.error { color: var(--warning); background: var(--warning-bg); animation: none; }
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 30%, transparent); }
+  80%, 100% { box-shadow: 0 0 0 18px transparent; }
+}
+.requests, .pin-field { border: 0; margin: 0; padding: 0; min-width: 0; }
+.requests legend, .pin-field legend { padding: 0; margin-bottom: 6px; }
+.requests { display: flex; flex-direction: column; gap: 8px; }
+.request {
+  display: flex; align-items: center; gap: 14px; padding: 10px 10px 10px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--card);
+}
+.request input { position: absolute; opacity: 0; pointer-events: none; }
+.request.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--card)); }
+.request:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.request .grow { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%; flex: none; background: var(--nav-selected); color: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.pin-row { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; }
+.pins { display: flex; gap: 8px; }
+.pin-box {
+  width: 48px; height: 56px; padding: 0; text-align: center; font-family: var(--mono); font-size: 24px; color: var(--text-heading);
+}
+.name-field { flex: 1 1 200px; }
+@media (prefers-reduced-motion: reduce) { .ring { animation: none; } }
 .step { margin: 0; }
 .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.device-row { display: flex; gap: 8px; }
-.pin-input { font-size: 22px; letter-spacing: 0.3em; font-family: var(--mono); max-width: 160px; }
 .otp-result { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
 .qr { background: #fff; padding: 10px; border-radius: 8px; line-height: 0; }
 .otp-text { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }

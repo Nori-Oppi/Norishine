@@ -1548,6 +1548,7 @@ namespace nvhttp {
       {"running_app", app},
       {"active_sessions", rtsp_stream::session_count()},
       {"sessions", sessions},
+      {"encoder", std::string {video::active_encoder_name()}},
     };
   }
 

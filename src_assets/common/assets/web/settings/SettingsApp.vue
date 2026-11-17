@@ -30,13 +30,21 @@ const query = ref('')
 const category = ref('general')
 const highlightKey = ref('')
 const searchInput = ref(null)
+const searchInputNarrow = ref(null)
+// The encoder the host picked ("nvenc", ...), so the sidebar shows only its tuning page.
+const activeEncoder = ref('')
+const ENCODER_CATEGORY = { nvenc: 'nv', quicksync: 'qsv', amdvce: 'amd', vaapi: 'vaapi', videotoolbox: 'vt', software: 'sw' }
+const showOtherEncoders = ref(false)
 
 const RESTART_KEY = 'norishine.restartNeeded'
 const ADVANCED_KEY = 'norishine.showAdvanced'
+const EXPERT_KEY = 'norishine.showExpert'
 const readFlag = (store, key) => { try { return store.getItem(key) === '1' } catch { return false } }
 const writeFlag = (store, key, on) => { try { on ? store.setItem(key, '1') : store.removeItem(key) } catch { /* ignore */ } }
 
 const showAdvanced = ref(readFlag(localStorage, ADVANCED_KEY))
+const expertOpen = ref(readFlag(localStorage, EXPERT_KEY))
+watch(expertOpen, (on) => writeFlag(localStorage, EXPERT_KEY, on))
 const restartNeeded = ref(readFlag(sessionStorage, RESTART_KEY))
 watch(showAdvanced, (on) => writeFlag(localStorage, ADVANCED_KEY, on))
 watch(restartNeeded, (on) => writeFlag(sessionStorage, RESTART_KEY, on))
@@ -44,11 +52,18 @@ watch(restartNeeded, (on) => writeFlag(sessionStorage, RESTART_KEY, on))
 const settings = computed(() => schema.value ? schema.value.settings.filter((s) => s.available) : [])
 const byKey = computed(() => Object.fromEntries((schema.value?.settings || []).map((s) => [s.key, s])))
 const categoryTitle = computed(() => Object.fromEntries((schema.value?.categories || []).map((c) => [c.id, c.title])))
-const visibleTier = (s) => showAdvanced.value || s.tier === 'basic'
+const expertIds = computed(() => new Set((schema.value?.categories || []).filter((c) => c.expert).map((c) => c.id)))
+// Expert categories are tucked into their own sidebar group, so they show all their settings.
+const visibleTier = (s) => showAdvanced.value || s.tier === 'basic' || expertIds.value.has(s.category)
 
 const categories = computed(() => {
   const list = (schema.value?.categories || [])
-    .map((c) => ({ ...c, settings: settings.value.filter((s) => s.category === c.id && visibleTier(s)) }))
+    .map((c) => {
+      const all = settings.value.filter((s) => s.category === c.id)
+      const shown = all.filter(visibleTier)
+      // A category with only advanced settings still shows them, rather than vanishing from the list.
+      return { ...c, settings: shown.length ? shown : all, onlyAdvanced: !shown.length && all.length > 0 }
+    })
     .filter((c) => c.settings.length > 0)
   if (showAdvanced.value && Object.keys(unknown.value).length) {
     list.push({ id: 'unknown', title: t('settings.unknown_title'), settings: [] })
@@ -88,6 +103,24 @@ const categoriesWithChanges = computed(() => new Set([...changedKeys.value].map(
 function valueOf(s) {
   return effective(s, stored.value, draft)
 }
+
+// The current category's settings under their sub-headings; settings without one come first.
+const currentSections = computed(() => {
+  const c = currentCategory.value
+  if (!c) {
+    return []
+  }
+  const defs = (schema.value?.sections || []).filter((s) => s.category === c.id)
+  const out = [{ id: '', title: '', settings: c.settings.filter((s) => !s.section || !defs.some((d) => d.id === s.section)) }]
+  for (const d of defs) {
+    out.push({
+      ...d,
+      settings: c.settings.filter((s) => s.section === d.id),
+      inactive: !isDependencyMet(d, byKey.value, stored.value, draft),
+    })
+  }
+  return out.filter((s) => s.settings.length > 0)
+})
 function canReset(s) {
   if (draft[s.key] === RESET) {
     return false
@@ -152,6 +185,7 @@ async function load() {
     discard()
     openFromHash()
     api('./api/v1/displays').then((d) => { displays.value = d.displays || null }).catch(() => { displays.value = null })
+    api('./api/v1/status').then((s) => { activeEncoder.value = s.encoder || '' }).catch(() => { activeEncoder.value = '' })
   } catch (e) {
     if (e.status !== 401) {
       loadError.value = e.message
@@ -254,6 +288,9 @@ async function restart() {
 
 function selectCategory(id) {
   category.value = id
+  if (expertIds.value.has(id)) {
+    expertOpen.value = true
+  }
   query.value = ''
   history.replaceState(null, '', '#' + id)
   window.scrollTo({ top: 0 })
@@ -270,6 +307,12 @@ async function reveal(key, updateHash = true) {
   }
   query.value = ''
   category.value = s.category
+  if (expertIds.value.has(s.category)) {
+    expertOpen.value = true
+    if (s.category !== detectedEncoderCategory.value && isEncoderCategory(s.category)) {
+      showOtherEncoders.value = true
+    }
+  }
   if (updateHash) {
     history.replaceState(null, '', '#' + key)
   }
@@ -294,6 +337,12 @@ function openFromHash() {
     if (id === 'unknown') {
       showAdvanced.value = true
     }
+    if (expertIds.value.has(id)) {
+      expertOpen.value = true
+      if (isEncoderCategory(id) && id !== detectedEncoderCategory.value) {
+        showOtherEncoders.value = true
+      }
+    }
     category.value = id
   }
 }
@@ -301,7 +350,7 @@ function openFromHash() {
 function onKey(e) {
   if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
     e.preventDefault()
-    searchInput.value?.focus()
+    ;(searchInput.value?.offsetParent ? searchInput.value : searchInputNarrow.value)?.focus()
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
     e.preventDefault()
@@ -339,20 +388,34 @@ onBeforeUnmount(() => {
   window.removeEventListener('hashchange', openFromHash)
 })
 
-// Group headings in the sidebar (encoders).
-const navItems = computed(() => {
-  const items = []
-  let group = ''
-  for (const c of categories.value) {
-    if ((c.group || '') !== group) {
-      group = c.group || ''
-      if (group) {
-        items.push({ heading: c.group_title, id: 'group-' + group })
-      }
-    }
-    items.push(c)
+// Sidebar: everyday categories first, then a collapsible Expert group. Of the encoder pages,
+// only the one for the encoder this host uses is listed; the others are one click away.
+const isEncoderCategory = (id) => (schema.value?.categories || []).some((c) => c.id === id && c.group === 'encoders')
+const detectedEncoderCategory = computed(() => {
+  const id = ENCODER_CATEGORY[activeEncoder.value]
+  return id && categories.value.some((c) => c.id === id) ? id : ''
+})
+const navItems = computed(() => categories.value.filter((c) => !c.expert))
+const expertItems = computed(() => categories.value
+  .filter((c) => c.expert)
+  .filter((c) => !c.group || !detectedEncoderCategory.value || showOtherEncoders.value || c.id === detectedEncoderCategory.value)
+  .map((c) => (c.group && c.id === detectedEncoderCategory.value && !showOtherEncoders.value
+    ? { ...c, title: c.group_title, tag: c.title }
+    : c)))
+const otherEncoderCount = computed(() => detectedEncoderCategory.value
+  ? categories.value.filter((c) => c.group && c.id !== detectedEncoderCategory.value).length
+  : 0)
+const expertHasNews = computed(() => categories.value.some((c) => c.expert &&
+  (categoriesWithErrors.value.has(c.id) || categoriesWithChanges.value.has(c.id))))
+const pageTitle = computed(() => {
+  if (searching.value) {
+    return t('settings.search_results')
   }
-  return items
+  const c = currentCategory.value
+  if (!c) {
+    return t('settings.title')
+  }
+  return c.group && c.id === detectedEncoderCategory.value ? `${c.group_title}: ${c.title}` : c.title
 })
 
 const rowProps = (s, inSearch) => ({
@@ -366,6 +429,7 @@ const rowProps = (s, inSearch) => ({
   dependencyText: dependencyText(s),
   indented: !inSearch && !!s.depends_on,
   showTier: inSearch,
+  showKey: showAdvanced.value,
   platform: schema.value?.platform || '',
   remapGroup: remapGroup.value,
   highlighted: highlightKey.value === s.key,
@@ -377,47 +441,83 @@ const rowProps = (s, inSearch) => ({
   <AppShell page="config">
     <div class="page">
       <aside class="sidebar" v-if="schema">
+        <div class="search">
+          <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+          <input ref="searchInput" v-model="query" type="search" class="field" :placeholder="$t('settings.search')"
+                 :aria-label="$t('settings.search')" aria-keyshortcuts="/">
+          <kbd v-if="!query" class="key-hint" :title="$t('settings.search_shortcut')">/</kbd>
+        </div>
         <nav :aria-label="$t('settings.title')">
-          <template v-for="item in navItems" :key="item.id">
-            <div v-if="item.heading" class="nav-heading">{{ item.heading }}</div>
-            <a v-else :href="'#' + item.id" class="nav-item"
-               :class="{ active: !searching && currentCategory && item.id === currentCategory.id }"
-               :aria-current="!searching && currentCategory && item.id === currentCategory.id ? 'page' : null"
-               @click.prevent="selectCategory(item.id)">
-              <span>{{ item.title }}</span>
-              <span v-if="categoriesWithErrors.has(item.id)" class="dot dot-error" :title="$t('settings.not_saved')"></span>
-              <span v-else-if="categoriesWithChanges.has(item.id)" class="dot" :title="$t('settings.unsaved', { n: 1 }, 1)"></span>
-            </a>
+          <div class="nav-heading">{{ $t('settings.group_everyday') }}</div>
+          <a v-for="item in navItems" :key="item.id" :href="'#' + item.id" class="nav-item"
+             :class="{ active: !searching && currentCategory && item.id === currentCategory.id }"
+             :aria-current="!searching && currentCategory && item.id === currentCategory.id ? 'page' : null"
+             @click.prevent="selectCategory(item.id)">
+            <span>{{ item.title }}</span>
+            <span v-if="categoriesWithErrors.has(item.id)" class="dot dot-error" :title="$t('settings.not_saved')"></span>
+            <span v-else-if="categoriesWithChanges.has(item.id)" class="dot" :title="$t('settings.unsaved', { n: 1 }, 1)"></span>
+          </a>
+          <template v-if="expertItems.length">
+            <button type="button" class="nav-heading nav-toggle" :aria-expanded="expertOpen ? 'true' : 'false'"
+                    aria-controls="expert-categories" @click="expertOpen = !expertOpen">
+              <span>{{ $t('settings.group_expert') }}</span>
+              <span v-if="!expertOpen && expertHasNews" class="dot" :title="$t('settings.unsaved', { n: 1 }, 1)"></span>
+              <i class="fas fa-chevron-down chevron" :class="{ open: expertOpen }" aria-hidden="true"></i>
+            </button>
+            <div v-show="expertOpen" id="expert-categories">
+              <a v-for="item in expertItems" :key="item.id" :href="'#' + item.id" class="nav-item expert"
+                 :class="{ active: !searching && currentCategory && item.id === currentCategory.id }"
+                 :aria-current="!searching && currentCategory && item.id === currentCategory.id ? 'page' : null"
+                 @click.prevent="selectCategory(item.id)">
+                <span>{{ item.title }}</span>
+                <span v-if="item.tag" class="tag">{{ item.tag }}</span>
+                <span v-if="categoriesWithErrors.has(item.id)" class="dot dot-error" :title="$t('settings.not_saved')"></span>
+                <span v-else-if="categoriesWithChanges.has(item.id)" class="dot" :title="$t('settings.unsaved', { n: 1 }, 1)"></span>
+              </a>
+              <button v-if="otherEncoderCount" type="button" class="link-button small other-encoders" @click="showOtherEncoders = !showOtherEncoders">
+                {{ showOtherEncoders ? $t('settings.hide_other_encoders') : $t('settings.other_encoders', { n: otherEncoderCount }, otherEncoderCount) }}
+              </button>
+            </div>
           </template>
         </nav>
         <button v-if="hiddenCategoryCount > 0" type="button" class="link-button small sidebar-note"
                 @click="showAdvanced = true">
           {{ $t('settings.more_categories', { n: hiddenCategoryCount }, hiddenCategoryCount) }}
         </button>
+        <label class="advanced-toggle">
+          <span>{{ $t('settings.show_advanced') }}</span>
+          <span class="switch">
+            <input type="checkbox" role="switch" v-model="showAdvanced">
+            <span class="track"></span>
+          </span>
+        </label>
       </aside>
 
       <main class="content">
         <div class="content-head">
-          <h1>{{ $t('settings.title') }}</h1>
-          <div class="tools">
+          <!-- Narrow screens: search, the categories as a list box, and the advanced switch. -->
+          <div class="narrow-tools">
             <div class="search">
               <i class="fas fa-magnifying-glass" aria-hidden="true"></i>
-              <input ref="searchInput" v-model="query" type="search" class="field" :placeholder="$t('settings.search')"
+              <input ref="searchInputNarrow" v-model="query" type="search" class="field" :placeholder="$t('settings.search')"
                      :aria-label="$t('settings.search')">
             </div>
+            <select v-if="schema && !searching" class="field" :aria-label="$t('settings.title')"
+                    :value="currentCategory?.id" @change="selectCategory($event.target.value)">
+              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.group_title ? c.group_title + ': ' : '' }}{{ c.title }}</option>
+            </select>
             <label class="advanced-toggle">
+              <span>{{ $t('settings.show_advanced') }}</span>
               <span class="switch">
                 <input type="checkbox" role="switch" v-model="showAdvanced">
                 <span class="track"></span>
               </span>
-              <span>{{ $t('settings.show_advanced') }}</span>
             </label>
           </div>
-          <!-- Narrow screens: categories as a list box instead of the sidebar. -->
-          <select v-if="schema && !searching" class="field category-select" :aria-label="$t('settings.title')"
-                  :value="currentCategory?.id" @change="selectCategory($event.target.value)">
-            <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.group_title ? c.group_title + ': ' : '' }}{{ c.title }}</option>
-          </select>
+          <div class="crumb">{{ $t('settings.title') }}</div>
+          <h1>{{ pageTitle }}</h1>
+          <p v-if="!searching && currentCategory?.description" class="muted category-desc">{{ currentCategory.description }}</p>
+          <p v-if="!searching && currentCategory?.onlyAdvanced && !currentCategory.expert" class="small muted category-desc">{{ $t('settings.only_advanced') }}</p>
         </div>
 
         <div class="notices" aria-live="polite">
@@ -479,14 +579,18 @@ const rowProps = (s, inSearch) => ({
             </div>
           </section>
 
-          <section v-else-if="currentCategory" class="section">
-            <h2 class="visually-hidden">{{ currentCategory.title }}</h2>
-            <p v-if="currentCategory.description" class="muted category-desc">{{ currentCategory.description }}</p>
-            <div class="card">
-              <SettingRow v-for="s in currentCategory.settings" :key="s.key" v-bind="rowProps(s, false)"
-                          @update="update(s, $event)" @reset="reset(s)" />
-            </div>
-          </section>
+          <template v-else-if="currentCategory">
+            <section v-for="sec in currentSections" :key="sec.id || 'main'" class="section" :class="{ inactive: sec.inactive }">
+              <h2 v-if="sec.title" class="section-title">
+                {{ sec.title }}
+                <span v-if="sec.inactive && sec.note" class="tag">{{ sec.note }}</span>
+              </h2>
+              <div class="card">
+                <SettingRow v-for="s in sec.settings" :key="s.key" v-bind="rowProps(s, false)"
+                            @update="update(s, $event)" @reset="reset(s)" />
+              </div>
+            </section>
+          </template>
         </template>
       </main>
     </div>
@@ -494,12 +598,15 @@ const rowProps = (s, inSearch) => ({
     <!-- Save bar -->
     <div class="savebar" v-if="changeCount > 0 || saving" role="region" :aria-label="$t('settings.save')">
       <div class="savebar-inner">
-        <span class="grow">{{ $t('settings.unsaved', { n: changeCount }, changeCount) }}</span>
-        <button type="button" class="btn" :disabled="saving" @click="discard">{{ $t('settings.discard') }}</button>
+        <span class="grow">
+          <strong>{{ $t('settings.unsaved', { n: changeCount }, changeCount) }}</strong>
+          <span v-if="needsRestart" class="muted"> · {{ $t('settings.takes_effect_after_restart') }}</span>
+        </span>
+        <button type="button" class="btn btn-quiet" :disabled="saving" @click="discard">{{ $t('settings.discard') }}</button>
         <button v-if="needsRestart" type="button" class="btn" :disabled="saving" @click="save(false, false)">
           {{ $t('settings.save_only') }}
         </button>
-        <button type="button" class="btn btn-primary" :disabled="saving" @click="save(false, needsRestart)">
+        <button type="button" class="btn btn-primary" :disabled="saving" :title="$t('settings.save_shortcut')" aria-keyshortcuts="Control+S" @click="save(false, needsRestart)">
           <i v-if="saving" class="fas fa-spinner fa-spin" aria-hidden="true"></i>
           {{ saving ? $t('settings.saving') : needsRestart ? $t('settings.save_restart') : $t('settings.save') }}
         </button>
@@ -539,32 +646,62 @@ const rowProps = (s, inSearch) => ({
 <style scoped>
 .page {
   max-width: 1240px; margin: 0 auto; padding: 24px 16px 120px;
-  display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 32px;
+  display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 32px;
 }
-.sidebar { position: sticky; top: 80px; align-self: start; max-height: calc(100vh - 100px); overflow-y: auto; }
+/* Norilight's settings sidebar: a panel with search at the top. */
+.sidebar {
+  position: sticky; top: 80px; align-self: start; max-height: calc(100vh - 100px); overflow-y: auto;
+  background: var(--sidebar); border-radius: var(--radius); padding: 8px;
+}
+.sidebar .search { margin: 0 0 6px; }
+.key-hint {
+  position: absolute; right: 9px; top: 50%; transform: translateY(-50%); pointer-events: none;
+  font: 12px var(--mono); color: var(--text-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px;
+}
 .nav-item {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 8px 12px; border-radius: 6px; color: var(--text-primary); text-decoration: none; font-size: 14.5px;
+  position: relative; display: flex; align-items: center; gap: 8px; min-height: 36px;
+  padding: 6px 10px; border-radius: 6px; color: var(--text-primary); text-decoration: none; font-size: 14px;
 }
+.nav-item > span:first-child { flex: 1; }
 .nav-item:hover { background: var(--nav-hover); }
-.nav-item.active { background: var(--nav-selected); font-weight: 600; box-shadow: inset 3px 0 0 var(--accent); }
-.nav-heading { margin: 14px 12px 4px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; }
+.nav-item.active { background: var(--nav-selected); font-weight: 600; }
+.nav-item.active::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: var(--accent); }
+.nav-item.expert:not(.active) { color: var(--text-secondary); }
+.nav-heading {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin: 10px 0 2px; padding: 4px 10px;
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+}
+.nav-toggle { border: 0; background: none; font-family: inherit; cursor: pointer; border-radius: 6px; text-align: left; }
+.nav-toggle > span:first-child { flex: 1; }
+.nav-toggle:hover { background: var(--nav-hover); color: var(--text-primary); }
+.chevron { font-size: 10px; transition: transform 0.12s; }
+.chevron:not(.open) { transform: rotate(-90deg); }
+.tag { font-size: 11.5px; font-weight: 500; padding: 1px 8px; border-radius: 999px; background: var(--nav-selected); color: var(--text-secondary); }
+.nav-item.active .tag { background: var(--background); }
+.other-encoders { display: block; margin: 4px 10px 2px; font-size: 13px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
 .dot-error { background: var(--error); }
-.sidebar-note { margin: 14px 12px 0; }
+.sidebar-note { margin: 10px 10px 0; font-size: 13px; }
+.sidebar .advanced-toggle {
+  justify-content: space-between; margin-top: 8px; padding: 10px 10px 4px; border-top: 1px solid var(--divider);
+}
 
 .content { max-width: var(--content-max); min-width: 0; }
-.content-head { display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; }
-.tools { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-.search { position: relative; flex: 1 1 280px; }
+.content-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 18px; }
+.crumb { font-size: 14px; color: var(--text-secondary); }
+.content-head .category-desc { margin: 6px 0 0; }
+.narrow-tools { display: none; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.section-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px; }
+.section.inactive .card { opacity: 0.62; }
+.section.inactive .card:focus-within, .section.inactive .card:hover { opacity: 1; }
+.search { position: relative; }
 .search i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 13px; }
 .search .field { padding-left: 32px; }
-.category-desc { margin: 0 0 12px; }
+
 .link-button { border: 0; background: none; padding: 2px 0; color: var(--accent); font: inherit; cursor: pointer; font-weight: 500; }
 .link-button:hover { text-decoration: underline; }
 .sidebar-note { text-align: left; margin-top: 12px; padding: 0 12px; }
 .advanced-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; color: var(--text-secondary); font-size: 14px; }
-.category-select { display: none; }
 
 .notices { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .notices:empty { display: none; }
@@ -579,18 +716,25 @@ const rowProps = (s, inSearch) => ({
 .unknown-row { display: flex; gap: 16px; padding: 12px 0; border-top: 1px solid var(--row-divider); overflow-wrap: anywhere; }
 .unknown-row:first-child { border-top: 0; }
 
+/* A floating bar, so it reads as a temporary prompt rather than part of the page. */
 .savebar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  background: var(--popup); border-top: 1px solid var(--border); box-shadow: var(--shadow);
+  position: fixed; left: 24px; right: 24px; bottom: 16px; z-index: 30; max-width: 1192px; margin: 0 auto;
+  background: var(--popup); border: 1px solid var(--stroke-card); border-radius: 12px; box-shadow: var(--shadow);
+  animation: bar-in 0.18s var(--ease-out);
 }
-.savebar-inner { max-width: 1240px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 10px; align-items: center; }
-.savebar .grow { flex: 1; font-weight: 500; }
+@keyframes bar-in { from { opacity: 0; transform: translateY(12px); } }
+.savebar-inner { padding: 12px 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.savebar .grow { flex: 1 1 220px; }
 
 .confirm-list { margin: 0; padding-left: 20px; font-weight: 600; }
 
 @media (max-width: 900px) {
   .page { grid-template-columns: minmax(0, 1fr); gap: 0; padding-top: 16px; }
   .sidebar { display: none; }
-  .category-select { display: block; }
+  .narrow-tools { display: flex; }
 }
+@media (max-width: 600px) {
+  .savebar { left: 0; right: 0; bottom: 0; border-radius: 12px 12px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+}
+@media (prefers-reduced-motion: reduce) { .savebar { animation: none; } .chevron { transition: none; } }
 </style>

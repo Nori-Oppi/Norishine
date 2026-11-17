@@ -196,6 +196,25 @@ check('web UI: devices, none marked as itself', s == 200 and not any(d['this_dev
 s, r = web.call('POST', '/api/v1/apps', {'name': ''})
 check('web UI: validation', s == 400 and 'name' in r.get('errors', {}), (s, r))
 
+# Cover images for the Apps page: a PNG, or 404 when the app has no picture of its own.
+try:
+    with web.opener.open(web.base + '/api/v1/apps/' + original_order[0] + '/image', timeout=15) as resp:
+        img_status, img = resp.status, resp.read()
+except urllib.error.HTTPError as e:
+    img_status, img = e.code, b''
+check('web UI: app cover is a PNG (or 404 without one)', (img_status == 200 and img[:8] == b'\x89PNG\r\n\x1a\n') or img_status == 404, img_status)
+s, r = web.call('GET', '/api/v1/apps/no-such-app/image')
+check('web UI: cover of an unknown app is 404', s == 404, (s, r))
+
+# The encoder in use, and sub-headings in the settings schema (both added later).
+s, r = web.call('GET', '/api/v1/status')
+check('status names the encoder', s == 200 and isinstance(r.get('encoder'), str), (s, str(r)[:200]))
+s, r = web.call('GET', '/api/v1/config/schema?locale=en')
+sections = {x['id']: x for x in r.get('sections', [])} if s == 200 else {}
+by_key = {x['key']: x for x in r.get('settings', [])} if s == 200 else {}
+check('schema has sections', 'display_monitor' in sections and sections['display_monitor'].get('depends_on', {}).get('key') == 'headless_mode'
+      and by_key.get('output_name', {}).get('section') == 'display_monitor', (s, list(sections)))
+
 web.call('POST', '/api/clients/unpair-all', {})
 failed = [n for n, ok in results if not ok]
 print('\n%d passed, %d failed' % (len(results) - len(failed), len(failed)))

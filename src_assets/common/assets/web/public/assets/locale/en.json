@@ -543,7 +543,11 @@
     "dd_wa_hdr_toggle_delay_0": "Off",
     "max_bitrate_0": "No limit",
     "minimum_fps_target_0": "Automatic",
-    "back_button_timeout_-1": "Off"
+    "back_button_timeout_-1": "Off",
+    "section_display_virtual": "Virtual display",
+    "section_display_monitor": "When streaming a monitor",
+    "section_display_monitor_note": "Not used while streaming to a virtual display",
+    "section_display_other": "Graphics card and fallback"
   },
   "navbar": {
     "applications": "Apps",
@@ -694,7 +698,17 @@
     "save_restart": "Save and restart",
     "save_only": "Save only",
     "restart_streams_title": "Restart while streaming?",
-    "restart_streams": "Restarting ends the stream that is running now. You can also save now and restart later. | Restarting ends the {n} streams that are running now. You can also save now and restart later."
+    "restart_streams": "Restarting ends the stream that is running now. You can also save now and restart later. | Restarting ends the {n} streams that are running now. You can also save now and restart later.",
+    "search_results": "Search results",
+    "group_everyday": "Streaming",
+    "group_expert": "Expert",
+    "other_encoders": "Show the other encoder ({n}) | Show the other encoders ({n})",
+    "hide_other_encoders": "Hide the other encoders",
+    "takes_effect_after_restart": "takes effect after the host restarts",
+    "only_advanced": "Everything here is an advanced setting; most people never need to change these.",
+    "config_key": "Name in sunshine.conf",
+    "search_shortcut": "Press / to search",
+    "save_shortcut": "Ctrl+S"
   },
   "account": {
     "title": "Sign in to Norishine",
@@ -799,12 +813,12 @@
   "pairing": {
     "title": "Pair a device",
     "intro": "Pairing lets a client stream from this PC. Afterwards, choose what it may do on the Devices page.",
-    "pin_tab": "PIN from the client",
-    "otp_tab": "PIN from this host",
+    "pin_tab": "PIN shown on the device",
+    "otp_tab": "One-time PIN (Artemis)",
     "pin_steps": "In Moonlight or Norilight, add this PC and start pairing. The client shows a 4-digit PIN; enter it here.",
     "device": "Device asking to pair",
     "waiting": "Waiting for a device…",
-    "waiting_help": "Start pairing on the client; it appears here within a few seconds.",
+    "waiting_help": "This page checks every few seconds; the device shows up here once it asks.",
     "load_failed": "Couldn't load pairing requests",
     "choose_device": "Choose the device you are pairing",
     "unknown_device": "Unknown device",
@@ -831,7 +845,10 @@
     "address": "Address",
     "port": "Port",
     "otp_clients": "Only Artemis supports this. Moonlight and Norilight pair with a PIN from the client.",
-    "warning": "Only pair devices you control: a paired device can get full control of this PC if you allow it."
+    "warning": "Only pair devices you control: a paired device can get full control of this PC if you allow it.",
+    "waiting_title": "Waiting for a device",
+    "pin_label": "PIN shown on the device",
+    "digit": "Digit {n} of the PIN"
   },
   "devices": {
     "title": "Devices",
@@ -896,7 +913,25 @@
     "command": "Command",
     "on_connect": "When it connects",
     "on_disconnect": "When it disconnects",
-    "first_device_note": "The first device you pair may start apps and send input. Devices paired later may only see apps until you allow more here."
+    "first_device_note": "The first device you pair may start apps and send input. Devices paired later may only see apps until you allow more here.",
+    "more": "More for {name}",
+    "sum_manage_read": "Can view this host",
+    "sum_manage_write": "Can manage this host",
+    "sum_virtual_display": "Always a virtual display",
+    "sum_device_mode": "The device's own resolution",
+    "sum_commands_off": "Off",
+    "sum_commands_none": "None",
+    "sum_commands": "{n} command | {n} commands",
+    "quick": "What it can do",
+    "quick_help": "Pick one, or fine-tune it below.",
+    "quick_custom": "Custom: the settings below don't match one of these.",
+    "preset_watch": "Watch only",
+    "preset_watch_help": "Joins streams others started. No input.",
+    "preset_play": "Play",
+    "preset_play_help": "Starts apps. Controller and touch input.",
+    "preset_full": "Full control",
+    "preset_full_help": "Starts apps. All input and the clipboard.",
+    "fine_tune": "Fine-tune"
   },
   "apps2": {
     "title": "Apps",
@@ -906,7 +941,7 @@
     "none": "No apps yet.",
     "running": "Running",
     "no_cmd": "No command: streams the desktop",
-    "order_help": "Drag apps, or use the arrows, to change the order clients show.",
+    "order_help": "Drag apps by the handle, or use the ⋯ menu, to change the order clients show.",
     "order_changed": "The order changed. Saving it closes the running app.",
     "order_saved": "The new order was saved.",
     "order_failed": "Couldn't save the order: {error}",
@@ -944,6 +979,8 @@
     "launch_body": "It starts without a stream, as if a client had started it.",
     "launch_replaces": "The app that is running now is closed first.",
     "launched": "{name} started.",
-    "launch_failed": "Couldn't start the app: {error}"
+    "launch_failed": "Couldn't start the app: {error}",
+    "drag": "Drag to change the order",
+    "more": "More for {name}"
   }
 }
