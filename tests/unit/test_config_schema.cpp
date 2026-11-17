@@ -5,6 +5,7 @@
 #include "../tests_common.h"
 
 // standard includes
+#include <map>
 #include <set>
 #include <string>
 
@@ -261,6 +262,28 @@ TEST(ConfigSchemaTests, DescribeWithReadableStrings) {
   EXPECT_TRUE(fixes_expert);
   // HDR is only changed when the host prepares the display.
   EXPECT_EQ(find_setting(english, "dd_hdr_option")["depends_on"]["key"], "dd_configuration_option");
+
+  // Sections: sub-headings inside a category. Each belongs to a known category, and every
+  // setting that names one names a section of its own category.
+  std::map<std::string, std::string> section_category;
+  for (const auto &section : english["sections"]) {
+    section_category[section["id"].get<std::string>()] = section["category"].get<std::string>();
+    EXPECT_FALSE(section["title"].get<std::string>().empty()) << section["id"];
+  }
+  EXPECT_EQ(find_setting(english, "headless_mode")["section"], "display_virtual");
+  EXPECT_EQ(find_setting(english, "output_name")["section"], "display_monitor");
+  for (const auto &s : english["settings"]) {
+    if (s.contains("section")) {
+      ASSERT_TRUE(section_category.contains(s["section"].get<std::string>())) << s["key"];
+      EXPECT_EQ(section_category[s["section"].get<std::string>()], s["category"].get<std::string>()) << s["key"];
+    }
+  }
+  for (const auto &section : english["sections"]) {
+    if (section["id"] == "display_monitor") {
+      EXPECT_EQ(section["depends_on"]["key"], "headless_mode");
+      EXPECT_FALSE(section["note"].get<std::string>().empty());
+    }
+  }
 
   // Every setting on this platform has an explanation and a known category, and every
   // choice has a readable name.

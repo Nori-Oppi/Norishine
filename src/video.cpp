@@ -1052,6 +1052,10 @@ namespace video {
   };
 
   static encoder_t *chosen_encoder;
+
+  std::string_view active_encoder_name() {
+    return chosen_encoder ? chosen_encoder->name : std::string_view {};
+  }
   int active_hevc_mode;
   int active_av1_mode;
   bool last_encoder_probe_supported_ref_frames_invalidation = false;

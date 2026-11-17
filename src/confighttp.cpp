@@ -1286,6 +1286,44 @@ namespace confighttp {
   }
 
   /**
+   * @brief Serve an app's cover image to the signed-in web UI: `GET /api/v1/apps/{uuid}/image`.
+   *
+   * 404 when the app has no image of its own (the web UI then draws a placeholder), so the
+   * shared default box art isn't shown for every app.
+   */
+  void getAppImage(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    const auto uuid = request->path_match[1].str();
+    std::string path;
+    for (const auto &app : proc::proc.get_apps()) {
+      if (app.uuid == uuid) {
+        path = proc::validate_app_image_path(app.image_path);
+        break;
+      }
+    }
+    std::ifstream in;
+    if (!path.empty() && path != SUNSHINE_ASSETS_DIR "/box.png") {
+      in.open(path, std::ios::binary);
+    }
+    if (!in.is_open()) {
+      send_json(response, SimpleWeb::StatusCode::client_error_not_found, {{"error", "no_image"}});
+      return;
+    }
+
+    SimpleWeb::CaseInsensitiveMultimap headers;
+    headers.emplace("Content-Type", "image/png");
+    headers.emplace("Cache-Control", "private, max-age=60");
+    headers.emplace("X-Frame-Options", "DENY");
+    headers.emplace("Content-Security-Policy", "frame-ancestors 'none';");
+    response->write(SimpleWeb::StatusCode::success_ok, in, headers);
+  }
+
+  /**
    * @brief Upload a cover image.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -1917,6 +1955,7 @@ namespace confighttp {
     server.resource["^/api/v1/apps/close$"]["POST"] = managed(false, [](auto &, auto &) { return manage_api::close_app(); });
     server.resource["^/api/v1/apps/([^/]+)$"]["PUT"] = managed(true, [](auto &id, auto &body) { return manage_api::replace_app(id, body); });
     server.resource["^/api/v1/apps/([^/]+)$"]["DELETE"] = managed(false, [](auto &id, auto &) { return manage_api::delete_app(id); });
+    server.resource["^/api/v1/apps/([^/]+)/image$"]["GET"] = getAppImage;
     server.resource["^/api/v1/apps/([^/]+)/launch$"]["POST"] = managed(false, [](auto &id, auto &) { return manage_api::launch_app(id); });
     server.resource["^/api/v1/devices$"]["GET"] = managed(false, [](auto &, auto &) { return manage_api::list_devices({}); });
     server.resource["^/api/v1/devices/([^/]+)$"]["PATCH"] = managed(true, [](auto &id, auto &body) { return manage_api::patch_device(id, body, {}); });

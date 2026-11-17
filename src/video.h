@@ -364,4 +364,10 @@ namespace video {
    * @warning This is only safe to call when there is no client actively streaming.
    */
   int probe_encoders();
+
+  /**
+   * @brief Name of the encoder the last probe chose ("nvenc", "quicksync", "amdvce", "vaapi",
+   *        "videotoolbox" or "software"), or empty before the first probe.
+   */
+  std::string_view active_encoder_name();
 }  // namespace video

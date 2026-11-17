@@ -8,6 +8,7 @@
 #include <charconv>
 #include <cmath>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <regex>
 
@@ -874,6 +875,39 @@ namespace config::schema {
       {"nvenc_vbv_increase", "percent"},
     };
 
+    // Sub-headings inside a category, in display order. A section with depends_on only
+    // matters while that setting has one of the values; UIs dim it otherwise and show its note.
+    struct section_t {
+      const char *id;
+      const char *category;
+      const char *title;  ///< When the locale has no config.section_<id>.
+      std::vector<std::string_view> keys;
+      std::string_view depends_on {};
+      std::vector<json> depends_on_values {};
+    };
+
+    const std::vector<section_t> section_list {
+      {"display_virtual", "display", "Virtual display", {"headless_mode", "double_refreshrate", "isolated_virtual_display_option"}},
+      {"display_monitor", "display", "When streaming a monitor", {"output_name", "dd_configuration_option", "dd_resolution_option", "dd_manual_resolution", "dd_refresh_rate_option", "dd_manual_refresh_rate", "dd_hdr_option", "dd_mode_remapping", "dd_config_revert_delay", "dd_config_revert_on_disconnect"}, "headless_mode", {false}},
+      {"display_other", "display", "Graphics card and fallback", {"adapter_name", "fallback_mode"}},
+    };
+    std::map<std::string_view, std::string_view> section_of;
+    json sections = json::array();
+    for (const auto &section : section_list) {
+      auto title = text("section_"s + section.id);
+      json item {{"id", section.id}, {"category", section.category}, {"title", title.empty() ? std::string {section.title} : title}};
+      if (!section.depends_on.empty()) {
+        item["depends_on"] = {{"key", section.depends_on}, {"values", section.depends_on_values}};
+        if (auto note = text("section_"s + section.id + "_note"); !note.empty()) {
+          item["note"] = note;
+        }
+      }
+      sections.push_back(std::move(item));
+      for (auto key : section.keys) {
+        section_of[key] = section.id;
+      }
+    }
+
     json list = json::array();
     for (const auto &setting : settings()) {
       json platforms = json::array();
@@ -914,6 +948,9 @@ namespace config::schema {
       item["help"] = help;
       if (!setting.depends_on.empty()) {
         item["depends_on"] = {{"key", setting.depends_on}, {"values", setting.depends_on_values}};
+      }
+      if (auto section = section_of.find(setting.key); section != section_of.end()) {
+        item["section"] = section->second;
       }
 
       // Readable names for the allowed values, where the locale has them (config.<key>_<value>).
@@ -1016,6 +1053,7 @@ namespace config::schema {
       {"platform", platform_name},
       {"locale", chosen},
       {"categories", categories},
+      {"sections", std::move(sections)},
       {"settings", std::move(list)},
     };
   }

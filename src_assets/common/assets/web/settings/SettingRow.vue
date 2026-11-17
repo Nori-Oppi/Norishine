@@ -16,6 +16,7 @@ const props = defineProps({
   dependencyText: { type: String, default: '' },  // Set when the setting has no effect now
   indented: Boolean,
   showTier: Boolean,  // Mark advanced settings (in search results)
+  showKey: Boolean,  // Show the name in the config file (advanced settings on)
   platform: { type: String, default: '' },
   remapGroup: { type: String, default: 'mixed' },
   highlighted: Boolean,
@@ -118,6 +119,7 @@ function numberInput(text) {
           <span v-else-if="showTier && s.tier === 'advanced'" class="badge">{{ $t('settings.advanced') }}</span>
         </label>
         <p v-if="s.help" class="row-help" :id="id + '-help'">{{ s.help }}</p>
+        <p v-if="showKey" class="row-key" :title="$t('settings.config_key')"><code>{{ s.key }}</code></p>
         <p v-if="dependencyText" class="row-note small">
           <i class="fas fa-circle-info" aria-hidden="true"></i> {{ dependencyText }}
         </p>
@@ -209,11 +211,13 @@ function numberInput(text) {
 }
 .row-main { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
 .row-text { flex: 1 1 auto; min-width: 0; }
-.row-title { display: block; font-weight: 600; color: var(--text-primary); font-size: 15px; }
+.row-title { display: block; font-weight: 400; color: var(--text-heading); font-size: 16px; }
 .row-title .badge { margin-left: 6px; }
-.row-help { margin: 3px 0 0; color: var(--text-secondary); font-size: 13.5px; white-space: pre-line; max-width: 62ch; }
+.row-help { margin: 3px 0 0; color: var(--text-secondary); font-size: 14px; white-space: pre-line; max-width: 62ch; }
 .row.inactive .row-title, .row.inactive .row-help { color: var(--text-disabled); }
 .row-note { margin: 6px 0 0; color: var(--text-tertiary); }
+.row-key { margin: 4px 0 0; font-size: 12px; color: var(--text-tertiary); }
+.row-key code { font-size: 12px; user-select: all; }
 .warning-text { color: var(--warning); }
 .row-control { flex: 0 0 auto; width: min(360px, 45%); display: flex; justify-content: flex-end; padding-top: 2px; }
 .row-control .field.number { width: 110px; text-align: right; }
