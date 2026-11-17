@@ -58,8 +58,18 @@ The Windows build uses ccache. A pull request starts from its own last cache, ot
 from `master`'s, so a warm build takes about 5 minutes instead of about 20. The version
 and commit are compiled only into `version.cpp` (generated from `src/version.cpp.in`):
 as compile definitions they would change every file on each commit and nothing could be
-reused. Failed tests and cache statistics are in the run's summary. Installers and test
-results are kept 14 days.
+reused. ccache runs in depend mode, so a cache miss costs no extra preprocessor run.
+Failed tests and cache statistics are in the run's summary. Installers and test results
+are kept 14 days.
+
+Measured in November 2026 (whole CI run):
+
+| Change | Before | After |
+| --- | --- | --- |
+| Code, cache warm | ~21 min (15–25) | ~4 min |
+| Code, no cache (first run, compiler update) | ~21 min | ~18 min |
+| Web UI only | ~21 min | ~30 s |
+| Docs only | ~21 min | ~10 s |
 
 ## Nightly builds
 
