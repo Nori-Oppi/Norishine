@@ -3,6 +3,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, 
 import AppShell from '../ui/AppShell.vue'
 import { api, restartHost } from '../ui/api'
 import SettingRow from './SettingRow.vue'
+import HelpLink from '../ui/HelpLink.vue'
 import {
   RESET, computeChange, effective, formatValue, isDependencyMet, matches, same, searchWords,
 } from './model'
@@ -514,10 +515,7 @@ const rowProps = (s, inSearch) => ({
               </span>
             </label>
           </div>
-          <div class="crumb">{{ $t('settings.title') }}</div>
-          <h1>{{ pageTitle }}</h1>
-          <p v-if="!searching && currentCategory?.description" class="muted category-desc">{{ currentCategory.description }}</p>
-          <p v-if="!searching && currentCategory?.onlyAdvanced && !currentCategory.expert" class="small muted category-desc">{{ $t('settings.only_advanced') }}</p>
+          <h1>{{ pageTitle }} <HelpLink :page="'SETTINGS.md' + (!searching && currentCategory ? '#' + currentCategory.id : '')" :label="$t('help.settings')" /></h1>
         </div>
 
         <div class="notices" aria-live="polite">
@@ -571,7 +569,6 @@ const rowProps = (s, inSearch) => ({
 
           <!-- Config file entries the host doesn't know -->
           <section v-else-if="currentCategory && currentCategory.id === 'unknown'" class="section">
-            <p class="muted">{{ $t('settings.unknown_desc') }}</p>
             <div class="card">
               <div v-for="(text, key) in unknown" :key="key" class="unknown-row">
                 <code>{{ key }}</code><code class="muted">{{ text }}</code>
@@ -583,7 +580,7 @@ const rowProps = (s, inSearch) => ({
             <section v-for="sec in currentSections" :key="sec.id || 'main'" class="section" :class="{ inactive: sec.inactive }">
               <h2 v-if="sec.title" class="section-title">
                 {{ sec.title }}
-                <span v-if="sec.inactive && sec.note" class="tag">{{ sec.note }}</span>
+                <span v-if="sec.inactive && sec.note" class="tag" :title="sec.note">{{ $t('settings.not_used') }}</span>
               </h2>
               <div class="card">
                 <SettingRow v-for="s in sec.settings" :key="s.key" v-bind="rowProps(s, false)"
@@ -600,7 +597,6 @@ const rowProps = (s, inSearch) => ({
       <div class="savebar-inner">
         <span class="grow">
           <strong>{{ $t('settings.unsaved', { n: changeCount }, changeCount) }}</strong>
-          <span v-if="needsRestart" class="muted"> · {{ $t('settings.takes_effect_after_restart') }}</span>
         </span>
         <button type="button" class="btn btn-quiet" :disabled="saving" @click="discard">{{ $t('settings.discard') }}</button>
         <button v-if="needsRestart" type="button" class="btn" :disabled="saving" @click="save(false, false)">

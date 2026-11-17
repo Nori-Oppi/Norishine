@@ -1,6 +1,7 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppShell from '../ui/AppShell.vue'
+import HelpLink from '../ui/HelpLink.vue'
 import { api, restartHost } from '../ui/api'
 import { confirmAction, notify } from '../ui/dialogs'
 import { levelRank, parseLog } from './logs'
@@ -151,35 +152,24 @@ const quit = () => run('quit', {
     <main class="page-main wide">
       <div class="page-head">
         <div>
-          <h1>{{ $t('trouble.title') }}</h1>
-          <p class="muted">{{ $t('trouble.intro') }}</p>
+          <h1>{{ $t('trouble.title') }} <HelpLink page="GUIDE.md#troubleshooting" :label="$t('help.page')" /></h1>
         </div>
       </div>
 
       <section class="section">
-        <div class="actions-grid">
-          <div class="card-pad action">
-            <div class="row-title">{{ $t('trouble.force_close') }}</div>
-            <p class="row-sub">{{ $t('trouble.force_close_desc') }}</p>
-            <button type="button" class="btn btn-small" :disabled="!!busy" @click="closeApp">{{ $t('trouble.force_close') }}</button>
-          </div>
-          <div class="card-pad action">
-            <div class="row-title">{{ $t('trouble.restart') }}</div>
-            <p class="row-sub">{{ $t('trouble.restart_desc') }}</p>
-            <button type="button" class="btn btn-small" :disabled="!!busy" @click="restart">
-              <i v-if="busy === 'restart'" class="fas fa-spinner fa-spin" aria-hidden="true"></i> {{ $t('trouble.restart') }}
-            </button>
-          </div>
-          <div v-if="platform === 'windows'" class="card-pad action">
-            <div class="row-title">{{ $t('trouble.dd_reset') }}</div>
-            <p class="row-sub">{{ $t('trouble.dd_reset_desc') }}</p>
-            <button type="button" class="btn btn-small" :disabled="!!busy" @click="resetDisplay">{{ $t('trouble.dd_reset') }}</button>
-          </div>
-          <div class="card-pad action">
-            <div class="row-title">{{ $t('trouble.quit') }}</div>
-            <p class="row-sub">{{ $t('trouble.quit_desc') }}</p>
-            <button type="button" class="btn btn-small btn-danger" :disabled="!!busy" @click="quit">{{ $t('trouble.quit') }}</button>
-          </div>
+        <div class="actions">
+          <button type="button" class="btn" :disabled="!!busy" :title="$t('trouble.force_close_desc')" @click="closeApp">
+            <i class="fas fa-stop" aria-hidden="true"></i> {{ $t('trouble.force_close') }}
+          </button>
+          <button type="button" class="btn" :disabled="!!busy" :title="$t('trouble.restart_desc')" @click="restart">
+            <i class="fas" :class="busy === 'restart' ? 'fa-spinner fa-spin' : 'fa-rotate'" aria-hidden="true"></i> {{ $t('trouble.restart') }}
+          </button>
+          <button v-if="platform === 'windows'" type="button" class="btn" :disabled="!!busy" :title="$t('trouble.dd_reset_desc')" @click="resetDisplay">
+            <i class="fas fa-display" aria-hidden="true"></i> {{ $t('trouble.dd_reset') }}
+          </button>
+          <button type="button" class="btn btn-danger" :disabled="!!busy" :title="$t('trouble.quit_desc')" @click="quit">
+            <i class="fas fa-power-off" aria-hidden="true"></i> {{ $t('trouble.quit') }}
+          </button>
         </div>
       </section>
 
@@ -227,9 +217,7 @@ const quit = () => run('quit', {
 
 <style scoped>
 .page-main.wide { max-width: 1240px; }
-.actions-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-.action { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
-.action .row-sub { margin: 0 0 6px; flex: 1; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .section-head h2 { display: flex; gap: 8px; align-items: center; }
 .badge-error { background: var(--error-bg); color: var(--error); }
 .log-buttons { display: flex; gap: 8px; }

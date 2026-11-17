@@ -31,6 +31,13 @@ const i18n = inject('i18n')
 const t = (...args) => i18n.t(...args)
 
 const s = computed(() => props.setting)
+
+// The explanation lives in the docs and on hover, so rows stay one line.
+const tooltip = computed(() => [
+  props.setting.help,
+  props.dependencyText,
+  props.showKey ? 'sunshine.conf: ' + props.setting.key : '',
+].filter(Boolean).join('\n\n'))
 const id = computed(() => 'setting-' + s.value.key)
 const wide = computed(() => LIST_TYPES.includes(s.value.type))
 const enumInteger = computed(() => isEnumInteger(s.value))
@@ -113,16 +120,12 @@ function numberInput(text) {
        :id="s.key">
     <div class="row-main">
       <div class="row-text">
-        <label class="row-title" :for="wide ? null : id" :id="id + '-label'">
+        <label class="row-title" :for="wide ? null : id" :id="id + '-label'" :title="tooltip">
           {{ s.title }}
           <span v-if="s.tier === 'dangerous'" class="badge badge-careful">{{ $t('settings.careful') }}</span>
           <span v-else-if="showTier && s.tier === 'advanced'" class="badge">{{ $t('settings.advanced') }}</span>
         </label>
-        <p v-if="s.help" class="row-help" :id="id + '-help'">{{ s.help }}</p>
-        <p v-if="showKey" class="row-key" :title="$t('settings.config_key')"><code>{{ s.key }}</code></p>
-        <p v-if="dependencyText" class="row-note small">
-          <i class="fas fa-circle-info" aria-hidden="true"></i> {{ dependencyText }}
-        </p>
+        <span v-if="s.help" class="visually-hidden" :id="id + '-help'">{{ s.help }}</span>
       </div>
 
       <div v-if="!wide" class="row-control">
@@ -182,8 +185,7 @@ function numberInput(text) {
       <i class="fas fa-circle-exclamation" aria-hidden="true"></i> {{ error }}
     </p>
     <div v-if="canReset || (invalidEntry && !modified)" class="row-reset small">
-      <span class="muted">{{ $t('settings.default_is', { value: defaultText }) }}</span>
-      <button type="button" class="link-button" @click="emit('reset')">
+      <button type="button" class="link-button" :title="$t('settings.default_is', { value: defaultText })" @click="emit('reset')">
         <i class="fas fa-rotate-left" aria-hidden="true"></i> {{ $t('settings.reset') }}
       </button>
     </div>

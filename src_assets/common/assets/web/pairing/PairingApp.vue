@@ -3,6 +3,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } fr
 import AppShell from '../ui/AppShell.vue'
 import { api } from '../ui/api'
 import { notify } from '../ui/dialogs'
+import HelpLink from '../ui/HelpLink.vue'
 
 const i18n = inject('i18n')
 const t = (...args) => i18n.t(...args)
@@ -233,8 +234,7 @@ onBeforeUnmount(() => {
     <main class="page-main narrow">
       <div class="page-head">
         <div>
-          <h1>{{ $t('pairing.title') }}</h1>
-          <p class="muted">{{ $t('pairing.intro') }}</p>
+          <h1>{{ $t('pairing.title') }} <HelpLink page="GUIDE.md#pairing" :label="$t('help.page')" /></h1>
         </div>
       </div>
 
@@ -261,7 +261,6 @@ onBeforeUnmount(() => {
           <div>
             <h2>{{ pendingError ? $t('pairing.load_failed') : $t('pairing.waiting_title') }}</h2>
             <p class="muted">{{ $t('pairing.pin_steps') }}</p>
-            <p class="small muted">{{ $t('pairing.waiting_help') }}</p>
           </div>
         </div>
 
@@ -304,12 +303,10 @@ onBeforeUnmount(() => {
       </template>
 
       <form v-else class="card-pad form-grid" @submit.prevent="requestOtp">
-        <p class="muted step">{{ $t('pairing.otp_steps') }}</p>
         <div class="two">
           <div class="form-field">
             <label for="passphrase">{{ $t('pairing.passphrase') }}</label>
-            <input id="passphrase" v-model="passphrase" class="field" pattern="[0-9a-zA-Z]{4,}" required autocomplete="off">
-            <p class="form-help">{{ $t('pairing.passphrase_help') }}</p>
+            <input id="passphrase" v-model="passphrase" class="field" pattern="[0-9a-zA-Z]{4,}" required autocomplete="off" :title="$t('pairing.passphrase_help')">
           </div>
           <div class="form-field">
             <label for="otp-name">{{ $t('pairing.name') }}</label>
@@ -333,10 +330,8 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-        <p class="form-help">{{ $t('pairing.otp_clients') }}</p>
       </form>
 
-      <p class="notice notice-warning warn">{{ $t('pairing.warning') }}</p>
     </main>
   </AppShell>
 </template>

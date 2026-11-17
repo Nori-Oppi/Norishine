@@ -6,6 +6,7 @@ import { confirmAction, notify } from '../ui/dialogs'
 import { clone } from '../settings/model'
 import AppEditor from './AppEditor.vue'
 import RowMenu from '../ui/RowMenu.vue'
+import HelpLink from '../ui/HelpLink.vue'
 
 const i18n = inject('i18n')
 const t = (...args) => i18n.t(...args)
@@ -251,8 +252,7 @@ async function saveOrder() {
       <template v-else>
         <div class="page-head">
           <div>
-            <h1>{{ $t('apps2.title') }}</h1>
-            <p class="muted">{{ $t('apps2.intro') }}</p>
+            <h1>{{ $t('apps2.title') }} <HelpLink page="GUIDE.md#apps" :label="$t('help.page')" /></h1>
           </div>
           <button type="button" class="btn btn-primary" @click="startNew">
             <i class="fas fa-plus" aria-hidden="true"></i> {{ $t('apps2.add') }}
@@ -269,7 +269,6 @@ async function saveOrder() {
 
         <div class="card-pad">
           <div class="list-tools" v-if="apps.length > 1">
-            <span class="small muted">{{ $t('apps2.order_help') }}</span>
             <button type="button" class="btn btn-small" @click="alphabetize"><i class="fas fa-arrow-down-a-z" aria-hidden="true"></i> {{ $t('apps.alphabetize') }}</button>
           </div>
           <div v-if="loading" class="empty-note"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i></div>
@@ -301,14 +300,13 @@ async function saveOrder() {
             </div>
           </div>
         </div>
-        <p class="small muted note">{{ $t('apps2.refresh_note') }}</p>
       </template>
     </main>
   </AppShell>
 </template>
 
 <style scoped>
-.list-tools { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0 10px; border-bottom: 1px solid var(--row-divider); flex-wrap: wrap; }
+.list-tools { display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 6px 0 10px; border-bottom: 1px solid var(--row-divider); flex-wrap: wrap; }
 .app-row { cursor: pointer; min-height: 76px; gap: 14px; }
 .app-row:hover .row-title { color: var(--accent); }
 .cover {

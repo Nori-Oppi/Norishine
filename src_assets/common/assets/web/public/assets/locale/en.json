@@ -34,11 +34,11 @@
     "actions": "Actions",
     "add_cmds": "Add Commands",
     "add_new": "Add New",
-    "allow_client_commands": "Allow client prepare commands",
+    "allow_client_commands": "Run device commands",
     "allow_client_commands_desc": "Whether to execute client prepare commands when running this app.",
     "alphabetize": "Alphabetize",
     "already_ordered": "Apps are already alphabetized.",
-    "app_name": "Application Name",
+    "app_name": "Name",
     "app_name_desc": "Application Name, as shown on Moonlight",
     "applications_desc": "Applications are refreshed when a session is terminated.",
     "applications_reorder_desc": "Drag and drop apps to reorder the apps. Any changes made will terminate the current running app.",
@@ -53,14 +53,14 @@
     "cmd_desc": "The main application to start. If blank, no application will be started.",
     "cmd_note": "If the path to the command executable contains spaces, you must enclose it in quotes.",
     "cmd_prep_desc": "A list of commands to be run before/after this application. If any of the prep-commands fail, starting the application is aborted.",
-    "cmd_prep_name": "Command Preparations",
+    "cmd_prep_name": "Commands before and after",
     "cmd_state_desc": "A list of commands to be run when resuming(first client connects when no clients are connected) or pausing(all clients disconnect) this application.\nDo commands for resume and Undo command for pause.\nPlease make sure to clean up any side effects of the commands in the preparation undo commands.\nPlease note that pause command will not be executed when the session terminates.",
-    "cmd_state_name": "Resume/Pause Commands",
+    "cmd_state_name": "Resume and pause commands",
     "covers_found": "Covers Found",
     "delete": "Delete",
     "delete_failed": "App delete failed: ",
-    "detached_cmds": "Detached Commands",
-    "detached_cmds_add": "Add Detached Command",
+    "detached_cmds": "Background commands",
+    "detached_cmds_add": "Add command",
     "detached_cmds_desc": "A list of commands to be run in the background.",
     "detached_cmds_note": "If the path to the command executable contains spaces, you must enclose it in quotes.",
     "edit": "Edit",
@@ -84,13 +84,13 @@
     "env_rtss_cli_example": "Example - rtss-cli for FPS Limitation:",
     "env_sunshine_compatibility": "Environment variables starting with \"SUNSHINE_\" are deprecated but still kept for compatibility with Sunshine related tools. The SUNSHINE_CLIENT_FPS variable is modified to FLOAT for fractional refresh rate support(especially for Special-K), if your script/tool can't take floating number input, go to Advanced tab to enable \"ENVVAR compatibility mode\". APOLLO_CLIENT_FPS is always FLOAT type.",
     "env_var_name": "Var Name",
-    "env_vars_about": "About Environment Variables",
+    "env_vars_about": "Environment variables",
     "env_vars_desc": "All commands get these environment variables by default:",
     "env_xrandr_example": "Example - Xrandr for Resolution Automation:",
     "export_launcher_file": "Export Launcher File",
     "exit_timeout": "Exit Timeout",
     "exit_timeout_desc": "Number of seconds to wait for all app processes to gracefully exit when requested to quit. If unset, the default is to wait up to 5 seconds. If set to zero or a negative value, the app will be immediately terminated.",
-    "find_cover": "Find Cover",
+    "find_cover": "Find cover",
     "global_prep_desc": "Enable/Disable the execution of Global Prep Commands for this application.",
     "global_prep_name": "Global Prep Commands",
     "global_state_desc": "Enable/Disable the execution of Global Resume/Pause Commands for this application.",
@@ -108,22 +108,22 @@
     "per_client_app_identity": "Per Client App Identity",
     "per_client_app_identity_desc": "Separate the app's identity per-client. Useful when you want different virtual display configurations on this specific app for different clients",
     "reorder_failed": "Failed to reorder apps: ",
-    "resolution_scale_factor": "Resolution Scale Factor",
+    "resolution_scale_factor": "Resolution scale",
     "resolution_scale_factor_desc": "Scale the client requested resolution based on this factor. e.g. 2000x1000 with a factor of 120% will become 2400x1200. Overrides client requested factor when the number isn't 100%. This option won't affect client requested streaming resolution.",
     "run_as_desc": "This can be necessary for some applications that require administrator permissions to run properly. Might cause URL schemes to fail.",
     "save_failed": "Failed to save app: ",
     "save_order": "Save Order",
-    "terminate_on_pause": "Terminate on Pause",
+    "terminate_on_pause": "Close the app when paused",
     "terminate_on_pause_desc": "Terminate the app when all clients are disconnected.",
-    "use_app_identity": "Use App Identity",
+    "use_app_identity": "Use its own identity",
     "use_app_identity_desc": "Use the app's own identity while creating virtual displays instead of client's. This is useful when you want display configuration for each APP separately.",
-    "virtual_display": "Always create Virtual Display",
+    "virtual_display": "Always use a virtual display",
     "virtual_display_desc": "Always create a virtual display when starting this app, overriding client request. Please make sure the SudoVDA driver is installed and enabled.",
     "virtual_display_primary": "Enforce Virtual Display Primary",
     "virtual_display_primary_desc": "Automatically set the virtual display as primary display when the app starts. Virtual display will always be set to primary when client requests to use virtual display. (Recommended to keep on) [Broken on Windows 11 24H2]",
     "wait_all": "Continue streaming until all app processes exit",
     "wait_all_desc": "This will continue streaming until all processes started by the app have terminated. When unchecked, streaming will stop when the initial app process exits, even if other app processes are still running.",
-    "working_dir": "Working Directory",
+    "working_dir": "Working directory",
     "working_dir_desc": "The working directory that should be passed to the process. For example, some applications use the working directory to search for configuration files. If not set, Norishine will default to the parent directory of the command"
   },
   "config": {
@@ -650,7 +650,7 @@
     "save_failed": "Couldn't save: {error}",
     "load_failed": "Couldn't load the settings: {error}",
     "retry": "Try again",
-    "reset": "Reset to default",
+    "reset": "Reset",
     "default_is": "Default: {value}",
     "careful": "Careful",
     "advanced": "Advanced",
@@ -708,7 +708,8 @@
     "only_advanced": "Everything here is an advanced setting; most people never need to change these.",
     "config_key": "Name in sunshine.conf",
     "search_shortcut": "Press / to search",
-    "save_shortcut": "Ctrl+S"
+    "save_shortcut": "Ctrl+S",
+    "not_used": "Not used now"
   },
   "account": {
     "title": "Sign in to Norishine",
@@ -733,7 +734,8 @@
     "change": "Change password",
     "changed": "Changed. Sign in again with the new password.",
     "wrong_current": "The current username or password is wrong.",
-    "forgot": "Forgot the password? On this PC, run \"norishine --creds <username> <password>\" in a Command Prompt opened as administrator, then restart Norishine."
+    "forgot": "Forgot the password? On this PC, run \"norishine --creds <username> <password>\" in a Command Prompt opened as administrator, then restart Norishine.",
+    "forgot_link": "Forgot the password?"
   },
   "home": {
     "status_failed": "Couldn't get the host status: {error}",
@@ -815,7 +817,7 @@
     "intro": "Pairing lets a client stream from this PC. Afterwards, choose what it may do on the Devices page.",
     "pin_tab": "PIN shown on the device",
     "otp_tab": "One-time PIN (Artemis)",
-    "pin_steps": "In Moonlight or Norilight, add this PC and start pairing. The client shows a 4-digit PIN; enter it here.",
+    "pin_steps": "Start pairing on the device; it shows up here.",
     "device": "Device asking to pair",
     "waiting": "Waiting for a device…",
     "waiting_help": "This page checks every few seconds; the device shows up here once it asks.",
@@ -931,7 +933,8 @@
     "preset_play_help": "Starts apps. Controller and touch input.",
     "preset_full": "Full control",
     "preset_full_help": "Starts apps. All input and the clipboard.",
-    "fine_tune": "Fine-tune"
+    "fine_tune": "Fine-tune",
+    "manage_trust": "Only for devices you trust"
   },
   "apps2": {
     "title": "Apps",
@@ -981,6 +984,11 @@
     "launched": "{name} started.",
     "launch_failed": "Couldn't start the app: {error}",
     "drag": "Drag to change the order",
-    "more": "More for {name}"
+    "more": "More for {name}",
+    "cmd_placeholder": "Empty: streams the desktop"
+  },
+  "help": {
+    "page": "Help for this page",
+    "settings": "What these settings do"
   }
 }

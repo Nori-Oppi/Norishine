@@ -154,7 +154,7 @@ const clients = [
             <span class="status-dot" :class="{ on: !!status.running_app }"></span>
             <div class="grow">
               <div class="row-title">{{ status.running_app ? status.running_app.name : $t('home.no_app') }}</div>
-              <div class="row-sub">{{ status.running_app ? $t('home.app_running') : $t('home.no_app_sub') }}</div>
+              <div v-if="status.running_app" class="row-sub">{{ $t('home.app_running') }}</div>
             </div>
             <button v-if="status.running_app" type="button" class="btn btn-small btn-danger" :disabled="busy" @click="closeApp">
               <i class="fas fa-stop" aria-hidden="true"></i> {{ $t('home.close') }}
@@ -176,28 +176,26 @@ const clients = [
               <i class="fas fa-link-slash" aria-hidden="true"></i> {{ $t('home.disconnect') }}
             </button>
           </div>
-          <p v-if="!(status.sessions || []).length" class="row-sub no-sessions">{{ $t('home.no_sessions') }}</p>
         </div>
       </section>
 
       <section class="section">
         <h2>{{ $t('home.shortcuts') }}</h2>
         <div class="tiles">
-          <a class="tile" href="./pin"><i class="fas fa-link" aria-hidden="true"></i><span class="row-title">{{ $t('home.pair') }}</span><span class="row-sub">{{ $t('home.pair_sub') }}</span></a>
-          <a class="tile" href="./clients"><i class="fas fa-mobile-screen" aria-hidden="true"></i><span class="row-title">{{ $t('navbar.clients') }}</span><span class="row-sub">{{ $t('home.devices_sub') }}</span></a>
-          <a class="tile" href="./apps"><i class="fas fa-table-cells-large" aria-hidden="true"></i><span class="row-title">{{ $t('navbar.applications') }}</span><span class="row-sub">{{ $t('home.apps_sub') }}</span></a>
-          <a class="tile" href="./config"><i class="fas fa-sliders" aria-hidden="true"></i><span class="row-title">{{ $t('navbar.configuration') }}</span><span class="row-sub">{{ $t('home.settings_sub') }}</span></a>
+          <a class="tile" href="./pin"><i class="fas fa-link" aria-hidden="true"></i><span class="row-title">{{ $t('home.pair') }}</span></a>
+          <a class="tile" href="./clients"><i class="fas fa-mobile-screen" aria-hidden="true"></i><span class="row-title">{{ $t('navbar.clients') }}</span></a>
+          <a class="tile" href="./apps"><i class="fas fa-table-cells-large" aria-hidden="true"></i><span class="row-title">{{ $t('navbar.applications') }}</span></a>
+          <a class="tile" href="./config"><i class="fas fa-sliders" aria-hidden="true"></i><span class="row-title">{{ $t('navbar.configuration') }}</span></a>
         </div>
       </section>
 
       <section class="section">
         <h2>{{ $t('home.clients') }}</h2>
         <div class="card-pad">
-          <a v-for="c in clients" :key="c.name" class="list-row client-link" :href="c.href" target="_blank" rel="noopener">
+          <a v-for="c in clients" :key="c.name" class="list-row client-link" :href="c.href" target="_blank" rel="noopener" :title="$t(c.note)">
             <i :class="c.icon" class="client-icon" aria-hidden="true"></i>
             <div class="grow">
               <div class="row-title">{{ c.name }} <span class="muted small">· {{ c.platform.startsWith('home.') ? $t(c.platform) : c.platform }}</span></div>
-              <div class="row-sub">{{ $t(c.note) }}</div>
             </div>
             <i class="fas fa-arrow-up-right-from-square muted" aria-hidden="true"></i>
           </a>

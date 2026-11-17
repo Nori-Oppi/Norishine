@@ -107,12 +107,10 @@ const envHelp = {
       <div class="form-field">
         <label for="app-name">{{ $t('apps.app_name') }}</label>
         <input id="app-name" v-model="a.name" class="field" required>
-        <p class="form-help">{{ $t('apps2.name_help') }}</p>
       </div>
       <div class="form-field">
-        <label for="app-cmd">{{ $t('apps.cmd') }}</label>
-        <input id="app-cmd" v-model="a.cmd" class="field mono" spellcheck="false">
-        <p class="form-help">{{ $t('apps2.cmd_help') }}</p>
+        <label for="app-cmd" :title="$t('apps2.cmd_help')">{{ $t('apps.cmd') }}</label>
+        <input id="app-cmd" v-model="a.cmd" class="field mono" spellcheck="false" :placeholder="$t('apps2.cmd_placeholder')" :title="$t('apps2.cmd_help')">
       </div>
       <div class="two">
         <div class="form-field">
@@ -124,7 +122,6 @@ const envHelp = {
           <input id="app-output" v-model="a.output" class="field mono" spellcheck="false">
         </div>
       </div>
-      <p class="form-help">{{ $t('apps2.dir_output_help') }}</p>
 
       <div class="form-field">
         <label for="app-image">{{ $t('apps.image') }}</label>
@@ -134,7 +131,6 @@ const envHelp = {
             <i class="fas" :class="coverSearching ? 'fa-spinner fa-spin' : 'fa-magnifying-glass'" aria-hidden="true"></i> {{ $t('apps.find_cover') }}
           </button>
         </div>
-        <p class="form-help">{{ $t('apps2.image_help') }}</p>
         <div v-if="covers !== null" class="covers">
           <p v-if="!coverSearching && !covers.length" class="muted small">{{ $t('apps2.no_covers') }}</p>
           <button v-for="c in covers" :key="c.key" type="button" class="cover" :disabled="coverBusy" :title="c.name" @click="useCover(c)">
@@ -157,7 +153,7 @@ const envHelp = {
         </div>
       </div>
       <div v-if="windows" class="toggle-row">
-        <div class="grow"><div class="row-title">{{ $t('apps2.elevated') }}</div><div class="row-sub">{{ $t('apps.run_as_desc') }}</div></div>
+        <div class="grow"><div class="row-title" :title="$t('apps.run_as_desc')">{{ $t('apps2.elevated') }}</div></div>
         <label class="switch"><input v-model="a.elevated" type="checkbox" role="switch" :aria-label="$t('apps2.elevated')"><span class="track"></span></label>
       </div>
     </section>
@@ -166,7 +162,7 @@ const envHelp = {
       <h3 class="sub">{{ $t('apps2.behaviour') }}</h3>
       <div class="card-pad">
         <div v-for="tg in toggles" :key="tg.key" class="toggle-row">
-          <div class="grow"><div class="row-title">{{ $t(tg.label) }}</div><div class="row-sub">{{ $t(tg.help) }}</div></div>
+          <div class="grow"><div class="row-title" :title="$t(tg.help)">{{ $t(tg.label) }}</div></div>
           <label class="switch">
             <input type="checkbox" role="switch" :aria-label="$t(tg.label)" :checked="tg.inverted ? !a[tg.key] : !!a[tg.key]"
                    @change="a[tg.key] = tg.inverted ? !$event.target.checked : $event.target.checked">
@@ -180,13 +176,12 @@ const envHelp = {
       <h3 class="sub">{{ $t('apps2.display') }}</h3>
       <div class="card-pad">
         <div v-for="tg in displayToggles" :key="tg.key" class="toggle-row" :class="{ indented: tg.indented }">
-          <div class="grow"><div class="row-title">{{ $t(tg.label) }}</div><div class="row-sub">{{ $t(tg.help) }}</div></div>
+          <div class="grow"><div class="row-title" :title="$t(tg.help)">{{ $t(tg.label) }}</div></div>
           <label class="switch"><input v-model="a[tg.key]" type="checkbox" role="switch" :aria-label="$t(tg.label)"><span class="track"></span></label>
         </div>
         <div v-if="windows" class="toggle-row">
           <div class="grow">
             <label class="row-title" for="app-scale">{{ $t('apps.resolution_scale_factor') }}: {{ a['scale-factor'] }}%</label>
-            <div class="row-sub">{{ $t('apps.resolution_scale_factor_desc') }}</div>
             <input id="app-scale" v-model.number="a['scale-factor']" type="range" min="20" max="200" step="1" class="range">
           </div>
         </div>
@@ -194,18 +189,15 @@ const envHelp = {
     </section>
 
     <section class="section">
-      <h3 class="sub">{{ $t('apps.cmd_prep_name') }}</h3>
-      <p class="form-help">{{ $t('apps2.prep_help') }}</p>
+      <h3 class="sub" :title="$t('apps2.prep_help')">{{ $t('apps.cmd_prep_name') }}</h3>
       <div class="card-pad"><CommandList :value="a['prep-cmd']" :fields="PREP_FIELDS" :elevated="windows" @update="a['prep-cmd'] = $event" /></div>
     </section>
     <section class="section">
-      <h3 class="sub">{{ $t('apps.cmd_state_name') }}</h3>
-      <p class="form-help">{{ $t('apps2.state_help') }}</p>
+      <h3 class="sub" :title="$t('apps2.state_help')">{{ $t('apps.cmd_state_name') }}</h3>
       <div class="card-pad"><CommandList :value="a['state-cmd']" :fields="PREP_FIELDS" :elevated="windows" @update="a['state-cmd'] = $event" /></div>
     </section>
     <section class="section">
-      <h3 class="sub">{{ $t('apps.detached_cmds') }}</h3>
-      <p class="form-help">{{ $t('apps2.detached_help') }}</p>
+      <h3 class="sub" :title="$t('apps2.detached_help')">{{ $t('apps.detached_cmds') }}</h3>
       <div class="card-pad"><CommandList :value="a.detached" :fields="DETACHED_FIELDS" add-label="apps.detached_cmds_add" @update="a.detached = $event" /></div>
     </section>
 
