@@ -23,7 +23,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a pull request replaces its running build. Builds of master finish
+  # (a newer one waits), so a docs-only push can't cancel the build that refreshes the
+  # compiler cache every pull request starts from.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # What the change touches. Docs-only changes build nothing; web UI changes get a quick
