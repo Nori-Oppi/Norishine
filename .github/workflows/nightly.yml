@@ -3,8 +3,9 @@
 #
 # Runs every night and publishes the result to the rolling "nightly"
 # pre-release, replacing the previous build. Nights without new commits on
-# master are skipped. Start a build by hand from the Actions tab
-# ("Run workflow") to build even when nothing changed.
+# master, or with only documentation changes since the last nightly, are
+# skipped. Start a build by hand from the Actions tab ("Run workflow") to
+# build even when nothing changed.
 #
 # The build, tests and installer come from ci.yml, so a nightly is built
 # exactly like every CI run, only with a nightly version name.
@@ -38,12 +39,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           LAST_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/nightly" --jq '.object.sha' 2>/dev/null || true)
-          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ "${LAST_SHA}" = "${GITHUB_SHA}" ]; then
-            echo "Nightly is already at ${GITHUB_SHA}; nothing to build."
-            echo "should_build=false" >> "${GITHUB_OUTPUT}"
-          else
-            echo "should_build=true" >> "${GITHUB_OUTPUT}"
+          should_build=true
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ] && [ -n "${LAST_SHA}" ]; then
+            if [ "${LAST_SHA}" = "${GITHUB_SHA}" ]; then
+              echo "Nightly is already at ${GITHUB_SHA}; nothing to build."
+              should_build=false
+            else
+              # Same rule as ci.yml: documentation alone doesn't change the installer.
+              # (docs/configuration.md is read by the tests, so it counts as code; the
+              # compare API lists at most 300 files, so more than that always builds.)
+              files=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${LAST_SHA}...${GITHUB_SHA}" --jq '.files[].filename' || echo "unknown")
+              count=$(echo "$files" | grep -c . || true)
+              code=$(echo "$files" | grep -vE '^(docs/|gh-pages-template/|\.github/ISSUE_TEMPLATE/)|\.md$|^(LICENSE|NOTICE|crowdin\.yml|codecov\.yml)$' || true)
+              if echo "$files" | grep -qx 'docs/configuration.md'; then code="docs/configuration.md"; fi
+              if [ "$count" -gt 0 ] && [ "$count" -lt 300 ] && [ -z "$code" ]; then
+                echo "Only documentation changed since the last nightly (${LAST_SHA}); nothing to build."
+                should_build=false
+              fi
+            fi
           fi
+          echo "should_build=${should_build}" >> "${GITHUB_OUTPUT}"
           echo "version=nightly-$(date -u +%Y%m%d)-$(echo ${GITHUB_SHA} | cut -c1-7)" >> "${GITHUB_OUTPUT}"
 
   build:
@@ -54,6 +69,8 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       version: ${{ needs.check.outputs.version }}
+      # Published as a release asset; the artifact only carries it to the publish job.
+      retention-days: 1
 
   publish:
     needs: [check, build]

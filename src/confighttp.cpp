@@ -45,6 +45,7 @@
 #include "utility.h"
 #include "uuid.h"
 #include "web_auth.h"
+#include "version.h"
 
 #ifdef _WIN32
   #include "platform/windows/utils.h"
@@ -1061,7 +1062,7 @@ namespace confighttp {
     nlohmann::json output_tree;
     output_tree["status"] = true;
     output_tree["platform"] = SUNSHINE_PLATFORM;
-    output_tree["version"] = PROJECT_VERSION;
+    output_tree["version"] = version::project;
 #ifdef _WIN32
     output_tree["vdisplayStatus"] = (int)proc::vDisplayDriverStatus;
 #endif

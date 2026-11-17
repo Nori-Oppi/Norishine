@@ -52,7 +52,13 @@ include_directories(BEFORE SYSTEM "${CMAKE_SOURCE_DIR}/third-party/nv-codec-head
 file(GLOB NVENC_SOURCES CONFIGURE_DEPENDS "src/nvenc/*.cpp" "src/nvenc/*.h")
 list(APPEND PLATFORM_TARGET_FILES ${NVENC_SOURCES})
 
+# The version and commit change with every build; they go in one generated file instead
+# of compile definitions, so the rest stays cacheable (see src/version.h).
+configure_file("${CMAKE_SOURCE_DIR}/src/version.cpp.in" "${CMAKE_BINARY_DIR}/generated-src/version.cpp" @ONLY)
+
 set(SUNSHINE_TARGET_FILES
+        "${CMAKE_BINARY_DIR}/generated-src/version.cpp"
+        "${CMAKE_SOURCE_DIR}/src/version.h"
         "${CMAKE_SOURCE_DIR}/third-party/moonlight-common-c/src/Input.h"
         "${CMAKE_SOURCE_DIR}/third-party/moonlight-common-c/src/Rtsp.h"
         "${CMAKE_SOURCE_DIR}/third-party/moonlight-common-c/src/RtspParser.c"
