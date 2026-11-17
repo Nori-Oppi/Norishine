@@ -44,6 +44,7 @@
 #include "uuid.h"
 #include "video.h"
 #include "zwpad.h"
+#include "version.h"
 
 #ifdef _WIN32
   #include "platform/windows/virtual_display.h"
@@ -1542,7 +1543,7 @@ namespace nvhttp {
       {"status", true},
       {"api_version", API_VERSION},
       {"hostname", config::nvhttp.sunshine_name},
-      {"version", PROJECT_VERSION},
+      {"version", version::project},
       {"platform", SUNSHINE_PLATFORM},
       {"uniqueid", http::unique_id},
       {"running_app", app},

@@ -16,32 +16,135 @@ on:
         description: 'Version to build, such as nightly-20261116-be295d3. Empty uses the git-based version.'
         type: string
         default: ''
+      retention-days:
+        description: 'How long to keep the installer artifact.'
+        type: number
+        default: 14
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  # What the change touches. Docs-only changes build nothing; web UI changes get a quick
+  # web build (also next to the Windows build, so web errors show up within a minute).
+  # Manual runs and the nightly build everything.
+  changes:
+    name: Changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      native: ${{ steps.classify.outputs.native }}
+      web: ${{ steps.classify.outputs.web }}
+    steps:
+      - name: Classify
+        id: classify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          CALLED: ${{ inputs.version != '' }}
+        run: |
+          set -euo pipefail
+          everything() { echo "native=true" >> "$GITHUB_OUTPUT"; echo "web=true" >> "$GITHUB_OUTPUT"; exit 0; }
+          if [ "$CALLED" = "true" ] || { [ "$EVENT" != "pull_request" ] && [ "$EVENT" != "push" ]; }; then
+            echo "Manual or nightly run: build everything."; everything
+          fi
+          if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+            echo "No base commit to compare with: build everything."; everything
+          fi
+          # The compare API lists at most 300 files; more than that builds everything.
+          files=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${BASE}...${HEAD}" --jq '.files[].filename') || everything
+          count=$(printf '%s\n' "$files" | grep -c . || true)
+          if [ "$count" -ge 300 ]; then everything; fi
+          native=false; web=false
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              # Read by the unit tests: these count as code.
+              docs/configuration.md|src_assets/common/assets/web/public/assets/locale/*) native=true ;;
+              docs/*|*.md|gh-pages-template/*|LICENSE|NOTICE|crowdin.yml|codecov.yml|.github/ISSUE_TEMPLATE/*) ;;
+              src_assets/common/assets/web/*|package.json|package-lock.json|vite.config.js) web=true ;;
+              *) native=true ;;
+            esac
+          done <<< "$files"
+          # The Windows build includes the web UI.
+          if [ "$native" = "true" ] && grep -qE '^(src_assets/common/assets/web/|package(-lock)?\.json$|vite\.config\.js$)' <<< "$files"; then web=true; fi
+          echo "Changed files: $count; native build: $native; web build: $web"
+          echo "native=$native" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+
+  web:
+    name: Web UI build
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 'lts/*'
+          cache: npm
+          # package-lock.json isn't tracked
+          cache-dependency-path: package.json
+
+      - name: Build
+        run: |
+          npm install --no-audit --no-fund
+          # vite.config.js resolves the output folder, which must exist
+          mkdir -p build
+          SUNSHINE_ASSETS_DIR=build npx vite build
+
   windows:
     name: Windows build and tests
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     runs-on: windows-2022
+    timeout-minutes: 60
     permissions:
       contents: read
     defaults:
       run:
         shell: msys2 {0}
+    env:
+      CCACHE_DIR: ${{ github.workspace }}\.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 2G
+      CCACHE_NOHASHDIR: 'true'
+      # Hash the compiler's own dependency file instead of running the preprocessor
+      # separately on a miss (that made a cold build ~50% slower).
+      CCACHE_DEPEND: 'true'
     steps:
+      # Only the submodules a Windows build uses (not the Linux, macOS, docs or Flatpak
+      # ones), shallow and in parallel.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          submodules: recursive
+
+      - name: Submodules
+        shell: pwsh
+        run: |
+          git submodule update --init --depth 1 --jobs 8 -- `
+            third-party/Simple-Web-Server third-party/ViGEmClient third-party/googletest `
+            third-party/libdisplaydevice third-party/moonlight-common-c third-party/nanors `
+            third-party/nv-codec-headers third-party/nvapi-open-source-sdk third-party/tray
+          git -C third-party/moonlight-common-c submodule update --init --depth 1
+          git -C third-party/libdisplaydevice submodule update --init --depth 1 -- third-party/googletest
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e  # v2.33.0
         with:
           msystem: UCRT64
           update: true
-          # Same package list as docs/DEVELOPMENT.md
+          # Same package list as docs/DEVELOPMENT.md, plus ccache
           install: >-
             git
             mingw-w64-ucrt-x86_64-toolchain
@@ -57,18 +160,32 @@ jobs:
             mingw-w64-ucrt-x86_64-openssl
             mingw-w64-ucrt-x86_64-opus
             mingw-w64-ucrt-x86_64-nlohmann-json
+            mingw-w64-ucrt-x86_64-ccache
 
       # The official Node.js, not MSYS2's (see docs/building.md).
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version: 'lts/*'
+          cache: npm
+          # package-lock.json isn't tracked
+          cache-dependency-path: package.json
 
       - name: Node.js path
         shell: pwsh
         run: |
           $dir = Split-Path -Parent (Get-Command node).Source
           echo "NODEJS_PATH=$dir" >> $env:GITHUB_ENV
+
+      # Compiler cache: a branch starts from its own last build, else from master's.
+      - name: Restore compiler cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-windows-${{ github.ref }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ccache-windows-${{ github.ref }}-
+            ccache-windows-refs/heads/master-
 
       - name: Configure
         env:
@@ -81,19 +198,45 @@ jobs:
             # logs and the installer.
             export BRANCH="${GITHUB_REF_NAME}" BUILD_VERSION="${VERSION}" COMMIT="${GITHUB_SHA}"
           fi
-          cmake -B build -G Ninja -S . -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake -B build -G Ninja -S . -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
+        id: build
         run: |
           export PATH="$PATH:$(cygpath "$NODEJS_PATH")"
+          ccache --zero-stats
           echo "::add-matcher::.github/matchers/gcc.json"
           ninja -C build
           echo "::remove-matcher owner=gcc::"
 
+      - name: Compiler cache statistics
+        if: always() && steps.build.outcome != 'skipped'
+        run: |
+          ccache --show-stats
+          { echo '### Compiler cache'; echo '```'; ccache --show-stats; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      # Saved even when the build failed, so the next run reuses what compiled.
+      - name: Save compiler cache
+        if: always() && steps.build.outcome != 'skipped'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: .ccache
+          key: ccache-windows-${{ github.ref }}-${{ github.run_id }}-${{ github.run_attempt }}
+
       - name: Run tests
         id: test
         working-directory: build/tests
-        run: ./test_sunshine.exe --gtest_color=yes --gtest_output=xml:test_results.xml
+        run: |
+          set -o pipefail
+          ./test_sunshine.exe --gtest_color=yes --gtest_output=xml:test_results.xml 2>&1 | tee test_output.log
+        # Failed tests are listed in the job summary (next step).
+
+      - name: List failed tests
+        if: failure() && steps.test.outcome == 'failure'
+        working-directory: build/tests
+        run: |
+          { echo '### Failed tests'; echo '```'; sed 's/\x1b\[[0-9;]*m//g' test_output.log | grep -E '^\[  FAILED  \]' | sort -u; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload test results
         if: always() && (steps.test.outcome == 'success' || steps.test.outcome == 'failure')
@@ -104,6 +247,7 @@ jobs:
             build/tests/test_results.xml
             build/tests/*.log
           if-no-files-found: warn
+          retention-days: 14
 
       - name: Package installer
         working-directory: build
@@ -115,3 +259,6 @@ jobs:
           name: installer-windows
           path: build/cpack_artifacts/*.exe
           if-no-files-found: error
+          # Already compressed (NSIS).
+          compression-level: 0
+          retention-days: ${{ inputs.retention-days || 14 }}
