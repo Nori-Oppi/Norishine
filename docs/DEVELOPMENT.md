@@ -40,10 +40,31 @@ test_sunshine.exe --gtest_filter=-MouseInputs/*:Configurations/AudioTest.*
 
 All tests pass; see [KNOWN-ISSUES.md](KNOWN-ISSUES.md) for the suites skipped locally.
 
+## CI
+
+`.github/workflows/ci.yml` runs on pull requests and pushes to `master`. A first job
+sorts the changed files:
+
+| Changed | Runs |
+| --- | --- |
+| Only docs (`docs/`, `*.md`, licence and translation config) | nothing else |
+| Web UI only (`src_assets/common/assets/web/`, `package.json`, `vite.config.js`) | web UI build on Linux (about a minute) |
+| Anything else, `docs/configuration.md` or the locale files (the tests read them) | Windows build, tests and installer, plus the web UI build |
+
+Manual runs and the nightly always build everything. `[skip ci]` in a commit message
+skips the run entirely.
+
+The Windows build uses ccache. A pull request starts from its own last cache, otherwise
+from `master`'s, so a warm build takes about 5 minutes instead of about 20. The version
+and commit are compiled only into `version.cpp` (generated from `src/version.cpp.in`):
+as compile definitions they would change every file on each commit and nothing could be
+reused. Failed tests and cache statistics are in the run's summary. Installers and test
+results are kept 14 days.
+
 ## Nightly builds
 
 `.github/workflows/nightly.yml` runs daily at 20:17 Amsterdam time. When `master` has
-new commits since the last nightly, it builds, tests and packages the installer through
+new commits since the last nightly (other than documentation alone), it builds, tests and packages the installer through
 `ci.yml` with a version such as `nightly-20261116-be295d3`, then replaces the rolling
 `nightly` pre-release with `Norishine-Windows-x64-<version>-Setup.exe`. Start it by hand
 from the Actions tab (Nightly, Run workflow) to build even when nothing changed. Runs
