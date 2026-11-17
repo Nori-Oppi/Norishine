@@ -291,6 +291,10 @@ namespace config {
     std::vector<prep_cmd_t> prep_cmds;
     std::vector<prep_cmd_t> state_cmds;
     std::vector<server_cmd_t> server_cmds;
+
+    /// Windows: another host had the default port at startup, so this run uses 48989.
+    /// Its name ("Apollo", "ApolloService", "another program"), or empty.
+    std::string port_moved_for;
   };
 
   extern video_t video;

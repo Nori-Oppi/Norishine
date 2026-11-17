@@ -36,9 +36,6 @@ $NorishineConfig = Join-Path $NorishineRoot 'config'
 $RecordFile = Join-Path $NorishineConfig 'other_host.json'
 $SideBySidePort = 48989
 $PortComment = '# Added by the Norishine installer: Apollo or Vibepollo uses the default port'
-# Written by Norishine itself when it finds another host's service on the default port
-# (src/config.cpp, avoid_other_host_port).
-$HostPortComment = '# Added by Norishine: another stream host uses the default port'
 # Sunshine's service names. Apollo's and Vibepollo's uninstallers delete SunshineSvc.
 $SunshineServices = @('SunshineSvc', 'SunshineService')
 $CopyMarker = 'norishine_copy.txt'
@@ -227,7 +224,7 @@ function Remove-SideBySidePort([string]$ConfigDir) {
   $lines = @(Get-Content -LiteralPath $conf)
   $kept = @()
   for ($i = 0; $i -lt $lines.Count; $i++) {
-    if (($lines[$i] -eq $PortComment -or $lines[$i] -eq $HostPortComment) -and $i + 1 -lt $lines.Count -and $lines[$i + 1] -eq "port = $SideBySidePort") {
+    if ($lines[$i] -eq $PortComment -and $i + 1 -lt $lines.Count -and $lines[$i + 1] -eq "port = $SideBySidePort") {
       $i++
       continue
     }
@@ -256,7 +253,8 @@ function Remove-StalePathEntries([string]$InstallDir, [string]$Key = 'HKLM:\SYST
 }
 
 # Settings of Sunshine services that don't belong to the host being replaced, so they can
-# be put back if its uninstaller deletes them.
+# be put back if its uninstaller deletes them: start type, account, dependencies and
+# recovery (failure) actions, as stored under the service's registry key.
 function Save-SunshineServices([string]$OtherInstallDir) {
   $saved = @()
   foreach ($name in $SunshineServices) {
@@ -268,12 +266,42 @@ function Save-SunshineServices([string]$OtherInstallDir) {
       ImagePath = [string]$props.ImagePath
       Start = [int]$props.Start
       Delayed = [int]$props.DelayedAutostart
+      ErrorControl = $props.ErrorControl
       DisplayName = $(if ($props.DisplayName) { [string]$props.DisplayName } else { $name })
       Description = [string]$props.Description
+      Account = [string]$props.ObjectName
+      DependsOn = @($props.DependOnService | Where-Object { $_ })
+      FailureActions = $props.FailureActions
+      FailureCommand = [string]$props.FailureCommand
+      RebootMessage = [string]$props.RebootMessage
+      FailureFlag = $props.FailureActionsOnNonCrashFailures
       Running = (Get-Service -Name $name -ErrorAction SilentlyContinue).Status -eq 'Running'
     }
   }
   return $saved
+}
+
+# The FailureActions registry value is a SERVICE_FAILURE_ACTIONS header (reset period,
+# then reboot message, command, action count and actions as 32-bit fields) followed by
+# one {type, delay ms} pair per action. Types: 0 none, 1 restart, 2 reboot, 3 run command.
+# Returns the sc.exe failure arguments, or nothing when there are no actions.
+function ConvertTo-FailureArguments($Service) {
+  $bytes = [byte[]]$Service.FailureActions
+  if (-not $bytes -or $bytes.Length -lt 20) { return @() }
+  $reset = [BitConverter]::ToUInt32($bytes, 0)
+  $count = [BitConverter]::ToUInt32($bytes, 12)
+  if ($count -eq 0 -or $bytes.Length -lt 20 + 8 * $count) { return @() }
+  $names = @{ 0 = ''; 1 = 'restart'; 2 = 'reboot'; 3 = 'run' }
+  $actions = @()
+  for ($i = 0; $i -lt $count; $i++) {
+    $type = [BitConverter]::ToUInt32($bytes, 20 + 8 * $i)
+    $delay = [BitConverter]::ToUInt32($bytes, 24 + 8 * $i)
+    $actions += "$($names[[int]$type])/$delay"
+  }
+  $arguments = @('failure', $Service.Name, 'reset=', "$reset", 'actions=', ($actions -join '/'))
+  if ($Service.FailureCommand) { $arguments += @('command=', $Service.FailureCommand) }
+  if ($Service.RebootMessage) { $arguments += @('reboot=', $Service.RebootMessage) }
+  return $arguments
 }
 
 function Restore-SunshineServices($Saved) {
@@ -289,9 +317,26 @@ function Restore-SunshineServices($Saved) {
 
     $startup = switch ($service.Start) { 2 { 'Automatic' } 4 { 'Disabled' } default { 'Manual' } }
     try {
-      New-Service -Name $service.Name -BinaryPathName $service.ImagePath -DisplayName $service.DisplayName -StartupType $startup | Out-Null
+      $create = @{ Name = $service.Name; BinaryPathName = $service.ImagePath; DisplayName = $service.DisplayName; StartupType = $startup }
+      if ($service.DependsOn.Count) { $create.DependsOn = $service.DependsOn }
+      New-Service @create | Out-Null
       if ($service.Description) { Set-ItemProperty -LiteralPath $key -Name Description -Value $service.Description }
-      if ($service.Start -eq 2 -and $service.Delayed -eq 1) { Set-ItemProperty -LiteralPath $key -Name DelayedAutostart -Value 1 -Type DWord }
+      if ($service.Start -eq 2 -and $service.Delayed -eq 1) { & sc.exe config $service.Name start= delayed-auto | Out-Null }
+      if ($null -ne $service.ErrorControl) {
+        $errorControl = switch ([int]$service.ErrorControl) { 0 { 'ignore' } 2 { 'severe' } 3 { 'critical' } default { 'normal' } }
+        & sc.exe config $service.Name error= $errorControl | Out-Null
+      }
+      # Built-in accounts need no password; other accounts can't be put back without one.
+      if ($service.Account -and $service.Account -ne 'LocalSystem') {
+        if ($service.Account -match '^NT AUTHORITY\(LocalService|NetworkService)$') {
+          & sc.exe config $service.Name obj= $service.Account password= '' | Out-Null
+        } else {
+          Write-Log "$($service.Name) ran as $($service.Account); set that account again in Services (it now runs as LocalSystem)."
+        }
+      }
+      $failure = ConvertTo-FailureArguments $service
+      if ($failure.Count) { & sc.exe @failure | Out-Null }
+      if ($null -ne $service.FailureFlag) { & sc.exe failureflag $service.Name ([int]$service.FailureFlag) | Out-Null }
       if ($service.Running) { Start-Service -Name $service.Name -ErrorAction SilentlyContinue }
       Write-Log "Put back the $($service.Name) service, which the uninstaller removed."
     } catch {

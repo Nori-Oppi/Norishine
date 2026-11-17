@@ -126,7 +126,9 @@ Host name, version, platform, unique ID, running app (`id`, `uuid`, `name`, or n
 `name`, its `address`, `width`, `height`, `fps`, `bitrate_kbps`, `codec` (`H.264`, `HEVC`,
 `AV1`), `hdr` and `state`. Optional, added later: `encoder`, the encoder the host chose
 (`nvenc`, `quicksync`, `amdvce`, `vaapi`, `videotoolbox`, `software`, or empty before the
-first check). The same object (plus `device`) is what paired clients get from
+first check); `port`, the base port in use; `port_moved_for`, on Windows the other host
+that had the default port at startup, so this run uses 48989 (empty otherwise). The same
+object (plus `device`) is what paired clients get from
 `GET /api/v1/status` on the HTTPS port.
 
 ## Apps, devices, streams and displays (/api/v1)

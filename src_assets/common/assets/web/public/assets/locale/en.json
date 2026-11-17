@@ -741,6 +741,7 @@
     "status_failed": "Couldn't get the host status: {error}",
     "startup_errors": "Norishine reported these errors when it started. Fix them before streaming:",
     "view_logs": "Open the log",
+    "port_moved": "Port {port}: {other} uses the default port.",
     "update_stable": "A new version is available:",
     "update_pre": "A new pre-release is available:",
     "download": "Download",

@@ -194,7 +194,8 @@ namespace proc {
 
   /**
    * @brief Remove the virtual displays this host created, before a forced exit (a hang)
-   *        that skips the normal cleanup. Does nothing on other platforms.
+   *        that skips the normal cleanup. Returns within about 3 seconds even when the
+   *        driver doesn't answer. Does nothing on other platforms.
    */
   void remove_virtual_displays();
 

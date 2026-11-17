@@ -1549,6 +1549,8 @@ namespace nvhttp {
       {"active_sessions", rtsp_stream::session_count()},
       {"sessions", sessions},
       {"encoder", std::string {video::active_encoder_name()}},
+      {"port", net::map_port(PORT_HTTP)},
+      {"port_moved_for", config::sunshine.port_moved_for},
     };
   }
 

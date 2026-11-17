@@ -11,12 +11,18 @@ audio devices). CI runs the full suite.
 
 ## Host
 
-No open host issues. Fixed on 2026-11-17:
+- The SudoVDA device is opened for overlapped I/O, but its calls
+  (`third-party/sudovda/sudovda.h`) pass no `OVERLAPPED`, which Windows doesn't support.
+  It works because the driver completes them at once. Inherited from Apollo; left as is
+  until it can be tested with the driver.
+
+Fixed on 2026-11-17:
 
 - SudoVDA displays left behind when a session hung on shutdown ("Hang detected! Session
   failed to terminate"). Norishine lists the displays it creates in
-  `config\state\virtual_displays.txt`, removes them before a forced exit, and removes any
-  still listed from an earlier run when it starts.
+  `config\state\virtual_displays.txt` and removes them before a forced exit (on a separate
+  thread, given 3 seconds, so the exit happens even if the driver doesn't answer). Any
+  still listed from an earlier run are removed when it starts.
 - `QOSAddSocketToFlow() failed: 1168` warnings: QoS is skipped for loopback addresses.
 - `POST /api/apps/close` answered 400 when sent without a body or `Content-Type`. Calls
   without a body no longer need one, and closing the app also ends its streams at once.
@@ -41,13 +47,17 @@ Vibepollo is installed.
 
 Handled since 2026-11-17:
 
-- Apollo, Vibepollo or Sunshine installed (again) while Norishine is: when its service
-  uses the default port, Norishine moves to port 48989 at its next start and saves that
-  in `sunshine.conf` (replacing that host later removes the line again). Clients that
-  added the host by address need `:48989`.
+- Apollo, Vibepollo or Sunshine installed (again) while Norishine is: when another
+  program listens on the default ports, or such a host's service is running, and no port
+  is set, Norishine uses port 48989 for that run and shows it on its home page. Nothing
+  is saved, so it is back on the default port once the other host is gone. Clients that
+  added the host by address need `:48989` meanwhile. If both start at boot and Norishine
+  is first, the other host is the one that can't stream.
 - Apollo's and Vibepollo's uninstallers delete a `SunshineSvc` service. When replacing
-  them, the installer saves the settings of any Sunshine service that isn't theirs and
-  puts it back (started again if it was running) if the uninstaller removed it.
+  them, the installer saves any Sunshine service that isn't theirs (start type, account,
+  dependencies, recovery actions) and puts it back, started again if it was running, if
+  the uninstaller removed it. A service that ran under a user account comes back as
+  LocalSystem: set the account again in Services.
 
 Remaining:
 
