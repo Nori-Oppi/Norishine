@@ -1,6 +1,7 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppShell from '../ui/AppShell.vue'
+import SealMark from '../ui/SealMark.vue'
 import { api } from '../ui/api'
 import { confirmAction, notify } from '../ui/dialogs'
 import ApolloVersion from '../apollo_version'
@@ -115,15 +116,25 @@ const clients = [
 
 <template>
   <AppShell page="home">
-    <main class="page-main">
-      <div class="page-head">
-        <div>
-          <h1>{{ status ? status.hostname : 'Norishine' }}</h1>
-          <p v-if="status" class="muted">
+    <div class="band">
+      <div class="band-inner">
+        <div class="band-text">
+          <h1 class="host-name">{{ status ? status.hostname : 'Norishine' }}</h1>
+          <p v-if="status">
             Norishine {{ status.version }} · {{ status.platform }}
           </p>
         </div>
+        <div class="pup" aria-hidden="true">
+          <SealMark class="pup-mark" />
+          <svg class="ripples" viewBox="0 0 320 20" preserveAspectRatio="none">
+            <path d="M8 14 Q24 8 40 14 M52 16 Q62 12 72 16" />
+            <path d="M248 16 Q258 12 268 16 M280 14 Q296 8 312 14" />
+          </svg>
+        </div>
       </div>
+    </div>
+
+    <main class="page-main">
 
       <div v-if="statusError" class="notice notice-error section">
         <span class="grow">{{ $t('home.status_failed', { error: statusError }) }}</span>
@@ -214,6 +225,49 @@ const clients = [
 </template>
 
 <style scoped>
+/* The header's blush band continues under it, with the host's name and the seal pup
+   surfacing through its lower edge. Same 12% shade as the header, for white text contrast. */
+.band {
+  background: linear-gradient(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.12)),
+              linear-gradient(90deg, var(--blush-start), var(--blush-middle) 55%, var(--blush-end));
+  color: #fff;
+  overflow: hidden;
+}
+.band-inner {
+  position: relative; max-width: 980px; margin: 0 auto; padding: 40px 16px 36px;
+  min-height: 200px; display: flex; align-items: flex-end;
+}
+.band-text { position: relative; z-index: 1; max-width: calc(100% - 230px); }
+.host-name {
+  color: #fff; font-family: var(--font-display);
+  font-size: clamp(32px, 6vw, 52px); font-weight: 600; line-height: 1.05; letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.band-text p { margin: 8px 0 0; color: rgba(255, 255, 255, 0.92); }
+.pup { position: absolute; right: 16px; bottom: 0; width: 200px; height: 136px; }
+.pup-mark {
+  position: absolute; left: 0; top: 0; width: 200px; height: 200px;
+  filter: drop-shadow(0 6px 18px rgba(60, 20, 36, 0.28));
+  animation: surface 1100ms var(--ease-out) 120ms both;
+}
+.ripples {
+  position: absolute; left: -60px; bottom: 2px; width: 320px; height: 20px;
+  fill: none; stroke: rgba(255, 255, 255, 0.6); stroke-width: 2.5; stroke-linecap: round;
+  animation: ripple 700ms ease-out 900ms both;
+}
+@keyframes surface { from { transform: translateY(64px); } }
+@keyframes ripple { from { opacity: 0; transform: scaleX(0.6); } }
+@media (prefers-reduced-motion: reduce) {
+  .pup-mark, .ripples { animation: none; }
+}
+@media (max-width: 600px) {
+  .band-inner { min-height: 168px; padding: 28px 16px 28px; }
+  .band-text { max-width: calc(100% - 120px); }
+  .pup { width: 120px; height: 82px; right: 12px; }
+  .pup-mark { width: 120px; height: 120px; }
+  .ripples { left: -40px; width: 200px; }
+}
+
 .fatal-list { margin: 6px 0; padding-left: 18px; }
 .no-sessions { padding: 12px 0 2px; border-top: 1px solid var(--row-divider); margin: 0; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
