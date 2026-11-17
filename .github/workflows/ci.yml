@@ -100,6 +100,8 @@ jobs:
       - name: Build
         run: |
           npm install --no-audit --no-fund
+          # vite.config.js resolves the output folder, which must exist
+          mkdir -p build
           SUNSHINE_ASSETS_DIR=build npx vite build
 
   windows:
