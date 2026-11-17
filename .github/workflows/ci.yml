@@ -118,6 +118,9 @@ jobs:
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_MAXSIZE: 2G
       CCACHE_NOHASHDIR: 'true'
+      # Hash the compiler's own dependency file instead of running the preprocessor
+      # separately on a miss (that made a cold build ~50% slower).
+      CCACHE_DEPEND: 'true'
     steps:
       # Only the submodules a Windows build uses (not the Linux, macOS, docs or Flatpak
       # ones), shallow and in parallel.
