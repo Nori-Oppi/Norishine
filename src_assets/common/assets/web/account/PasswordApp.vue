@@ -61,7 +61,6 @@ async function save() {
       <div class="page-head">
         <div>
           <h1>{{ $t('account.change_title') }}</h1>
-          <p class="muted">{{ $t('account.change_intro') }}</p>
         </div>
       </div>
       <form class="card-pad form-grid" @submit.prevent="save">
@@ -93,7 +92,7 @@ async function save() {
         <p v-if="done" class="notice notice-ok" role="status">{{ $t('account.changed') }}</p>
         <div><button type="submit" class="btn btn-primary" :disabled="busy || done">{{ $t('account.change') }}</button></div>
       </form>
-      <p class="small muted note">{{ $t('account.forgot') }}</p>
+      <p class="small muted note"><a href="https://github.com/Nori-Oppi/Norishine/blob/master/docs/GUIDE.md#forgot-the-password" target="_blank" rel="noopener">{{ $t('account.forgot_link') }}</a></p>
     </main>
   </AppShell>
 </template>

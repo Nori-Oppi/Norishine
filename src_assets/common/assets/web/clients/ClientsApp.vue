@@ -6,6 +6,7 @@ import { confirmAction, notify } from '../ui/dialogs'
 import { clone } from '../settings/model'
 import CommandList from '../settings/CommandList.vue'
 import RowMenu from '../ui/RowMenu.vue'
+import HelpLink from '../ui/HelpLink.vue'
 import { P, ACCESS_LEVELS, MANAGE_LEVELS, INPUTS, EXTRAS, PRESETS, accessLevel, manageLevel, presetOf, setLevel, summary } from './permissions'
 
 const i18n = inject('i18n')
@@ -204,8 +205,7 @@ async function disconnect(c) {
     <main class="page-main">
       <div class="page-head">
         <div>
-          <h1>{{ $t('devices.title') }}</h1>
-          <p class="muted">{{ $t('devices.intro') }}</p>
+          <h1>{{ $t('devices.title') }} <HelpLink page="GUIDE.md#devices-and-permissions" :label="$t('help.page')" /></h1>
         </div>
         <a class="btn btn-primary" href="./pin"><i class="fas fa-plus" aria-hidden="true"></i> {{ $t('devices.pair_new') }}</a>
       </div>
@@ -245,16 +245,13 @@ async function disconnect(c) {
 
             <fieldset class="group">
               <legend>{{ $t('devices.quick') }}</legend>
-              <p class="form-help">{{ $t('devices.quick_help') }}</p>
               <div class="presets" role="radiogroup">
-                <label v-for="preset in PRESETS" :key="preset.id" class="level" :class="{ active: presetOf(form.perm) === preset.id }">
+                <label v-for="preset in PRESETS" :key="preset.id" class="level" :class="{ active: presetOf(form.perm) === preset.id }" :title="$t(preset.help)">
                   <input type="radio" :name="'preset-' + c.uuid" :checked="presetOf(form.perm) === preset.id"
                          @change="form.perm = preset.apply(form.perm)">
                   <span class="row-title">{{ $t(preset.label) }}</span>
-                  <span class="row-sub">{{ $t(preset.help) }}</span>
                 </label>
               </div>
-              <p v-if="!presetOf(form.perm)" class="form-help custom-note">{{ $t('devices.quick_custom') }}</p>
             </fieldset>
 
             <details class="more-group" :open="fineTune" @toggle="fineTune = $event.target.open">
@@ -263,11 +260,10 @@ async function disconnect(c) {
             <fieldset class="group">
               <legend>{{ $t('devices.perm_streaming') }}</legend>
               <div class="levels" role="radiogroup">
-                <label v-for="level in ACCESS_LEVELS" :key="level.id" class="level" :class="{ active: accessLevel(form.perm) === level.id }">
+                <label v-for="level in ACCESS_LEVELS" :key="level.id" class="level" :class="{ active: accessLevel(form.perm) === level.id }" :title="$t(level.help)">
                   <input type="radio" :name="'access-' + c.uuid" :checked="accessLevel(form.perm) === level.id"
                          @change="form.perm = setLevel(form.perm, P.access, level.bits)">
                   <span class="row-title">{{ $t(level.label) }}</span>
-                  <span class="row-sub">{{ $t(level.help) }}</span>
                 </label>
               </div>
             </fieldset>
@@ -285,9 +281,9 @@ async function disconnect(c) {
             <fieldset class="group">
               <legend>{{ $t('devices.perm_extras') }}</legend>
               <div class="checks column">
-                <label v-for="p in EXTRAS" :key="p.bit" class="check">
+                <label v-for="p in EXTRAS" :key="p.bit" class="check" :title="$t(p.help)">
                   <input type="checkbox" :checked="(form.perm & p.bit) !== 0" @change="toggle(p.bit, $event.target.checked)">
-                  <span>{{ $t(p.label) }} <span class="row-sub">· {{ $t(p.help) }}</span></span>
+                  <span>{{ $t(p.label) }}</span>
                 </label>
               </div>
             </fieldset>
@@ -296,13 +292,12 @@ async function disconnect(c) {
 
             <fieldset class="group">
               <legend>{{ $t('devices.perm_manage') }}</legend>
-              <p class="form-help">{{ $t('devices.manage_help') }}</p>
               <div class="levels three" role="radiogroup">
-                <label v-for="level in MANAGE_LEVELS" :key="level.id" class="level" :class="{ active: manageLevel(form.perm) === level.id }">
+                <label v-for="level in MANAGE_LEVELS" :key="level.id" class="level" :class="{ active: manageLevel(form.perm) === level.id }" :title="$t(level.help)">
                   <input type="radio" :name="'manage-' + c.uuid" :checked="manageLevel(form.perm) === level.id"
                          @change="form.perm = setLevel(form.perm, P.manage, level.bits)">
                   <span class="row-title">{{ $t(level.label) }}</span>
-                  <span class="row-sub">{{ $t(level.help) }}</span>
+                  <span v-if="level.id === 'write'" class="row-sub careful">{{ $t('devices.manage_trust') }}</span>
                 </label>
               </div>
             </fieldset>
@@ -313,14 +308,14 @@ async function disconnect(c) {
               <div class="form-field">
                 <label :for="'mode-' + c.uuid">{{ $t('devices.display_mode') }}</label>
                 <input :id="'mode-' + c.uuid" v-model="form.display_mode" class="field mono mode" :class="{ invalid: modeInvalid }" placeholder="1920x1080x59.94">
-                <p class="form-help" :class="{ 'error-text': modeInvalid }">{{ modeInvalid ? $t('devices.display_mode_invalid') : $t('devices.display_mode_help') }}</p>
+                <p v-if="modeInvalid" class="form-help error-text">{{ $t('devices.display_mode_invalid') }}</p>
               </div>
               <div v-if="platform === 'windows'" class="toggle-row">
-                <div class="grow"><div class="row-title">{{ $t('pin.always_use_virtual_display') }}</div><div class="row-sub">{{ $t('pin.always_use_virtual_display_desc') }}</div></div>
+                <div class="grow"><div class="row-title" :title="$t('pin.always_use_virtual_display_desc')">{{ $t('pin.always_use_virtual_display') }}</div></div>
                 <label class="switch"><input v-model="form.always_use_virtual_display" type="checkbox" role="switch" :aria-label="$t('pin.always_use_virtual_display')"><span class="track"></span></label>
               </div>
               <div class="toggle-row">
-                <div class="grow"><div class="row-title">{{ $t('pin.enable_legacy_ordering') }}</div><div class="row-sub">{{ $t('devices.legacy_ordering_help') }}</div></div>
+                <div class="grow"><div class="row-title" :title="$t('devices.legacy_ordering_help')">{{ $t('pin.enable_legacy_ordering') }}</div></div>
                 <label class="switch"><input v-model="form.enable_legacy_ordering" type="checkbox" role="switch" :aria-label="$t('pin.enable_legacy_ordering')"><span class="track"></span></label>
               </div>
               </div>
@@ -330,7 +325,7 @@ async function disconnect(c) {
               <summary><span class="sum-title">{{ $t('devices.commands') }}</span><span class="sum-value">{{ commandsSummary }}</span></summary>
               <div class="more-body">
               <div class="toggle-row">
-                <div class="grow"><div class="row-title">{{ $t('devices.allow_commands') }}</div><div class="row-sub">{{ $t('devices.allow_commands_help') }}</div></div>
+                <div class="grow"><div class="row-title" :title="$t('devices.allow_commands_help')">{{ $t('devices.allow_commands') }}</div></div>
                 <label class="switch"><input v-model="form.allow_client_commands" type="checkbox" role="switch" :aria-label="$t('devices.allow_commands')"><span class="track"></span></label>
               </div>
               <template v-if="form.allow_client_commands">
@@ -359,7 +354,6 @@ async function disconnect(c) {
         </div>
       </div>
       <div class="foot">
-        <p class="small muted">{{ $t('devices.first_device_note') }}</p>
         <button v-if="clients.length > 1" type="button" class="btn btn-small btn-quiet danger" @click="unpairAll">{{ $t('devices.unpair_all') }}</button>
       </div>
     </main>
@@ -404,7 +398,8 @@ async function disconnect(c) {
 .more-body { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
 .danger { color: var(--error); }
 .danger:hover:not(:disabled) { background: color-mix(in srgb, var(--error) 10%, transparent); }
-.foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+.careful { color: var(--warning); }
+.foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
 .foot p { margin: 0; }
 .levels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .levels.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
