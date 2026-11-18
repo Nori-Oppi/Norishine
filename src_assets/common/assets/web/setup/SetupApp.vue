@@ -5,7 +5,7 @@ import HelpLink from '../ui/HelpLink.vue'
 import { P, PRESETS, presetOf, setLevel } from '../clients/permissions'
 
 // First start, after the account is made: import, name, display, encoder, first device.
-// Explanations are in docs/GUIDE.md#first-start; this page has labels only.
+// Explanations are in the wiki (Norishine-Guide#first-start); this page has labels only.
 const i18n = inject('i18n')
 const t = (...args) => i18n.t(...args)
 
@@ -208,7 +208,7 @@ onMounted(async () => {
     <div class="setup-card">
       <div class="setup-head">
         <img src="/images/logo-norishine-45.png" width="36" height="36" alt="">
-        <h1>{{ $t('setup.title') }} <HelpLink page="GUIDE.md#first-start" :label="$t('help.page')" /></h1>
+        <h1>{{ $t('setup.title') }} <HelpLink page="Norishine-Guide#first-start" :label="$t('help.page')" /></h1>
         <button type="button" class="btn btn-quiet btn-small skip" :disabled="finishing" @click="finish">{{ $t('setup.skip') }}</button>
       </div>
 

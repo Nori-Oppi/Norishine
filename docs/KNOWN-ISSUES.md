@@ -27,7 +27,7 @@ Fixed on 2026-11-17:
 - `POST /api/apps/close` answered 400 when sent without a body or `Content-Type`. Calls
   without a body no longer need one, and closing the app also ends its streams at once.
 - Devices paired after the first are **Watch only** by design (see
-  [Devices and permissions](GUIDE.md#devices-and-permissions)); launching from them now
+  [Devices and permissions](https://github.com/Nori-Oppi/norilight-docs/wiki/Norishine-Guide#devices-and-permissions)); launching from them now
   answers "Permission denied. Change this device's permissions on the host's Devices
   page." and the host logs it.
 

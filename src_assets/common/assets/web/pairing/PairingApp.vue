@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
     <main class="page-main narrow">
       <div class="page-head">
         <div>
-          <h1>{{ $t('pairing.title') }} <HelpLink page="GUIDE.md#pairing" :label="$t('help.page')" /></h1>
+          <h1>{{ $t('pairing.title') }} <HelpLink page="Norishine-Guide#pairing" :label="$t('help.page')" /></h1>
         </div>
       </div>
 

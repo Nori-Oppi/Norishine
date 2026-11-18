@@ -1,15 +1,20 @@
 <script setup>
 // A small "?" beside a page title, linking to the explanation in the documentation, so the
 // page itself can stay short.
-defineProps({
-  page: { type: String, required: true },  // file in docs/, e.g. "GUIDE.md#devices"
+import { computed } from 'vue'
+
+const props = defineProps({
+  // A wiki page ("Norishine-Guide#apps"), or a file in docs/ ("SETTINGS.md#video").
+  page: { type: String, required: true },
   label: { type: String, required: true },
 })
+const WIKI = 'https://github.com/Nori-Oppi/norilight-docs/wiki/'
 const DOCS = 'https://github.com/Nori-Oppi/Norishine/blob/master/docs/'
+const href = computed(() => (/^[^#]+\.md(#|$)/.test(props.page) ? DOCS : WIKI) + props.page)
 </script>
 
 <template>
-  <a class="help-link" :href="DOCS + page" target="_blank" rel="noopener" :title="label">
+  <a class="help-link" :href="href" target="_blank" rel="noopener" :title="label">
     <i class="fas fa-circle-question" aria-hidden="true"></i><span class="visually-hidden">{{ label }}</span>
   </a>
 </template>

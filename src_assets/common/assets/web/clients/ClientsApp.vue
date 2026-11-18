@@ -205,7 +205,7 @@ async function disconnect(c) {
     <main class="page-main">
       <div class="page-head">
         <div>
-          <h1>{{ $t('devices.title') }} <HelpLink page="GUIDE.md#devices-and-permissions" :label="$t('help.page')" /></h1>
+          <h1>{{ $t('devices.title') }} <HelpLink page="Norishine-Guide#devices-and-permissions" :label="$t('help.page')" /></h1>
         </div>
         <a class="btn btn-primary" href="./pin"><i class="fas fa-plus" aria-hidden="true"></i> {{ $t('devices.pair_new') }}</a>
       </div>
