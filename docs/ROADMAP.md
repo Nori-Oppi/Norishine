@@ -175,11 +175,12 @@ deliberately broken, but is not verified until CI exists for it.
   Host page uses them.
 
 ### Phase 5: diagnostics and optimisation
-- **M8** Host stats and per-session metrics behind the API (**in progress**: the API is
+- **M8** Host stats and per-session metrics behind the API (**done**: the API is
   done, `GET /api/v1/stats` on both ports with CPU, memory, GPU and encoder load and, per
   stream, frame rate, bitrate, latency, send time and recovery requests; see
   `docs/api.md`); a repeatable benchmark with a first baseline, measured before any tuning
-  ([BENCHMARK.md](BENCHMARK.md), `scripts/benchmark/`). Still to do: Norilight showing it.
+  ([BENCHMARK.md](BENCHMARK.md), `scripts/benchmark/`); Norilight's Manage Host page shows
+  host load and each stream on a Stats tab.
 - **M9** Auto-tuning ([AUTOTUNE.md](AUTOTUNE.md)): the best settings for each display, network
   and machine, kept up to date while streaming (**done**).
   - **M9.1** Live adaptation on the host (**done**): each stream's bitrate and error correction
