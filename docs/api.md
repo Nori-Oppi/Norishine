@@ -109,7 +109,7 @@ by default, only per device from the web UI (paired devices, "Manage"):
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,stats,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,stats,session,adaptive,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -158,6 +158,37 @@ performance counters. `encoder` is as in `/api/v1/status`.
 | `frames`, `duplicate_frames`, `bytes`, `key_frames` | Totals sent |
 | `key_frame_requests`, `ref_invalidations`, `frames_invalidated` | Totals of what the client reported lost |
 | `client_lost_frames` | From the periodic loss reports of older clients; 0 for current Moonlight |
+| `adaptive` | What the stream's controller does now (feature `adaptive`), or null when `adaptive_bitrate` is off; see below |
+
+`adaptive` ([AUTOTUNE.md](AUTOTUNE.md)):
+
+| Field | Meaning |
+| --- | --- |
+| `enabled`, `live_bitrate` | The controller runs; the encoder can change bitrate during the stream (otherwise only FEC changes) |
+| `bitrate_kbps` | Bitrate the encoder is set to now |
+| `max_kbps`, `min_kbps` | Bounds: the stream's start bitrate, and `adaptive_min_bitrate` |
+| `fec_percent` | Error correction now |
+| `last_reason`, `last_change_s` | Why and when (seconds into the stream) it last changed something: `congestion`, `delay`, `loss`, `probe`, `fec_relax` or `none` |
+| `decreases`, `increases` | Bitrate changes so far |
+| `client_reports` | The client sent a report in the last 3 seconds |
+| `host_limited`, `client_limited` | The host can't encode, or the client can't decode, as fast as asked; the bitrate isn't raised meanwhile |
+| `base_rtt_ms` | Lowest round-trip time the client reported in the last minute, or null |
+
+## GET /api/v1/session
+
+Feature `session`. HTTPS port only. The requesting device's own stream; no management
+permission is needed, since a device only sees its own. 404 when it has no stream running.
+
+`stream`: the per-stream fields of `/api/v1/stats` (including `adaptive`), plus `width`,
+`height`, `target_fps`, `start_bitrate_kbps`, `codec` and `hdr`.
+
+## POST /api/v1/session/report
+
+Feature `adaptive`. HTTPS port only, no management permission. The client's own measurements
+for its stream's controller, about once a second (JSON, every field optional): `loss_percent`
+(video frames lost after FEC, percent), `rtt_ms`, `rtt_variance_ms`, `decode_ms`, `fps`,
+`display_hz`. Answers as `GET /api/v1/session`; 400 for a value of the wrong type or out of
+range, 404 without a stream.
 
 ## GET /api/v1/update
 @copydoc confighttp::getUpdateV1()

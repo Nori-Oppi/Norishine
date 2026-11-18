@@ -1056,6 +1056,10 @@ namespace video {
   std::string_view active_encoder_name() {
     return chosen_encoder ? chosen_encoder->name : std::string_view {};
   }
+
+  bool live_bitrate_supported() {
+    return chosen_encoder && (chosen_encoder->flags & PARALLEL_ENCODING);
+  }
   int active_hevc_mode;
   int active_av1_mode;
   bool last_encoder_probe_supported_ref_frames_invalidation = false;
@@ -1957,6 +1961,7 @@ namespace video {
     auto packets = mail::man->queue<packet_t>(mail::video_packets);
     auto idr_events = mail->event<bool>(mail::idr);
     auto invalidate_ref_frames_events = mail->event<std::pair<int64_t, int64_t>>(mail::invalidate_ref_frames);
+    auto bitrate_events = mail->event<int>(mail::bitrate);
 
     {
       // Load a dummy image into the AVFrame to ensure we have something to encode
@@ -2057,7 +2062,8 @@ namespace video {
       //
       // Ensure that this check occurs as close as possible to the encode call to prevent packets
       // in flight after encoder teardown.
-      if (shutdown_event->peek() || !images->running() || (reinit_event.peek() && frame_nr > 1)) {
+      // d) A new bitrate was asked for: capture_async() rebuilds the encoder with it.
+      if (shutdown_event->peek() || !images->running() || ((reinit_event.peek() || bitrate_events->peek()) && frame_nr > 1)) {
         break;
       }
 
@@ -2402,6 +2408,7 @@ namespace video {
 
     auto touch_port_event = mail->event<input::touch_port_t>(mail::touch_port);
     auto hdr_event = mail->event<hdr_info_t>(mail::hdr);
+    auto bitrate_events = mail->event<int>(mail::bitrate);
 
     // Encoding takes place on this thread
     platf::adjust_thread_priority(platf::thread_priority_e::high);
@@ -2424,6 +2431,15 @@ namespace video {
       }
 
       auto &encoder = *chosen_encoder;
+
+      // The stream's controller asked for a new bitrate (adaptive.h): the encoder is
+      // rebuilt with it, and the client gets a key frame as after a display change.
+      if (bitrate_events->peek()) {
+        if (auto kbps = bitrate_events->pop(0ms); kbps && *kbps > 0 && *kbps != config.bitrate) {
+          BOOST_LOG(info) << "Video bitrate: "sv << config.bitrate << " -> "sv << *kbps << " kbps"sv;
+          config.bitrate = *kbps;
+        }
+      }
 
       auto encode_device = make_encode_device(*display, encoder, config);
       if (!encode_device) {

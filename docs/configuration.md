@@ -2143,6 +2143,88 @@ editing the `conf` file in a text editor. Use the examples as reference.
     </tr>
 </table>
 
+### adaptive_bitrate
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Adapt each stream to the network while it runs: lower the bitrate and raise error
+            correction when the network can't keep up, and return to the bitrate the client asked
+            for when it can. The client's bitrate is never exceeded. Clients that send reports
+            (Norilight) are adapted more precisely. See [AUTOTUNE.md](AUTOTUNE.md).
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            enabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            adaptive_bitrate = enabled
+            @endcode</td>
+    </tr>
+</table>
+
+### adaptive_min_bitrate
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            The lowest bitrate, in kbps, that adapting may set. When the client asked for less, its
+            bitrate is the lowest.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            3000
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Range</td>
+        <td colspan="2">500-500000</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            adaptive_min_bitrate = 3000
+            @endcode</td>
+    </tr>
+</table>
+
+### adaptive_max_fec
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            The highest error correction percentage that adapting may set when packets are lost.
+            It returns to [fec_percentage](#fec_percentage) once the network is clean.
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            50
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Range</td>
+        <td colspan="2">1-255</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            adaptive_max_fec = 50
+            @endcode</td>
+    </tr>
+</table>
+
 ### qp
 
 <table>

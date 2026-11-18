@@ -180,8 +180,18 @@ deliberately broken, but is not verified until CI exists for it.
   stream, frame rate, bitrate, latency, send time and recovery requests; see
   `docs/api.md`). Still to do: Norilight showing it, and a repeatable benchmark procedure
   recorded before any tuning.
-- **M9** Wizard, first version: capability discovery on both sides and conservative
-  recommendations with preview and rollback.
+- **M9** Auto-tuning ([AUTOTUNE.md](AUTOTUNE.md)): the best settings for each display, network
+  and machine, kept up to date while streaming. **In progress.**
+  - **M9.1** Live adaptation on the host (**done**): each stream's bitrate and error correction
+    follow the network (`src/adaptive.*`, settings `adaptive_bitrate`, `adaptive_min_bitrate`,
+    `adaptive_max_fec`), for every client; `GET /api/v1/session` and
+    `POST /api/v1/session/report` let a client see its own stream and report what it measures.
+  - **M9.2** Norilight reports its measurements during the stream and shows what the host does
+    in the performance overlay.
+  - **M9.3** Launch settings: capability discovery on both sides (display, decoder, encoder,
+    network) and "Auto" picks in Norilight's profiles, with preview and rollback.
+  - **M9.4** Learning between streams (start bitrate per host and network) and host encoder
+    setting recommendations, with preview and rollback.
 - **M10** Measured improvements: display restore after crashes, capture from a
   user-session helper, frame cap matched to the client, AMF path evaluation.
 

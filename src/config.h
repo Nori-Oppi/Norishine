@@ -176,6 +176,11 @@ namespace config {
     // Video encryption settings for LAN and WAN streams
     int lan_encryption_mode;
     int wan_encryption_mode;
+
+    // Bitrate and error correction adapted during each stream (adaptive.h)
+    bool adaptive_bitrate;
+    int adaptive_min_bitrate;  ///< kbps
+    int adaptive_max_fec;  ///< percent
   };
 
   struct nvhttp_t {

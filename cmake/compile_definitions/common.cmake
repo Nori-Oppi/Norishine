@@ -124,6 +124,8 @@ set(SUNSHINE_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/thread_safe.h"
         "${CMAKE_SOURCE_DIR}/src/sync.h"
         "${CMAKE_SOURCE_DIR}/src/round_robin.h"
+        "${CMAKE_SOURCE_DIR}/src/adaptive.h"
+        "${CMAKE_SOURCE_DIR}/src/adaptive.cpp"
         "${CMAKE_SOURCE_DIR}/src/host_stats.h"
         "${CMAKE_SOURCE_DIR}/src/host_stats.cpp"
         "${CMAKE_SOURCE_DIR}/src/stream_metrics.h"

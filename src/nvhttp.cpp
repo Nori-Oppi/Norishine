@@ -24,6 +24,7 @@
 #include <Simple-Web-Server/server_http.hpp>
 
 // local includes
+#include "adaptive.h"
 #include "config.h"
 #include "config_schema.h"
 #include "display_device.h"
@@ -1251,7 +1252,7 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
-    tree.put("root.Norishine.Features", "status,stats,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    tree.put("root.Norishine.Features", "status,stats,session,adaptive,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
 
     std::ostringstream data;
 
@@ -1429,6 +1430,67 @@ namespace nvhttp {
       }
     }
 
+    /**
+     * @brief The requesting device's own stream, as GET /api/v1/session answers it.
+     */
+    nlohmann::json own_session(stream::session_t &session) {
+      static const char *codecs[] = {"H.264", "HEVC", "AV1"};
+      auto info = stream::session::describe(session);
+      auto entry = stream_metrics::to_json(info.metrics);
+      entry["width"] = info.width;
+      entry["height"] = info.height;
+      entry["target_fps"] = info.fps;
+      entry["start_bitrate_kbps"] = info.bitrate_kbps;
+      entry["codec"] = info.codec >= 0 && info.codec < 3 ? codecs[info.codec] : "unknown";
+      entry["hdr"] = info.hdr;
+      entry["adaptive"] = info.adaptive ? adaptive::to_json(*info.adaptive) : nlohmann::json(nullptr);
+      return {{"status", true}, {"stream", entry}};
+    }
+
+    /**
+     * @brief Find the requesting device's stream; answers 404 when it has none.
+     */
+    std::shared_ptr<stream::session_t> own_stream(resp_https_t response, req_https_t request) {
+      auto named_cert_p = get_verified_cert(request);
+      auto session = rtsp_stream::find_session(named_cert_p->uuid);
+      if (!session) {
+        send_json(response, SimpleWeb::StatusCode::client_error_not_found, {{"status", false}, {"error", "This device has no stream running"}});
+      }
+      return session;
+    }
+
+    /**
+     * @brief GET /api/v1/session: the requesting device's own stream. No management
+     *        permission is needed: a device only sees its own stream.
+     */
+    void session_get(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (auto session = own_stream(response, request)) {
+        send_json(response, SimpleWeb::StatusCode::success_ok, own_session(*session));
+      }
+    }
+
+    /**
+     * @brief POST /api/v1/session/report: the client's own measurements for its stream's
+     *        controller (adaptive.h). Answers as GET /api/v1/session.
+     */
+    void session_report(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      nlohmann::json body;
+      if (!json_body(response, request, body)) {
+        return;
+      }
+      adaptive::client_report_t report;
+      if (auto error = adaptive::parse_report(body, report); !error.empty()) {
+        send_json(response, SimpleWeb::StatusCode::client_error_bad_request, {{"status", false}, {"error", error}});
+        return;
+      }
+      if (auto session = own_stream(response, request)) {
+        stream::session::report(*session, report);
+        send_json(response, SimpleWeb::StatusCode::success_ok, own_session(*session));
+      }
+    }
+
     void apps_list(resp_https_t response, req_https_t request) {
       print_req<SunshineHTTPS>(request);
       if (allowed(response, request, read_perm, "read the app list")) {
@@ -1587,6 +1649,7 @@ namespace nvhttp {
       auto entry = stream_metrics::to_json(s.metrics);
       entry["uuid"] = s.uuid;
       entry["name"] = s.name;
+      entry["adaptive"] = s.adaptive ? adaptive::to_json(*s.adaptive) : nlohmann::json(nullptr);
       sessions.push_back(std::move(entry));
     }
     return {
@@ -2323,6 +2386,8 @@ namespace nvhttp {
     https_server.resource["^/actions/clipboard$"]["POST"] = setClipboard;
     https_server.resource["^/api/v1/status$"]["GET"] = api::status;
     https_server.resource["^/api/v1/stats$"]["GET"] = api::stats;
+    https_server.resource["^/api/v1/session$"]["GET"] = api::session_get;
+    https_server.resource["^/api/v1/session/report$"]["POST"] = api::session_report;
     https_server.resource["^/api/v1/update$"]["GET"] = api::update_status;
     https_server.resource["^/api/v1/update$"]["POST"] = api::update_start;
     https_server.resource["^/api/v1/config/schema$"]["GET"] = api::config_schema;

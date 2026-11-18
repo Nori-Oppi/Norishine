@@ -370,4 +370,10 @@ namespace video {
    *        "videotoolbox" or "software"), or empty before the first probe.
    */
   std::string_view active_encoder_name();
+
+  /**
+   * @brief Whether a stream's bitrate can change while it runs (mail::bitrate): only
+   *        encoders that capture and encode on separate threads rebuild for it.
+   */
+  bool live_bitrate_supported();
 }  // namespace video
