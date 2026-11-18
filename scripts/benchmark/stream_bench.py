@@ -29,7 +29,8 @@ from gsclient import WebUI  # noqa: E402
 
 # Settings that change what the benchmark measures; recorded with every run.
 SETTING_KEYS = [
-    'nvenc_preset', 'nvenc_twopass', 'amd_quality', 'qsv_preset', 'sw_preset', 'fec_percentage',
+    'nvenc_preset', 'nvenc_twopass', 'amd_quality', 'amd_usage', 'amd_preanalysis', 'amd_rc', 'amd_vbaq',
+    'qsv_preset', 'sw_preset', 'fec_percentage',
     'adaptive_bitrate', 'adaptive_min_bitrate', 'adaptive_max_fec', 'client_tuning', 'max_bitrate',
     'minimum_fps_target', 'capture', 'encoder',
 ]
@@ -137,17 +138,22 @@ def flatten(t, host, s):
     a = s.get('adaptive') or {}
     return {
         't': round(t, 1),
+        'stream_s': s.get('duration_s'),
         'fps': s.get('fps'),
         'bitrate_kbps': s.get('bitrate_kbps'),
         'latency_min': lat.get('min'), 'latency_avg': lat.get('avg'), 'latency_max': lat.get('max'),
         'send_min': send.get('min'), 'send_avg': send.get('avg'), 'send_max': send.get('max'),
         'recent_recovery_requests': s.get('recent_recovery_requests'),
+        'key_frame_requests': s.get('key_frame_requests'),
+        'ref_invalidations': s.get('ref_invalidations'),
         'cpu_percent': host.get('cpu_percent'),
         'process_cpu_percent': host.get('process_cpu_percent'),
         'gpu_percent': host.get('gpu_percent'),
         'encoder_percent': host.get('encoder_percent'),
         'adaptive_bitrate_kbps': a.get('bitrate_kbps'),
         'fec_percent': a.get('fec_percent'),
+        'adaptive_reason': a.get('last_reason'),
+        'adaptive_change_s': a.get('last_change_s'),
         'host_limited': bool(a.get('host_limited')),
     }
 

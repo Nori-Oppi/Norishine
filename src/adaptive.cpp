@@ -183,7 +183,9 @@ namespace adaptive {
     t.heavy_loss = delta >= 6;
 
     bool fresh = fresh_report(now);
-    if (fresh && last_report->loss_percent) {
+    // Frames a client misses while it sets up its decoder aren't network loss.
+    bool settled_report = fresh && first_tick && *last_report_at >= *first_tick + startup_grace;
+    if (settled_report && last_report->loss_percent) {
       t.loss = t.loss || *last_report->loss_percent >= loss_percent;
       t.heavy_loss = t.heavy_loss || *last_report->loss_percent >= heavy_loss_percent;
     }
@@ -252,11 +254,15 @@ namespace adaptive {
     decision.fec_percent = fec;
 
     if (now - *first_tick < startup_grace) {
+      // Clients ask for key frames while their decoder starts; those requests mustn't
+      // count as loss once the grace ends.
+      recent_recovery.clear();
       clean_since = now;
       return decision;
     }
     if (last_change && now - *last_change < change_grace) {
       // Ignore what may still come from before the change, but keep the RTT base fresh.
+      recent_recovery.clear();
       return decision;
     }
 
