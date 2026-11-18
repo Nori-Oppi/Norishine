@@ -210,7 +210,11 @@ deliberately broken, but is not verified until CI exists for it.
     the uninstaller does too (`sunshine.exe --restore-displays`,
     [DISPLAY-RESTORE.md](DISPLAY-RESTORE.md)).
   - Capture from a user-session helper.
-  - Frame cap matched to the client.
+  - Frame cap matched to the client (**not built**, measured): the host already encodes
+    no more frames than its own display shows (120 fps asked on a 60 Hz display: 53 fps and
+    the same encoder load as 60). A cap would only help a faster host display than the
+    client's, and would undo the clients' deliberate V-sync-off for high frame rates
+    ([BENCHMARK.md](BENCHMARK.md#m10-frame-cap-matched-to-the-client)).
   - AMF path evaluation (**done**, nothing changed): on an RX 6700 XT at 1080p60 every
     option measured within 0.5 ms of the others; the higher-quality ones cost about 4 points
     of encoder load. The defaults (`ultralowlatency`, `balanced`) stay
