@@ -178,8 +178,8 @@ deliberately broken, but is not verified until CI exists for it.
 - **M8** Host stats and per-session metrics behind the API (**in progress**: the API is
   done, `GET /api/v1/stats` on both ports with CPU, memory, GPU and encoder load and, per
   stream, frame rate, bitrate, latency, send time and recovery requests; see
-  `docs/api.md`). Still to do: Norilight showing it, and a repeatable benchmark procedure
-  recorded before any tuning.
+  `docs/api.md`); a repeatable benchmark with a first baseline, measured before any tuning
+  ([BENCHMARK.md](BENCHMARK.md), `scripts/benchmark/`). Still to do: Norilight showing it.
 - **M9** Auto-tuning ([AUTOTUNE.md](AUTOTUNE.md)): the best settings for each display, network
   and machine, kept up to date while streaming. **In progress.**
   - **M9.1** Live adaptation on the host (**done**): each stream's bitrate and error correction
