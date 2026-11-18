@@ -187,7 +187,7 @@ deliberately broken, but is not verified until CI exists for it.
     `adaptive_max_fec`), for every client; `GET /api/v1/session` and
     `POST /api/v1/session/report` let a client see its own stream and report what it measures.
   - **M9.2** Norilight reports its measurements during the stream and shows what the host does
-    in the performance overlay.
+    in the performance overlay (**done**, Norilight #18).
   - **M9.3** Launch settings: capability discovery on both sides (display, decoder, encoder,
     network) and "Auto" picks in Norilight's profiles, with preview and rollback.
   - **M9.4** Learning between streams (start bitrate per host and network) and host encoder
