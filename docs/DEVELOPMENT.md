@@ -126,7 +126,8 @@ folder. Add the host as `127.0.0.1:49989`.
 
 ## Branches
 
-Branch review: **16 November 2026**. All of these are included in `master`.
+Branch review: **18 November 2026**. All of these are included in `master`; later work
+(M8 to M10) went straight into `master` through pull requests.
 
 | Branch | Work |
 | --- | --- |

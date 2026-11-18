@@ -29,6 +29,24 @@
 - Sunshine's security fixes are carried forward; the
   [upstream sync record](UPSTREAM-SYNC.md) lists each one.
 
+## Streams that tune themselves
+
+- **Adaptive bitrate and error correction** for every client: the host lowers the bitrate
+  or adds error correction when the network struggles, then returns to the bitrate asked
+  for. Norilight's reports make it react sooner.
+- **Encoder recommendations** from earlier streams (a faster preset when the encoder fell
+  behind, a better one with room to spare, more error correction with frequent loss), with
+  Apply and Undo in the web UI and in Norilight.
+- **Per-stream tuning goal** from Norilight (Performance, Balanced, Quality) sets the
+  encoder preset for that stream.
+- **Stats**: host CPU, memory, GPU and encoder load, and per stream the frame rate,
+  bitrate, latency and recovery requests (`/api/v1/stats`, Norilight's Stats tab).
+- **Displays put back after a crash**: display changes and virtual displays of a host that
+  crashed or had to be killed are undone at once.
+
+See [AUTOTUNE.md](AUTOTUNE.md), [BENCHMARK.md](BENCHMARK.md) and
+[DISPLAY-RESTORE.md](DISPLAY-RESTORE.md).
+
 ## Host controls in Norilight
 
 With [Norilight](https://github.com/Nori-Oppi/Norilight) and the matching permission:

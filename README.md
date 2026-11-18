@@ -16,8 +16,8 @@
 Norishine streams games and desktops from your Windows PC to
 [Norilight](https://github.com/Nori-Oppi/Norilight), Moonlight, Artemis and other
 GameStream clients. It's built on [Apollo](https://github.com/ClassicOldSong/Apollo) and
-[Sunshine](https://github.com/LizardByte/Sunshine), and adds a clearer web UI and host
-controls inside Norilight.
+[Sunshine](https://github.com/LizardByte/Sunshine), and adds a clearer web UI, streams that
+adapt to the network, and host controls inside Norilight.
 
 <p align="center">
   <img src="docs/screenshots/settings.png" width="720" alt="Norishine's web UI: searchable settings with help beside each one">
