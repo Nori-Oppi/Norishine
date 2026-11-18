@@ -8,8 +8,8 @@
 
 <p align="center">
   <a href="https://github.com/Nori-Oppi/Norishine/releases/tag/nightly"><strong>Download nightly</strong></a> ·
-  <a href="docs/GUIDE.md">Guide</a> ·
-  <a href="docs/FEATURES.md">Features</a> ·
+  <a href="https://github.com/Nori-Oppi/norilight-docs/wiki/Norishine-Guide">Guide</a> ·
+  <a href="https://github.com/Nori-Oppi/norilight-docs/wiki/Norishine-Features">Features</a> ·
   <a href="docs/DEVELOPMENT.md">Build from source</a>
 </p>
 
@@ -30,11 +30,11 @@ adapt to the network, and host controls inside Norilight.
 2. Open the web UI, create your sign-in and pair your client.
 3. Pick Desktop or an app in your client and start streaming.
 
-The [guide](docs/GUIDE.md) covers switching from another host, Norilight's host controls
+The [guide](https://github.com/Nori-Oppi/norilight-docs/wiki/Norishine-Guide) covers switching from another host, Norilight's host controls
 and updating. Nightlies are unsigned development builds; see the
 [known issues](docs/KNOWN-ISSUES.md) and the [roadmap](docs/ROADMAP.md).
 
 ## License
 
 GPL v3, like Apollo and Sunshine. See [LICENSE](LICENSE) and the
-[credits](docs/FEATURES.md#credits).
+[credits](https://github.com/Nori-Oppi/norilight-docs/wiki/Norishine-Features#credits).

@@ -92,7 +92,7 @@ async function save() {
         <p v-if="done" class="notice notice-ok" role="status">{{ $t('account.changed') }}</p>
         <div><button type="submit" class="btn btn-primary" :disabled="busy || done">{{ $t('account.change') }}</button></div>
       </form>
-      <p class="small muted note"><a href="https://github.com/Nori-Oppi/Norishine/blob/master/docs/GUIDE.md#forgot-the-password" target="_blank" rel="noopener">{{ $t('account.forgot_link') }}</a></p>
+      <p class="small muted note"><a href="https://github.com/Nori-Oppi/norilight-docs/wiki/Norishine-Guide#forgot-the-password" target="_blank" rel="noopener">{{ $t('account.forgot_link') }}</a></p>
     </main>
   </AppShell>
 </template>

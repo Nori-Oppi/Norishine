@@ -252,7 +252,7 @@ async function saveOrder() {
       <template v-else>
         <div class="page-head">
           <div>
-            <h1>{{ $t('apps2.title') }} <HelpLink page="GUIDE.md#apps" :label="$t('help.page')" /></h1>
+            <h1>{{ $t('apps2.title') }} <HelpLink page="Norishine-Guide#apps" :label="$t('help.page')" /></h1>
           </div>
           <button type="button" class="btn btn-primary" @click="startNew">
             <i class="fas fa-plus" aria-hidden="true"></i> {{ $t('apps2.add') }}

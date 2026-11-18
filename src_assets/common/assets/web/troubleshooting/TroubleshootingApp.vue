@@ -167,7 +167,7 @@ const resetHost = () => run('reset', {
     <main class="page-main wide">
       <div class="page-head">
         <div>
-          <h1>{{ $t('trouble.title') }} <HelpLink page="GUIDE.md#troubleshooting" :label="$t('help.page')" /></h1>
+          <h1>{{ $t('trouble.title') }} <HelpLink page="Norishine-Guide#troubleshooting" :label="$t('help.page')" /></h1>
         </div>
       </div>
 

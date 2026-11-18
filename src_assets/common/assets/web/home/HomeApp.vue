@@ -183,7 +183,7 @@ const clients = [
 
       <div v-if="status && status.port_moved_for" class="notice notice-warning section">
         <span class="grow">{{ $t('home.port_moved', { port: status.port, other: status.port_moved_for }) }}</span>
-        <HelpLink page="GUIDE.md#coming-from-another-host" :label="$t('help.page')" />
+        <HelpLink page="Coming-from-Another-Host" :label="$t('help.page')" />
       </div>
 
       <div v-if="updating" class="notice notice-warning section">
