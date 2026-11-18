@@ -41,7 +41,8 @@ What it does:
    that copy's **Tuning goal** (`--goal`, default `performance`). The goal changes the host's
    encoder preset, so the result names it, and only results with the same goal can be
    compared.
-3. Streams twice, three times over (`--runs`), always the same way:
+3. Streams once unmeasured, to warm up (see [Warm start](#warm-start)). Then it streams
+   twice, three times over (`--runs`), always the same way:
    - **Clean stream**: the `Desktop` app at 1920×1080, 60 fps, 20 Mbps, HEVC, windowed,
      V-sync and frame pacing off. It waits 5 seconds after the first frame, then measures
      for 60 seconds.
@@ -79,7 +80,7 @@ and none is n/a.
 | Time to first frame | From starting the client to the first frame of the test picture in its window. Most of it is the client starting up (about 5 s), and that part is the same for every host | lower | 150 ms or 10 % |
 | Capture to send (host processing) | The host processing latency each host writes into every frame, averaged by the client (its end-of-stream statistics) | lower | 0.5 ms or 15 % |
 | Decode time | The client's average decoding time | lower | 0.3 ms or 20 % |
-| Dropped frames | Frames the client dropped for network loss or jitter, in the clean stream | lower | 0.5 points |
+| Dropped frames | Frames the client dropped for network loss or jitter, in the clean stream, counted as Moonlight 6.2.0 counts them (see [Dropped frames](#dropped-frames-norilight-counted-drops-moonlight-620-doesnt)) | lower | 0.5 points |
 | Frames shown per second | New pictures seen in the stream window per second. Watched every 4 ms; the screen refreshes at 60 Hz | higher | 2 fps or 5 % |
 | Frame interval, 99th percentile | Time between new pictures in the window | lower | 5 ms or 15 % |
 | Stutters per minute | Gaps of more than 50 ms between new pictures | lower | 2 or 25 % |
@@ -151,42 +152,91 @@ What the reference hosts do to the PC while they run (the same as they do when i
 
 ### Results
 
-First references recorded on 18 November 2026. PC: AMD Ryzen 7 5700X, AMD Radeon RX 6700 XT
-(AMF, HEVC), Windows 11, one 1920×1080 60 Hz display. Then the check ran against `master` at
-`d25025f0`, with Norilight `main` at `46fcc987`, **Performance goal**, three runs:
+References recorded on 18 November 2026 (with the warm-up stream, see below). PC: AMD Ryzen 7
+5700X, AMD Radeon RX 6700 XT (AMF, HEVC), Windows 11, one 1920×1080 60 Hz display. Check
+against `master` at `a947f1c4` with Norilight at `f062d49b` (which logs its full-queue drops),
+**Performance goal**, three runs:
 
 | Metric | Norishine | Apollo 0.4.6 | Vibepollo 2.17.6 | Sunshine 2026.914.233613 |
 | --- | --- | --- | --- | --- |
-| Time to first frame (ms) | 5156 | 5019 same | 5276 same | 4872 same |
-| Capture to send (ms) | 3.0 | 5.9 **better** | 3.3 same | 4.1 **better** |
-| Decode time (ms) | 0.48 | 0.52 same | 0.40 same | 0.44 same |
-| Dropped frames (%) | 0.28 | 0.08 same | 0.08 same | 0.08 same |
-| Frames shown per second | 55.2 | 53.8 same | 55.5 same | 51.6 **better** |
-| Frame interval, 99th percentile (ms) | 34.0 | 34.5 same | 34.9 same | 34.4 same |
-| Stutters per minute | 3 | 3 same | 1 same | 2 same |
-| Frames shown per second at 5 % loss | 53.2 | 49.2 **better** | 53.2 same | 53.8 same |
-| Dropped frames, loss stream (%) | 5.9 | 5.6 same | 5.5 same | 5.7 same |
-| Recovery after a 300 ms blackout (ms) | 48 | 47 same | 45 same | 50 same |
-| Video encoder load (%) | 17.0 | 16.9 same | 16.4 same | 16.9 same |
-| Host process CPU (%) | 0.75 | 0.68 same | 0.39 same | 0.69 same |
-| Whole PC CPU (%) | 44 | 58 same | 56 same | 43 same |
+| Time to first frame (ms) | 5079 | 4838 same | 5092 same | 4811 same |
+| Capture to send (ms) | 2.8 | 4.2 **better** | 3.4 **better** | 4.1 **better** |
+| Decode time (ms) | 0.48 | 0.39 same | 0.84 **better** | 0.47 same |
+| Dropped frames (%) | 0.08 | 0.08 same | 0.08 same | 0.08 same |
+| Frames shown per second | 54.2 | 54.5 same | 50.9 **better** | 55.5 same |
+| Frame interval, 99th percentile (ms) | 34.3 | 34.4 same | 35.5 same | 34.0 same |
+| Stutters per minute | 2 | 1 same | 7 **better** | 1 same |
+| Frames shown per second at 5 % loss | 54.4 | 55.2 same | 56.5 same | 52.5 same |
+| Dropped frames, loss stream (%) | 5.3 | 5.5 same | 5.1 same | 5.5 same |
+| Recovery after a 300 ms blackout (ms) | 38 | 49 same | 51 same | 38 same |
+| Video encoder load (%) | 17.1 | 16.8 same | 16.5 same | 17.1 same |
+| Host process CPU (%) | 0.73 | 0.57 same | 0.51 same | 0.62 same |
+| Whole PC CPU (%) | 46 | 43 same | 59 same | 43 same |
 
 **Verdict: not worse than any reference on any metric.**
 
 What it shows:
 
-- Capture to send is where the hosts differ most: Norishine 2.7–3.6 ms, Vibepollo 3.3–3.5,
-  Sunshine 4.0–4.2, Apollo 4.3–6.3. Everything else is within the spread between runs.
-- Recovery after a blackout is about 50 ms everywhere: once packets flow again, every host
+- Capture to send is where the hosts differ most: Norishine 2.4–2.8 ms (the warm-up run
+  5.5), Vibepollo 3.4–3.6, Sunshine 4.0–4.3, Apollo 4.1–5.4. Everything else is within the
+  spread between runs.
+- Recovery after a blackout is 40–50 ms everywhere: once packets flow again, every host
   sends a key frame within a few frames.
 - Time to first frame is about 5 seconds for every host, and nearly all of it is the client
   starting up. Roadmap N5 needs a finer measurement of the steps.
-- **To watch:** Norishine with Norilight dropped 0.2–0.3 % of frames in every clean run, the
-  references 0.03–0.08 %. That's within the tolerance (half a point), but it's consistent.
-  These are frames the client counts as lost on the network, on a loopback connection with
-  nothing dropped. The cause (Norilight or the host) is not yet known.
-- Apollo had one run with 51 stutters a minute and only 42 frames a second; its other runs
+- Apollo had one run with 28 stutters a minute and Vibepollo one with 8; their other runs
   were normal. The medians keep one bad run from deciding the result.
+
+#### Dropped frames: Norilight counted drops Moonlight 6.2.0 doesn't
+
+The first check (against `d25025f0`) showed Norishine with Norilight dropping 0.23–0.31 % of
+frames in every clean run, the references 0.03–0.08 %. Found and fixed on 18 November 2026:
+
+- **Which side:** crossing hosts and clients (40-second clean streams, three runs each)
+  showed it follows the client. Norishine with Moonlight dropped 0.11 % like Apollo with
+  Moonlight; Apollo with Norilight dropped 0.26–0.37 % like Norishine with Norilight. So it's
+  not the host, its adaptive bitrate or its stats.
+- **Where:** none were network drops (0.00 % in every run). All were in the second figure,
+  "Frames dropped due to network jitter", which is actually the client's pacer throwing away
+  frames that queued up behind the one on screen.
+- **Why only Norilight:** Moonlight's `master` changed the pacer on 15 November 2026 to also
+  count the frames it drops when a new frame arrives and its queue is already full
+  (moonlight-qt `423cbdcd`, "Fix counting of old frames dropped during enqueue"). Norilight
+  took that with the upstream sync of 17 November. Moonlight 6.2.0, the references' client,
+  drops the same frames without counting them. The frames dropped are the same; only the
+  count differs.
+- **Proof:** Norilight now logs how many of its pacer drops were full-queue drops. Six
+  streams (Norishine and Apollo, three each): all pacer drops 0.26–0.41 %, full-queue drops
+  0.15–0.30 %, the rest 0.11–0.12 % every time, exactly Moonlight 6.2.0's 0.11 %.
+- **Fix:** the check counts every client the way Moonlight 6.2.0 does: Norilight's
+  full-queue drops are left out of "Dropped frames" (`dropped_frames()` in `compare.py`). The
+  result also keeps the full count (`dropped_all_pct`) and each run's client statistics. When
+  the references move to a Moonlight release with `423cbdcd`, Moonlight counts these too:
+  then count them on both sides (remove the subtraction).
+
+| Clean-stream dropped frames | Before | After |
+| --- | --- | --- |
+| Norishine + Norilight, per run | 0.18, 0.28, 0.28 % (all pacer drops) | 0.08, 0.08, 0.08 % (counted like Moonlight 6.2.0); all pacer drops 0.26 % |
+| References | 0.03–0.08 % | 0.03–0.08 % |
+
+The full-queue drops themselves (about 0.15–0.3 %, a few frames a minute) happen in Moonlight
+6.2.0 as well; they aren't something Norishine or Norilight added.
+
+#### Warm start
+
+The first stream after a host starts showed its first frame 1 to 2.5 seconds later than the
+next ones, for every host and client (for example 6.9, 5.4 and 5.1 s). With three runs, that
+cold run moved the median enough to make time to first frame "worse" or not by chance. Since
+18 November every measurement starts with an unmeasured warm-up stream; the references were
+recorded again that way, and the times now stay within 4.7–5.1 s.
+
+#### Streams that show no picture
+
+About one stream in eleven doesn't show a picture in the watched strip: the client decodes
+its first frame, but its window stays one flat colour after it recreates its renderer just as
+the check moves the window. It happens with every host and client alike, so it's the test's
+window handling, not streaming. The stream is tried again (each one worked the second time);
+the screenshot and log are in `build/benchmark/failures/`.
 
 ## Host benchmark (stream_bench.py)
 

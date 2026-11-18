@@ -73,7 +73,7 @@ METRICS = {
     'host_cpu_pct': ('Host process CPU', '%', 'lower', 2, 0.25),
     'system_cpu_pct': ('Whole PC CPU', '%', 'lower', 10, 0.30),
 }
-INFO = ['first_packet_ms', 'received_fps', 'render_ms', 'decoder_pct', 'client_cpu_pct']
+INFO = ['dropped_all_pct', 'first_packet_ms', 'received_fps', 'render_ms', 'decoder_pct', 'client_cpu_pct']
 
 STATS_RE = {
     'received_fps': r'Incoming frame rate from network: ([\d.]+) FPS',
@@ -82,7 +82,16 @@ STATS_RE = {
     'jitter_drop_pct': r'Frames dropped due to network jitter: ([\d.]+)%',
     'decode_ms': r'Average decoding time: ([\d.]+) ms',
     'render_ms': r'Average rendering time \(including monitor V-sync latency\): ([\d.]+) ms',
+    # Norilight only: frames the pacer dropped because its queue was full when a new one came.
+    # Moonlight 6.2.0 drops these without counting them (counted upstream since moonlight-qt
+    # 423cbdcd), so dropped_frames() leaves them out to count every client the same way.
+    'queue_drop_pct': r'Of those, dropped because the frame queue was full: ([\d.]+)%',
 }
+
+
+def dropped_frames(st):
+    """Frames the client dropped (network + pacer), counted as Moonlight 6.2.0 counts them."""
+    return round(st.get('net_drop_pct', 0) + st.get('jitter_drop_pct', 0) - st.get('queue_drop_pct', 0), 2)
 
 
 def refs_path(*p):
@@ -433,13 +442,18 @@ class Stream:
         self.watcher.stop()
         time.sleep(0.5)
 
+    def stats_block(self):
+        """The client's last end-of-stream statistics, without the decoder's debug lines
+        that can come in between."""
+        lines = [l for _, l in self.lines]
+        starts = [i for i, l in enumerate(lines) if 'Global video stats' in l]
+        if not starts:
+            return []
+        return [l for l in lines[starts[-1]:] if 'FFmpeg' not in l][:24]
+
     def stats(self):
-        text = '\n'.join(l for _, l in self.lines)
-        i = text.rfind('Global video stats')
+        block = '\n'.join(self.stats_block())
         out = {}
-        if i < 0:
-            return out
-        block = text[i:i + 2500]
         for k, rx in STATS_RE.items():
             m = re.search(rx, block)
             if m:
@@ -504,11 +518,13 @@ def clean_stream(client, host, relay):
     st = s.stats()
     if not st:
         raise RuntimeError('the client printed no stream statistics')
+    m['client_stats'] = s.stats_block()
     m['host_latency_ms'] = st.get('host_latency_ms')
     m['decode_ms'] = st.get('decode_ms')
     m['render_ms'] = st.get('render_ms')
     m['received_fps'] = st.get('received_fps')
-    m['dropped_pct'] = round(st.get('net_drop_pct', 0) + st.get('jitter_drop_pct', 0), 2)
+    m['dropped_pct'] = dropped_frames(st)
+    m['dropped_all_pct'] = round(st.get('net_drop_pct', 0) + st.get('jitter_drop_pct', 0), 2)
     return m
 
 
@@ -546,8 +562,23 @@ def loss_stream(client, host, relay):
         if motion.poll() is None:
             motion.kill()
     st = s.stats()
-    m['loss_dropped_pct'] = round(st.get('net_drop_pct', 0) + st.get('jitter_drop_pct', 0), 2) if st else None
+    m['loss_dropped_pct'] = dropped_frames(st) if st else None
     return m
+
+
+def warm_up(client, host, relay):
+    motion = start_motion(80)
+    time.sleep(1.5)
+    s = Stream(client, host, relay)
+    try:
+        s.start()
+        if s.wait_first_frame() is None:
+            s.report_failure('no picture in the stream window')
+        time.sleep(5)
+    finally:
+        s.stop()
+        if motion.poll() is None:
+            motion.kill()
 
 
 def retry(fn, client, host, relay):
@@ -566,6 +597,11 @@ def measure(host, client, runs):
     try:
         relay.start()
         client.ensure_paired(host)
+        # The first stream after the host starts takes 1 to 2.5 s longer to show its first
+        # frame (cold start, for every host and client), so it isn't measured
+        print('  warm-up stream...', flush=True)
+        retry(warm_up, client, host, relay)
+        time.sleep(3)
         results = []
         for i in range(runs):
             print('  run %d/%d: clean stream (%d s)...' % (i + 1, runs, SCENARIO['clean_s'] + SCENARIO['warmup_s']), flush=True)
