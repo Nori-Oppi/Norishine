@@ -973,7 +973,12 @@ namespace stream {
       sample.latency_ms = metrics.latency_ms->avg;
     }
     auto decision = session.adaptive->tick(sample, now);
-    session.video.fec_percentage.store(decision.fec_percent, std::memory_order_relaxed);
+    auto previous_fec = session.video.fec_percentage.exchange(decision.fec_percent, std::memory_order_relaxed);
+    if (previous_fec != decision.fec_percent && !decision.bitrate_kbps) {
+      auto state = session.adaptive->state(now);
+      BOOST_LOG(info) << "Adaptive error correction for ["sv << session.device_name << "]: "sv << decision.fec_percent
+                      << "% ("sv << adaptive::to_string(state.last_reason) << ')';
+    }
     if (decision.bitrate_kbps) {
       auto state = session.adaptive->state(now);
       BOOST_LOG(info) << "Adaptive bitrate for ["sv << session.device_name << "]: "sv << *decision.bitrate_kbps

@@ -45,6 +45,9 @@ Rules:
   30 s and step × 1.04 instead.
 - **Clean for 20 s**: FEC −5 points every 10 s, back to `fec_percentage`.
 - No changes in the first 3 s of a stream, and loss in the 2 s after a change is ignored.
+  Key frame requests and client loss reports from the first 3 s don't count later either:
+  clients ask for a few key frames while their decoder starts (Norilight four), which isn't
+  network loss.
 - Never above the bitrate the client started with (after `max_bitrate`), never below
   `adaptive_min_bitrate` (or the start bitrate if lower). No raises while the host or client
   is the bottleneck.

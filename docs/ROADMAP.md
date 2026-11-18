@@ -200,8 +200,15 @@ deliberately broken, but is not verified until CI exists for it.
     higher-quality one with room to spare and Quality clients, more error correction with
     frequent loss (`src/recommend.*`, `/api/v1/recommendations`, `.../apply`, `.../rollback`),
     shown with Apply and Undo in the web UI's settings and Norilight's Host Settings.
-- **M10** Measured improvements: display restore after crashes, capture from a
-  user-session helper, frame cap matched to the client, AMF path evaluation.
+- **M10** Measured improvements, each benchmarked before and after
+  ([BENCHMARK.md](BENCHMARK.md)).
+  - Error correction at stream start (**done**): the key frames a client asks for while its
+    decoder starts no longer raise error correction to 30 % for the stream's first half
+    minute (average 24.6 % to 20 % over the first minute).
+  - Display restore after crashes.
+  - Capture from a user-session helper.
+  - Frame cap matched to the client.
+  - AMF path evaluation.
 
 ## Not planned
 WebRTC browser streaming, PyroWave, Playnite and Lutris integration, custom gamepad

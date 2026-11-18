@@ -97,9 +97,53 @@ What it shows:
 - The frame rate is below 60 because the host's desktop doesn't change 60 times a second
   everywhere; it follows the motion window, and dips when the host's CPU is busy (Performance run 2, Balanced run 1).
 - Nothing was lost on loopback. Error correction still went to 30 % in each stream's first
-  seconds and back to 20 % about 20 seconds later; the cause isn't known yet. The adaptive bitrate
+  seconds and back to 20 % about 30 seconds later; fixed in M10, see below. The adaptive bitrate
   stayed at the stream's start: 14988 kbps, the 20000 the client asked for less room for
   error correction and audio.
 - Bitrate sent is much lower than the target: the test picture compresses well.
 
-Next measurements go in the same table, with what changed.
+Next measurements go below, with what changed.
+
+## M10: error correction at stream start
+
+**What changed:** the adaptive controller no longer counts the key frames a client asks for
+while its decoder starts as loss. Norilight asks for four or five in the first two seconds;
+those requests stayed in the controller's 3-second loss window past the 3-second startup
+grace, so its first decision raised error correction to 30 %. Now requests (and client loss
+reports) from the grace period are dropped when it ends, as they already were after a change
+([AUTOTUNE.md](AUTOTUNE.md#live-adaptation-host-srcadaptive)).
+
+Measured with `--warmup 0 --duration 60`, so the samples start about 1.5 s into the stream
+(`stream_s` in the samples), **Performance goal**. Before: `master` at `335e42b6`; after: the
+same with the change.
+
+Error correction, second by second (time into the stream):
+
+| Run | Before | After |
+| --- | --- | --- |
+| 1 | 20 % to 2 s, **30 % 3–24 s, 25 % 25–35 s**, 20 % from 36 s; average 24.6 % | 20 % throughout |
+| 2 | 20 % to 3 s, **30 % 4–25 s, 25 % 26–35 s**, 20 % from 36 s; average 24.5 % | 20 % throughout |
+| 3 | 20 % to 2 s, **30 % 3–24 s, 25 % 25–35 s**, 20 % from 36 s; average 24.6 % | 20 % throughout |
+
+Every stream got 4 or 5 key frame requests in its first 2 seconds, before and after, and no
+recovery requests after that. With 20 % error correction each frame is sent with 20 % more
+data; with 30 %, with 30 %. So the first 35 seconds of every stream sent about 6 % more than
+needed (8 % for 22 seconds, 4 % for 10), for nothing.
+
+The rest of the stream is unchanged:
+
+| Run | fps (min / avg / max) | Latency ms (min / avg / max) | Send ms avg | Bitrate kbps avg | Recovery | Host CPU % avg | Encoder % avg |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Before 1 | 32.2 / 42.5 / 53.0 | 2.82 / 4.85 / 51.40 | 0.17 | 4909 | 0 | 72.8 | 33.2 |
+| Before 2 | 47.8 / 53.8 / 58.8 | 2.49 / 4.53 / 22.22 | 0.13 | 6740 | 0 | 51.9 | 40.7 |
+| Before 3 | 37.4 / 51.9 / 58.2 | 2.18 / 4.55 / 16.78 | 0.14 | 6399 | 0 | 54.4 | 39.0 |
+| After 1 | 42.2 / 55.5 / 59.6 | 1.85 / 4.41 / 36.95 | 0.12 | 7099 | 0 | 44.8 | 41.8 |
+| After 2 | 34.0 / 51.7 / 58.8 | 2.13 / 4.51 / 21.58 | 0.13 | 6483 | 0 | 53.0 | 39.2 |
+| After 3 | 38.2 / 48.6 / 54.8 | 2.70 / 4.69 / 32.86 | 0.14 | 5724 | 0 | 60.2 | 37.2 |
+
+Recovery counts requests after the first sample, so it doesn't include the startup ones. The
+highest latency is higher than in the baseline because these samples include the stream's
+first seconds. Before run 1 had the host's CPU busy with something else (73 %).
+
+The benchmark's samples now also carry `stream_s`, `key_frame_requests`, `ref_invalidations`,
+`adaptive_reason` and `adaptive_change_s`, and the results record the other AMF settings.

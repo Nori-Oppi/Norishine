@@ -82,6 +82,29 @@ TEST(AdaptiveTests, NothingHappensWhileTheStreamSettles) {
   EXPECT_TRUE(s.changes.empty());
 }
 
+TEST(AdaptiveTests, KeyFrameRequestsWhileTheClientStartsAreNotLoss) {
+  // Clients ask for a few key frames while their decoder starts (Norilight sends four).
+  sim_t s;
+  s.second(0);
+  s.second(4);
+  s.clean(40);
+  EXPECT_TRUE(s.changes.empty());
+  EXPECT_EQ(s.state().fec_percent, 20);
+  EXPECT_EQ(s.state().last_reason, reason_e::none);
+}
+
+TEST(AdaptiveTests, ClientLossWhileTheStreamSettlesIsNotLoss) {
+  sim_t s;
+  s.second(0, rtt(5, 3));
+  s.second(0, rtt(5, 3));
+  s.second(0);
+  s.second(0);  // the report from the grace period is still fresh here
+  EXPECT_EQ(s.state().fec_percent, 20);
+  s.second(0, rtt(5, 3));  // after the grace period, loss counts
+  EXPECT_EQ(s.state().fec_percent, 30);
+  EXPECT_EQ(s.state().last_reason, reason_e::loss);
+}
+
 TEST(AdaptiveTests, HeavyLossCutsTheBitrate) {
   sim_t s;
   s.clean(5);
