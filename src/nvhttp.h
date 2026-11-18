@@ -336,6 +336,11 @@ namespace nvhttp {
   nlohmann::json host_status();
 
   /**
+   * @brief Host load and per-stream metrics for the management API (`GET /api/v1/stats`).
+   */
+  nlohmann::json host_stats();
+
+  /**
    * @brief Remove all paired clients.
    * @examples
    * nvhttp::erase_all_clients();

@@ -426,6 +426,8 @@ namespace stream {
     safe::signal_t controlEnd;
 
     std::atomic<session::state_e> state;
+
+    stream_metrics::recorder_t metrics;
   };
 
   /**
@@ -971,6 +973,7 @@ namespace stream {
       std::chrono::milliseconds t {stats[1]};
 
       auto lastGoodFrame = stats[3];
+      session->metrics.client_loss_report(count);
 
       BOOST_LOG(verbose)
         << "type [IDX_LOSS_STATS]"sv << std::endl
@@ -983,6 +986,7 @@ namespace stream {
 
     server->map(packetTypes[IDX_REQUEST_IDR_FRAME], [&](session_t *session, const std::string_view &payload) {
       BOOST_LOG(debug) << "type [IDX_REQUEST_IDR_FRAME]"sv;
+      session->metrics.key_frame_requested();
 
       session->video.idr_events->raise(true);
     });
@@ -996,6 +1000,7 @@ namespace stream {
         << "type [IDX_INVALIDATE_REF_FRAMES]"sv << std::endl
         << "firstFrame [" << firstFrame << ']' << std::endl
         << "lastFrame [" << lastFrame << ']';
+      session->metrics.ref_frames_invalidated(firstFrame, lastFrame);
 
       session->video.invalidate_ref_frames_events->raise(std::make_pair(firstFrame, lastFrame));
     });
@@ -1438,6 +1443,8 @@ namespace stream {
       }
 
       frame_network_latency_logger.first_point_now();
+      const auto frame_send_start = std::chrono::steady_clock::now();
+      std::optional<std::chrono::steady_clock::duration> frame_latency;
 
       auto session = (session_t *) packet->channel_data;
       auto lowseq = session->video.lowseq;
@@ -1475,6 +1482,7 @@ namespace stream {
           return (uint16_t) std::clamp<decltype(duration_us)>((duration_us + 50) / 100, 0, std::numeric_limits<uint16_t>::max());
         };
 
+        frame_latency = frame_send_start - *packet->frame_timestamp;
         uint16_t latency = duration_to_latency(std::chrono::steady_clock::now() - *packet->frame_timestamp);
         frame_header.frame_processing_latency = latency;
         frame_processing_latency_logger.collect_and_log(latency / 10.);
@@ -1723,6 +1731,9 @@ namespace stream {
         });
 
         session->video.lowseq = lowseq;
+
+        auto frame_sent = std::chrono::steady_clock::now();
+        session->metrics.frame_sent(packet->data_size(), frame_latency, frame_sent - frame_send_start, packet->is_idr(), frame_sent);
       } catch (const std::exception &e) {
         BOOST_LOG(error) << "Broadcast video failed "sv << e.what();
         std::this_thread::sleep_for(100ms);
@@ -2045,6 +2056,7 @@ namespace stream {
       result.codec = session.config.monitor.videoFormat;
       result.hdr = session.config.monitor.dynamicRange != 0;
       result.state = state(session);
+      result.metrics = session.metrics.snapshot();
       return result;
     }
 

@@ -13,6 +13,7 @@
 // local includes
 #include "audio.h"
 #include "crypto.h"
+#include "stream_metrics.h"
 #include "video.h"
 
 namespace stream {
@@ -71,6 +72,7 @@ namespace stream {
       int codec = 0;  ///< 0 H.264, 1 HEVC, 2 AV1
       bool hdr = false;
       state_e state = state_e::STOPPED;
+      stream_metrics::snapshot_t metrics;  ///< Measured frame rate, bitrate, latency and recovery.
     };
 
     info_t describe(session_t &session);

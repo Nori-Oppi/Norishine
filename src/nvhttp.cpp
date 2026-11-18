@@ -29,6 +29,7 @@
 #include "display_device.h"
 #include "file_handler.h"
 #include "globals.h"
+#include "host_stats.h"
 #include "httpcommon.h"
 #include "logging.h"
 #include "manage_api.h"
@@ -1249,7 +1250,7 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
-    tree.put("root.Norishine.Features", "status,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    tree.put("root.Norishine.Features", "status,stats,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
 
     std::ostringstream data;
 
@@ -1303,6 +1304,14 @@ namespace nvhttp {
       auto tree = host_status();
       tree["device"] = {{"name", named_cert_p->name}, {"permissions", (uint32_t) named_cert_p->perm}};
       send_json(response, SimpleWeb::StatusCode::success_ok, tree);
+    }
+
+    void stats(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, read_perm, "read host status")) {
+        return;
+      }
+      send_json(response, SimpleWeb::StatusCode::success_ok, host_stats());
     }
 
     void config_schema(resp_https_t response, req_https_t request) {
@@ -1552,6 +1561,22 @@ namespace nvhttp {
       {"encoder", std::string {video::active_encoder_name()}},
       {"port", net::map_port(PORT_HTTP)},
       {"port_moved_for", config::sunshine.port_moved_for},
+    };
+  }
+
+  nlohmann::json host_stats() {
+    nlohmann::json sessions = nlohmann::json::array();
+    for (const auto &s : rtsp_stream::get_all_session_info()) {
+      auto entry = stream_metrics::to_json(s.metrics);
+      entry["uuid"] = s.uuid;
+      entry["name"] = s.name;
+      sessions.push_back(std::move(entry));
+    }
+    return {
+      {"status", true},
+      {"host", host_stats::to_json(host_stats::current())},
+      {"encoder", std::string {video::active_encoder_name()}},
+      {"sessions", sessions},
     };
   }
 
@@ -2280,6 +2305,7 @@ namespace nvhttp {
     https_server.resource["^/actions/clipboard$"]["GET"] = getClipboard;
     https_server.resource["^/actions/clipboard$"]["POST"] = setClipboard;
     https_server.resource["^/api/v1/status$"]["GET"] = api::status;
+    https_server.resource["^/api/v1/stats$"]["GET"] = api::stats;
     https_server.resource["^/api/v1/config/schema$"]["GET"] = api::config_schema;
     https_server.resource["^/api/v1/config$"]["GET"] = api::config_get;
     https_server.resource["^/api/v1/config$"]["PATCH"] = api::config_patch;
