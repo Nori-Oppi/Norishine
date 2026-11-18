@@ -56,6 +56,7 @@ set(CPACK_NSIS_EXTRA_UNINSTALL_COMMANDS
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\delete-firewall-rule.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\uninstall-service.bat\\\"'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\sunshine.exe\\\" --restore-nvprefs-undo'
+        nsExec::ExecToLog '\\\"$INSTDIR\\\\sunshine.exe\\\" --restore-displays'
         nsExec::ExecToLog '\\\"$INSTDIR\\\\scripts\\\\update-path.bat\\\" remove'
         # If Norishine replaced Apollo or Vibepollo, keep a copy of its settings where a
         # reinstall of that host finds them (also on upgrades, which uninstall silently).

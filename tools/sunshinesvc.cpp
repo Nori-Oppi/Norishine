@@ -166,6 +166,29 @@ bool RunTerminationHelper(HANDLE console_token, DWORD pid) {
   return exit_code == 0;
 }
 
+// Undo the display changes and remove the virtual displays of a Sunshine.exe we had to kill:
+// it couldn't clean up, and when the service stops no new run follows to do it.
+void RunDisplayRestore(HANDLE console_token) {
+  // The current directory is the one with Sunshine.exe (see wmain).
+  std::wstring command = L"Sunshine.exe --restore-displays";
+
+  STARTUPINFOW startup_info = {};
+  startup_info.cb = sizeof(startup_info);
+  startup_info.lpDesktop = (LPWSTR) L"winsta0\\default";
+
+  PROCESS_INFORMATION process_info;
+  if (!CreateProcessAsUserW(console_token, L"Sunshine.exe", command.data(), nullptr, nullptr, FALSE, CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW, nullptr, nullptr, &startup_info, &process_info)) {
+    return;
+  }
+
+  // Display changes take a few seconds at most; don't hold up the service stop for long.
+  if (WaitForSingleObject(process_info.hProcess, 15000) != WAIT_OBJECT_0) {
+    TerminateProcess(process_info.hProcess, ERROR_TIMEOUT);
+  }
+  CloseHandle(process_info.hProcess);
+  CloseHandle(process_info.hThread);
+}
+
 VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv) {
   service_status_handle = RegisterServiceCtrlHandlerEx(SERVICE_NAME, HandlerEx, nullptr);
   if (service_status_handle == nullptr) {
@@ -289,6 +312,8 @@ VOID WINAPI ServiceMain(DWORD dwArgc, LPTSTR *lpszArgv) {
               WaitForSingleObject(process_info.hProcess, 20000) != WAIT_OBJECT_0) {
             // If it won't terminate gracefully, kill it now
             TerminateProcess(process_info.hProcess, ERROR_PROCESS_ABORTED);
+            WaitForSingleObject(process_info.hProcess, 5000);
+            RunDisplayRestore(console_token);
           }
           still_running = false;
           break;

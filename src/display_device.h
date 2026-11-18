@@ -124,6 +124,19 @@ namespace display_device {
   bool reset_persistence();
 
   /**
+   * @brief Undo the display changes an earlier run left behind (it crashed, or was killed
+   *        when it hung), once, without starting a display session.
+   *
+   * For the service and the uninstaller after the host stopped without cleaning up: when no
+   * new host run follows, nothing else would undo them.
+   *
+   * @param persistence_filepath The state file the host keeps its changes in.
+   * @param video_config User's video related configuration.
+   * @return True if nothing is left to undo, false if undoing failed.
+   */
+  bool restore_once(const std::filesystem::path &persistence_filepath, const config::video_t &video_config);
+
+  /**
    * @brief Enumerate the available devices.
    * @return A list of devices.
    *
