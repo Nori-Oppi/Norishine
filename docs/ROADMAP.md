@@ -87,7 +87,7 @@ in, with confirmation) or the command line, never from a paired client.
 
 ## Done
 
-Phases 2 to 5 are finished, and so are N1 and N2. Details are in the linked docs and the git history.
+Phases 2 to 5 are finished, and so are N1 to N4. Details are in the linked docs and the git history.
 
 | Milestone | What it gave | More |
 | --- | --- | --- |
@@ -100,6 +100,8 @@ Phases 2 to 5 are finished, and so are N1 and N2. Details are in the linked docs
 | M8 Diagnostics | `GET /api/v1/stats` (host load, per-stream metrics), Stats tab in Norilight, repeatable benchmark with a baseline | [BENCHMARK.md](BENCHMARK.md) |
 | M9 Auto-tuning | Live bitrate and FEC adaptation for every client, Norilight's reports, Tuning goals with learned launch settings, encoder recommendations with Apply and Undo | [AUTOTUNE.md](AUTOTUNE.md) |
 | N1 Reset button (Norilight) | Settings › Reset Norilight: settings moved to a dated backup (D9), restart into the first-start wizard; `Norilight --reset` | [Norilight's GUIDE.md](https://github.com/Nori-Oppi/Norilight/blob/main/docs/GUIDE.md#resetting-norilight) |
+| N3 Help links (Norilight) | Norilight's help buttons open the new [norilight-docs](https://github.com/Nori-Oppi/norilight-docs) (setup, troubleshooting, hardware decoding, gamepad mapping) instead of moonlight-docs | [norilight-docs](https://github.com/Nori-Oppi/norilight-docs) |
+| N4 Setup wizard and reset | First start in the web UI: sign-in, import from Apollo or Vibepollo, host name, display, encoder check, first device and its permissions; Troubleshooting › Reset Norishine and `norishine --reset` move everything to a dated backup (D9) and open the wizard again | [GUIDE.md](GUIDE.md#first-start) |
 | N2 Benchmark check | `scripts/benchmark/compare.py`: Norishine with Norilight against stored Apollo, Vibepollo and Sunshine results with Moonlight, per metric better, same or worse; run after every streaming change | [BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine) |
 
 ## In progress: M10 measured improvements
@@ -128,8 +130,6 @@ they're listed here so there's one order for both.
 
 | # | Item | Project | Effort | Importance | Needs |
 | --- | --- | --- | --- | --- | --- |
-| N3 | Help links to a new `norilight-docs` repository | Norilight | S | Medium | the repository |
-| N4 | Setup wizard and reset button | Norishine | M | High | — |
 | N5 | Near-instant stream start | Both | L | Very high | — |
 | N6 | Auto-optimisation wizard | Both | M | High | — |
 | N7 | Linux build | Norilight | M | Medium | — |
@@ -147,20 +147,6 @@ whenever there's room, between the items above:
 | --- | --- | --- | --- | --- |
 | N14 | Fewer full-queue frame drops in the pacer | Norilight | S–M | Medium |
 | N15 | Benchmark streams that show no picture | Norishine (check script) | S | Low |
-
-### N3. Help links to `norilight-docs` — S
-Norilight's guide and help buttons still open moonlight-docs (Setup Guide,
-Troubleshooting, Fixing Hardware Decoding Problems, Gamepad Mapping). Create
-`Nori-Oppi/norilight-docs` with those pages rewritten for Norilight and Norishine, and
-point every link there.
-
-### N4. Setup wizard and reset button (Norishine) — M
-First start in the web UI, like Norilight's: create the sign-in, host name, virtual or
-physical display, a quick encoder check, pair the first device and choose its permissions,
-with an optional import when Apollo or Vibepollo is installed. Then **Reset Norishine**
-(Troubleshooting page, and `norishine --reset`): configuration, apps and state are moved to
-a backup (D9) and the host restarts into the wizard. Pairings and the sign-in go with it,
-so clients pair again.
 
 ### N5. Near-instant stream start — L
 Measure each step from choosing an app to the first frame (launch request, display change

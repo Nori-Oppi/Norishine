@@ -13,6 +13,7 @@
 #include "display_device.h"
 #include "entry_handler.h"
 #include "globals.h"
+#include "host_reset.h"
 #include "httpcommon.h"
 #include "logging.h"
 #include "main.h"
@@ -58,6 +59,9 @@ std::map<std::string_view, std::function<int(const char *name, int argc, char **
    }},
   {"help"sv, [](const char *name, int argc, char **argv) {
      return args::help(name);
+   }},
+  {"reset"sv, [](const char *name, int argc, char **argv) {
+     return host_reset::reset_from_command_line();
    }},
   {"version"sv, [](const char *name, int argc, char **argv) {
      return args::version();
@@ -498,6 +502,9 @@ int main(int argc, char *argv[]) {
     system_tray::end_tray_threaded();
   }
 #endif
+
+  // A reset from the web UI moves the files now that nothing uses them any more.
+  host_reset::finish_if_requested();
 
   return lifetime::desired_exit_code;
 }

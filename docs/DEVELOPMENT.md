@@ -121,6 +121,15 @@ Apollo, Vibepollo or Sunshine keeps working. Create web UI credentials with
 `sunshine.exe <conf> --creds <user> <password>` and copy
 `src_assets/windows/assets/apps.json` into the dev folder.
 
+To try the setup wizard and the reset on a dev host, start it with a fresh dev folder (no
+`credentials_file` content). Keep the dev paths and the port on the command line rather than
+only in the dev `sunshine.conf`: a reset moves that file to the backup, and the host restarts
+with the same command line, so it stays on the dev port and files instead of the defaults.
+For example `build/sunshine.exe build/dev/sunshine.conf port=49989
+file_apps=<build>/dev/apps.json file_state=<build>/dev/sunshine_state.json ...` in a console
+window (the restart only relaunches a host that has one). The wizard's import step runs
+`build/scripts/other-hosts.ps1`, which CMake copies there.
+
 ## End-to-end host check
 
 `scripts/e2e/host_check.py` acts as GameStream clients against a running dev host: it

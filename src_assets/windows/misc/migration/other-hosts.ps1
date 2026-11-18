@@ -20,14 +20,25 @@
   -Action restore      (uninstall) When Norishine replaced Apollo or Vibepollo and that is
                        not installed again, puts Norishine's configuration in its config
                        folder, so installing it again carries the settings back.
+  -Action find         (setup wizard) Prints, as the last line, JSON naming an Apollo or
+                       Vibepollo whose configuration can be imported ({"name", "installed"}),
+                       or null.
+  -Action import-settings
+                       (setup wizard) Copies that host's settings and apps over the files
+                       given by -ConfigFile and -AppsFile, keeping the previous ones as
+                       <name>.before-import. Paired devices, the sign-in and the host's
+                       identity are not copied. Exit code 3 when there is nothing to import.
 
   The choice is recorded in config\other_host.json next to the Norishine install.
 #>
 param(
-  [ValidateSet('prepare', 'replace', 'side-by-side', 'restore')]
+  [ValidateSet('prepare', 'replace', 'side-by-side', 'restore', 'find', 'import-settings')]
   [string]$Action,
   # For tests: the Norishine install folder (default: the folder above this script).
-  [string]$Root
+  [string]$Root,
+  # import-settings: the running host's settings file and apps file.
+  [string]$ConfigFile,
+  [string]$AppsFile
 )
 
 $ErrorActionPreference = 'Stop'
@@ -408,9 +419,72 @@ function Copy-ConfigBack($record) {
   Write-Log "Norishine's settings, apps and paired devices are in $target for $($record.host)."
 }
 
+# The host the setup wizard can import from: an installed Apollo or Vibepollo with a
+# configuration, or the configuration an uninstalled one left in Program Files\Apollo.
+function Find-ImportSource {
+  $other = Get-OtherHost
+  if ($other -and $other.InstallDir -and (Test-HasState (Join-Path $other.InstallDir 'config'))) {
+    return [pscustomobject]@{ Name = $other.Name; InstallDir = $other.InstallDir; Installed = $true }
+  }
+  $leftover = Join-Path $env:ProgramFiles 'Apollo'
+  if (-not $other -and (Test-HasState (Join-Path $leftover 'config'))) {
+    return [pscustomobject]@{ Name = 'Apollo or Vibepollo'; InstallDir = $leftover; Installed = $false }
+  }
+  return $null
+}
+
+# Settings that name files: the imported ones would point at the other host's state, so
+# Norishine keeps its own. The port too while the other host still uses its own.
+function Remove-HostSpecificSettings([string]$Conf, [bool]$KeepPort) {
+  if (-not (Test-Path -LiteralPath $Conf)) { return }
+  $keys = @('file_apps', 'file_state', 'credentials_file', 'pkey', 'cert', 'log_path')
+  if (-not $KeepPort) { $keys += 'port' }
+  $pattern = '^\s*(' + ($keys -join '|') + ')\s*='
+  $lines = @(Get-Content -LiteralPath $Conf)
+  $kept = @($lines | Where-Object { $_ -notmatch $pattern })
+  if ($kept.Count -ne $lines.Count) {
+    Set-Content -LiteralPath $Conf -Value $kept -Encoding UTF8
+    Write-Log 'Left out settings that name files or the port of the other host.'
+  }
+}
+
+function Import-Settings($Source, [string]$ToConfig, [string]$ToApps) {
+  $from = Join-Path $Source.InstallDir 'config'
+  $stage = Join-Path ([IO.Path]::GetTempPath()) ('norishine-import-' + [guid]::NewGuid())
+  New-Item -ItemType Directory -Force -Path $stage | Out-Null
+  try {
+    foreach ($name in 'sunshine.conf', 'apps.json') {
+      $file = Join-Path $from $name
+      if (Test-Path -LiteralPath $file) { Copy-Item -LiteralPath $file -Destination $stage }
+    }
+    Update-Paths $stage $Source.InstallDir $NorishineRoot
+    Remove-UnsupportedCapture $stage
+    Remove-HostSpecificSettings (Join-Path $stage 'sunshine.conf') (-not $Source.Installed)
+
+    $covers = Join-Path $from 'covers'
+    if (Test-Path -LiteralPath $covers) {
+      $target = Join-Path $NorishineConfig 'covers'
+      New-Item -ItemType Directory -Force -Path $target | Out-Null
+      Copy-Item -Path (Join-Path $covers '*') -Destination $target -Recurse -Force
+    }
+
+    foreach ($pair in @(@('sunshine.conf', $ToConfig), @('apps.json', $ToApps))) {
+      $staged = Join-Path $stage $pair[0]
+      if (-not (Test-Path -LiteralPath $staged) -or -not $pair[1]) { continue }
+      if (Test-Path -LiteralPath $pair[1]) {
+        Copy-Item -LiteralPath $pair[1] -Destination "$($pair[1]).before-import" -Force
+      }
+      Copy-Item -LiteralPath $staged -Destination $pair[1] -Force
+    }
+    Write-Log "Imported settings and apps from $($Source.Name) ($from)."
+  } finally {
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+
 # Dot-sourced (tests): define the functions only.
 if ($MyInvocation.InvocationName -eq '.') { return }
-if (-not $Action) { throw 'Specify -Action prepare, replace, side-by-side or restore.' }
+if (-not $Action) { throw 'Specify -Action prepare, replace, side-by-side, restore, find or import-settings.' }
 
 switch ($Action) {
   'prepare' {
@@ -459,6 +533,24 @@ switch ($Action) {
     }
     if (-not (Test-HasState $NorishineConfig)) { exit 0 }
     Copy-ConfigBack $record
+    exit 0
+  }
+  'find' {
+    $source = Find-ImportSource
+    if ($source) {
+      [pscustomobject]@{ name = $source.Name; installed = $source.Installed } | ConvertTo-Json -Compress
+    } else {
+      'null'
+    }
+    exit 0
+  }
+  'import-settings' {
+    $source = Find-ImportSource
+    if (-not $source) {
+      Write-Log 'No Apollo or Vibepollo configuration to import.'
+      exit 3
+    }
+    Import-Settings $source $ConfigFile $AppsFile
     exit 0
   }
 }

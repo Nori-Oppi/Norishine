@@ -145,6 +145,21 @@ const quit = () => run('quit', {
   },
   done: t('trouble.quit_done'),
 })
+// The host moves its files to a backup while it restarts, then opens the setup wizard.
+const resetHost = () => run('reset', {
+  confirmText: t('trouble.reset_confirm'),
+  confirmBody: t('trouble.reset_body'),
+  call: async () => {
+    clearInterval(timer)
+    live.value = false
+    await api('./api/v1/reset', { method: 'POST', body: { confirm: 'reset' } })
+    notify(t('settings.restarting'), 'warning')
+    if (!await restartHost({ alreadyRequested: true })) {
+      throw new Error(t('settings.restart_timeout'))
+    }
+    location.href = './'
+  },
+})
 </script>
 
 <template>
@@ -169,6 +184,9 @@ const quit = () => run('quit', {
           </button>
           <button type="button" class="btn btn-danger" :disabled="!!busy" :title="$t('trouble.quit_desc')" @click="quit">
             <i class="fas fa-power-off" aria-hidden="true"></i> {{ $t('trouble.quit') }}
+          </button>
+          <button type="button" class="btn btn-danger" :disabled="!!busy" :title="$t('trouble.reset_desc')" @click="resetHost">
+            <i class="fas" :class="busy === 'reset' ? 'fa-spinner fa-spin' : 'fa-clock-rotate-left'" aria-hidden="true"></i> {{ $t('trouble.reset') }}
           </button>
         </div>
       </section>

@@ -278,6 +278,7 @@ namespace logging {
       << std::endl
       << "    --help                    | print help"sv << std::endl
       << "    --creds username password | set user credentials for the Web manager"sv << std::endl
+      << "    --reset                   | move settings, apps, pairings and sign-in to a backup and start over"sv << std::endl
       << "    --version                 | print the version of sunshine"sv << std::endl
 #ifdef _WIN32
       << "    --restore-displays        | undo display changes an earlier run left behind"sv << std::endl

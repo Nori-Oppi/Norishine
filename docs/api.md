@@ -290,6 +290,31 @@ The web UI port also has `GET /api/v1/apps/{uuid}/image`: the app's picture as P
 when it has none of its own (the web UI then draws a lettered tile). Paired clients get
 pictures from `/appasset` as before.
 
+## GET /api/v1/setup
+@copydoc confighttp::getSetupV1()
+
+`pending` is true from the first account until the wizard is finished or skipped; while it
+is, `/` opens `/setup`. `other_host` is `{"name", "installed"}` or null.
+
+## POST /api/v1/setup/encoder
+@copydoc confighttp::checkEncoderV1()
+
+Answers `{"status", "encoder", "h264", "hevc", "av1", "hdr"}`; 409 while a stream runs.
+
+## POST /api/v1/setup/import
+@copydoc confighttp::importSettingsV1()
+
+Runs `scripts/other-hosts.ps1 -Action import-settings`. 409 once the wizard is finished.
+
+## POST /api/v1/setup/done
+@copydoc confighttp::finishSetupV1()
+
+## POST /api/v1/reset
+@copydoc confighttp::resetV1()
+
+Web UI only (session cookie and CSRF token): it is not part of the management API on the
+GameStream port, so no paired client can reset the host.
+
 ## POST /api/covers/upload
 @copydoc confighttp::uploadCover()
 

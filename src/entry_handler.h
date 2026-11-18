@@ -137,6 +137,17 @@ namespace service_ctrl {
   bool start_service();
 
   /**
+   * @brief Stop the Norishine service and wait until it has stopped.
+   * @return True when it stopped.
+   */
+  bool stop_service();
+
+  /**
+   * @brief Whether something listens on this host's web UI port.
+   */
+  bool is_ui_port_listening();
+
+  /**
    * @brief Wait for the UI to be ready after Sunshine startup.
    * @examples
    * wait_for_ui_ready();
