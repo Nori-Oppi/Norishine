@@ -377,6 +377,9 @@ namespace stream {
 
       safe::mail_raw_t::event_t<bool> idr_events;
       safe::mail_raw_t::event_t<std::pair<int64_t, int64_t>> invalidate_ref_frames_events;
+      safe::mail_raw_t::event_t<int> bitrate_events;
+
+      std::atomic_int fec_percentage;  ///< Error correction for this stream, adapted while it runs.
 
       std::unique_ptr<platf::deinit_t> qos;
     } video;
@@ -428,6 +431,7 @@ namespace stream {
     std::atomic<session::state_e> state;
 
     stream_metrics::recorder_t metrics;
+    std::unique_ptr<adaptive::controller_t> adaptive;  ///< Empty when adaptive_bitrate is off.
   };
 
   /**
@@ -954,6 +958,27 @@ namespace stream {
     return 0;
   }
 
+  /**
+   * @brief Run the stream's controller (adaptive.h) and pass on what it decided.
+   */
+  void adapt(session_t &session, std::chrono::steady_clock::time_point now) {
+    auto metrics = session.metrics.snapshot(now);
+    adaptive::host_sample_t sample;
+    sample.recovery_requests = metrics.key_frame_requests + metrics.ref_invalidations;
+    sample.fps = metrics.fps;
+    if (metrics.latency_ms) {
+      sample.latency_ms = metrics.latency_ms->avg;
+    }
+    auto decision = session.adaptive->tick(sample, now);
+    session.video.fec_percentage.store(decision.fec_percent, std::memory_order_relaxed);
+    if (decision.bitrate_kbps) {
+      auto state = session.adaptive->state(now);
+      BOOST_LOG(info) << "Adaptive bitrate for ["sv << session.device_name << "]: "sv << *decision.bitrate_kbps
+                      << " kbps ("sv << adaptive::to_string(state.last_reason) << "), error correction "sv << decision.fec_percent << '%';
+      session.video.bitrate_events->raise(*decision.bitrate_kbps);
+    }
+  }
+
   void controlBroadcastThread(control_server_t *server) {
     server->map(packetTypes[IDX_PERIODIC_PING], [](session_t *session, const std::string_view &payload) {
       BOOST_LOG(verbose) << "type [IDX_PERIODIC_PING]"sv;
@@ -1212,6 +1237,10 @@ namespace stream {
               auto hdr_info = hdr_queue->pop();
 
               send_hdr_mode(session, std::move(hdr_info));
+            }
+
+            if (session->adaptive && session->state.load(std::memory_order_relaxed) == session::state_e::RUNNING) {
+              adapt(*session, now);
             }
           }
 
@@ -1490,7 +1519,7 @@ namespace stream {
         frame_header.frame_processing_latency = 0;
       }
 
-      auto fecPercentage = config::stream.fec_percentage;
+      auto fecPercentage = session->video.fec_percentage.load(std::memory_order_relaxed);
 
       // Insert space for packet headers
       auto blocksize = session->config.packetsize + MAX_RTP_HEADER_SIZE;
@@ -2057,7 +2086,18 @@ namespace stream {
       result.hdr = session.config.monitor.dynamicRange != 0;
       result.state = state(session);
       result.metrics = session.metrics.snapshot();
+      if (session.adaptive) {
+        result.adaptive = session.adaptive->state();
+      }
       return result;
+    }
+
+    bool report(session_t &session, const adaptive::client_report_t &report) {
+      if (!session.adaptive) {
+        return false;
+      }
+      session.adaptive->report(report);
+      return true;
     }
 
     inline bool send(session_t& session, const std::string_view &payload) {
@@ -2286,6 +2326,15 @@ namespace stream {
 
       session->video.idr_events = mail->event<bool>(mail::idr);
       session->video.invalidate_ref_frames_events = mail->event<std::pair<int64_t, int64_t>>(mail::invalidate_ref_frames);
+      session->video.bitrate_events = mail->event<int>(mail::bitrate);
+      session->video.fec_percentage = config::stream.fec_percentage;
+      if (config::stream.adaptive_bitrate && !config.monitor.input_only) {
+        adaptive::settings_t settings;
+        settings.min_kbps = config::stream.adaptive_min_bitrate;
+        settings.base_fec = config::stream.fec_percentage;
+        settings.max_fec = std::max(config::stream.adaptive_max_fec, config::stream.fec_percentage);
+        session->adaptive = std::make_unique<adaptive::controller_t>(settings, config.monitor.bitrate, config.monitor.framerate, video::live_bitrate_supported());
+      }
       session->video.lowseq = 0;
       session->video.ping_payload = launch_session.av_ping_payload;
       if (config.encryptionFlagsEnabled & SS_ENC_VIDEO) {

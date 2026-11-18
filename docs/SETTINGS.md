@@ -180,6 +180,12 @@ Pairing, finding this PC, ports and encryption.
   <br>`ping_timeout` · default: 10000 ms · advanced
 - **Error correction**: Extra data sent to repair lost packets. Raise it on unreliable Wi-Fi; it uses more bandwidth.
   <br>`fec_percentage` · default: 20% · advanced
+- **Adapt to the network**: During each stream, lower the bitrate and raise error correction when the network can't keep up, then return to the device's bitrate when it can. The device's bitrate is never exceeded.
+  <br>`adaptive_bitrate` · default: On
+- **Lowest adapted bitrate**: The bitrate is never lowered below this, or below the device's own bitrate if that is lower.
+  <br>`adaptive_min_bitrate` · default: 3000 kbps · advanced
+- **Highest adapted error correction**: Error correction is raised up to this when packets are lost, and returns to the error correction setting when the network is clean again.
+  <br>`adaptive_max_fec` · default: 50% · advanced
 
 <a id="apps"></a>
 

@@ -11,6 +11,7 @@
 #include <boost/asio.hpp>
 
 // local includes
+#include "adaptive.h"
 #include "audio.h"
 #include "crypto.h"
 #include "stream_metrics.h"
@@ -73,8 +74,15 @@ namespace stream {
       bool hdr = false;
       state_e state = state_e::STOPPED;
       stream_metrics::snapshot_t metrics;  ///< Measured frame rate, bitrate, latency and recovery.
+      std::optional<adaptive::state_t> adaptive;  ///< Bitrate and error correction now, when adapting.
     };
 
     info_t describe(session_t &session);
+
+    /**
+     * @brief Pass a client's own measurements to its stream's controller.
+     * @return False when the stream isn't adapted (adaptive_bitrate is off).
+     */
+    bool report(session_t &session, const adaptive::client_report_t &report);
   }  // namespace session
 }  // namespace stream

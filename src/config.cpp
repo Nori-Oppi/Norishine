@@ -539,6 +539,10 @@ namespace config {
 
     ENCRYPTION_MODE_NEVER,  // lan_encryption_mode
     ENCRYPTION_MODE_OPPORTUNISTIC,  // wan_encryption_mode
+
+    true,  // adaptive_bitrate
+    3000,  // adaptive_min_bitrate
+    50,  // adaptive_max_fec
   };
 
   nvhttp_t nvhttp {
@@ -1325,6 +1329,9 @@ namespace config {
 #endif
 
     int_between_f(vars, "fec_percentage", stream.fec_percentage, {1, 255});
+    bool_f(vars, "adaptive_bitrate", stream.adaptive_bitrate);
+    int_between_f(vars, "adaptive_min_bitrate", stream.adaptive_min_bitrate, {500, 500000});
+    int_between_f(vars, "adaptive_max_fec", stream.adaptive_max_fec, {1, 255});
 
     map_int_int_f(vars, "keybindings"s, input.keybindings);
 

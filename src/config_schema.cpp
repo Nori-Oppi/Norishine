@@ -151,6 +151,9 @@ namespace config::schema {
         integer("wan_encryption_mode", "network", tier::dangerous, ALL, 1, 0, 2),
         integer("ping_timeout", "network", tier::advanced, ALL, 10000, -1, INT_MAX_D),
         integer("fec_percentage", "network", tier::advanced, ALL, 20, 1, 255),
+        boolean("adaptive_bitrate", "network", tier::basic, ALL, true),
+        depends(integer("adaptive_min_bitrate", "network", tier::advanced, ALL, 3000, 500, 500000), "adaptive_bitrate", {true}),
+        depends(integer("adaptive_max_fec", "network", tier::advanced, ALL, 50, 1, 255), "adaptive_bitrate", {true}),
 
         // Apps and commands
         special("global_prep_cmd", "apps", type_e::prep_commands, tier::dangerous, json::array()),
@@ -872,6 +875,8 @@ namespace config::schema {
       {"key_repeat_frequency", "per_second"},
       {"ping_timeout", "ms"},
       {"fec_percentage", "percent"},
+      {"adaptive_min_bitrate", "kbps"},
+      {"adaptive_max_fec", "percent"},
       {"nvenc_vbv_increase", "percent"},
     };
 
