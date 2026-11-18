@@ -208,7 +208,10 @@ deliberately broken, but is not verified until CI exists for it.
   - Display restore after crashes.
   - Capture from a user-session helper.
   - Frame cap matched to the client.
-  - AMF path evaluation.
+  - AMF path evaluation (**done**, nothing changed): on an RX 6700 XT at 1080p60 every
+    option measured within 0.5 ms of the others; the higher-quality ones cost about 4 points
+    of encoder load. The defaults (`ultralowlatency`, `balanced`) stay
+    ([BENCHMARK.md](BENCHMARK.md#m10-amf-options)).
 
 ## Not planned
 WebRTC browser streaming, PyroWave, Playnite and Lutris integration, custom gamepad

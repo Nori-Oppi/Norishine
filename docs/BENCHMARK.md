@@ -147,3 +147,62 @@ first seconds. Before run 1 had the host's CPU busy with something else (73 %).
 
 The benchmark's samples now also carry `stream_s`, `key_frame_requests`, `ref_invalidations`,
 `adaptive_reason` and `adaptive_change_s`, and the results record the other AMF settings.
+
+## M10: AMF options
+
+**What changed:** nothing in the code; this compares the AMD encoder's options on this PC
+(RX 6700 XT, `amdvce`, HEVC) to see whether a different default would help. Each option was
+set alone in the dev host's config, everything else at its default. **Balanced goal**, so
+the host's own preset applies (with Balanced the host logs no `Tuning` line). Standard
+scenario (10 s warmup, 60 s of samples). Host: a development build with the same code as
+`master` at `dea0fab0`, plus the display-restore change (#38), which doesn't touch streaming.
+
+| Option | Run | fps (min / avg / max) | Latency ms (min / avg / max) | Send ms avg | Bitrate kbps avg | Recovery | Host CPU % avg | Encoder % avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Defaults: `amd_usage` ultralowlatency, `amd_quality` balanced | 1 | 46.4 / 53.6 / 59.0 | 2.44 / 4.51 / 9.37 | 0.12 | 6755 | 0 | 49.6 | 41.0 |
+| | 2 | 43.4 / 51.8 / 58.4 | 2.14 / 4.46 / 10.39 | 0.12 | 6351 | 0 | 50.0 | 39.6 |
+| | 3 | 29.8 / 43.9 / 57.6 | 2.34 / 4.95 / 11.18 | 0.16 | 5266 | 0 | 69.2 | 33.5 |
+| `amd_quality` quality | 1 | 50.6 / 56.3 / 58.8 | 2.83 / 4.92 / 8.14 | 0.12 | 7267 | 0 | 41.1 | 47.4 |
+| | 2 | 50.0 / 56.3 / 58.4 | 2.76 / 4.82 / 7.52 | 0.11 | 7249 | 0 | 36.7 | 47.0 |
+| | 3 | 49.8 / 55.8 / 59.0 | 2.62 / 4.85 / 7.52 | 0.11 | 7097 | 0 | 35.1 | 46.6 |
+| `amd_usage` lowlatency | 1 | 29.4 / 44.8 / 55.4 | 2.03 / 4.99 / 10.64 | 0.17 | 5351 | 0 | 67.4 | 34.3 |
+| | 2 | 53.2 / 55.7 / 57.6 | 2.10 / 4.36 / 8.03 | 0.11 | 7094 | 0 | 31.3 | 42.3 |
+| | 3 | 54.6 / 57.7 / 59.2 | 1.73 / 4.35 / 7.03 | 0.10 | 7317 | 0 | 27.9 | 43.6 |
+| `amd_usage` lowlatency_high_quality | 1 | 54.2 / 57.1 / 58.6 | 2.55 / 4.75 / 9.13 | 0.12 | 7426 | 0 | 39.9 | 47.2 |
+| | 2 | 33.2 / 48.9 / 57.2 | 3.13 / 5.17 / 10.08 | 0.14 | 6056 | 0 | 60.2 | 41.3 |
+| | 3 | 37.8 / 52.7 / 58.4 | 2.69 / 4.94 / 9.35 | 0.13 | 6765 | 0 | 52.6 | 43.9 |
+| `amd_preanalysis` enabled | 1 | 50.8 / 55.8 / 58.4 | 2.49 / 4.75 / 8.38 | 0.12 | 7122 | 0 | 37.2 | 45.9 |
+| | 2 | 52.2 / 54.7 / 58.4 | 2.54 / 4.87 / 7.19 | 0.11 | 7003 | 0 | 24.1 | 45.1 |
+| | 3 | 35.0 / 50.9 / 58.0 | 2.73 / 5.18 / 9.30 | 0.14 | 6183 | 0 | 48.4 | 42.6 |
+
+Averaged over the runs, with the encoder load and bitrate divided by the frames actually
+sent (the frame rate follows the host's CPU load, which other programs changed between
+runs). `amd_quality` speed is the Performance goal's preset; its numbers are the baseline's
+Performance table above.
+
+| Option | fps avg | Latency avg ms | Encoder % per 60 fps | kbit per frame |
+| --- | --- | --- | --- | --- |
+| Defaults (ultralowlatency, balanced) | 49.8 | 4.64 | 45.9 | 123 |
+| `amd_quality` speed (Performance baseline) | 53.9 | 4.47 | 45.7 | 126 |
+| `amd_quality` quality | 56.1 | 4.86 | 50.2 | 128 |
+| `amd_usage` lowlatency | 52.7 | 4.57 | 45.6 | 125 |
+| `amd_usage` lowlatency_high_quality | 52.9 | 4.95 | 50.1 | 127 |
+| `amd_preanalysis` enabled | 53.8 | 4.93 | 49.7 | 126 |
+
+What it shows:
+
+- Every option stays within about 0.5 ms of the others, under a third of a 16.7 ms frame,
+  and the encoder kept up in every run. The run-to-run spread (0.5 ms) is as large as the
+  differences, so the presets can't be told apart by latency here.
+- The higher-quality options (`quality`, `lowlatency_high_quality`, pre-analysis) cost about
+  4 points of encoder load per 60 fps and 0.2–0.3 ms. `lowlatency` measures the same as
+  the default `ultralowlatency`.
+- Bits per frame barely change (123–128 kbit): the test picture is easy, and the benchmark
+  measures speed, not picture quality. Picture quality needs a comparison of decoded frames
+  against the source, which the benchmark doesn't do.
+
+**Decision:** keep the defaults. Nothing here is faster than `ultralowlatency` with
+`balanced`, and the Quality goal's `quality` preset ([AUTOTUNE.md](AUTOTUNE.md#encoder-per-goal-norishine))
+costs little enough on this card at 1080p60. Pre-analysis isn't turned on: its cost is
+measured, its benefit isn't. Revisit with a picture-quality measurement, or at 4K or
+120 fps, where the encoder has less room.
