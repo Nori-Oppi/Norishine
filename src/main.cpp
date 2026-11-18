@@ -66,6 +66,9 @@ std::map<std::string_view, std::function<int(const char *name, int argc, char **
   {"restore-nvprefs-undo"sv, [](const char *name, int argc, char **argv) {
      return args::restore_nvprefs_undo();
    }},
+  {"restore-displays"sv, [](const char *name, int argc, char **argv) {
+     return args::restore_displays();
+   }},
 #endif
 };
 
@@ -164,6 +167,11 @@ int main(int argc, char *argv[]) {
   // parse config file
   if (config::parse(argc, argv)) {
     return 0;
+  }
+
+  // Restoring displays runs right after a host was killed: keep that host's log as it is.
+  if (config::sunshine.cmd.name == "restore-displays"sv) {
+    config::sunshine.log_file += ".restore";
   }
 
   auto log_deinit_guard = logging::init(config::sunshine.min_log_level, config::sunshine.log_file);

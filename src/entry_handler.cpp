@@ -11,12 +11,14 @@
 // local includes
 #include "config.h"
 #include "confighttp.h"
+#include "display_device.h"
 #include "entry_handler.h"
 #include "globals.h"
 #include "httpcommon.h"
 #include "logging.h"
 #include "network.h"
 #include "platform/common.h"
+#include "process.h"
 
 extern "C" {
 #ifdef _WIN32
@@ -62,6 +64,12 @@ namespace args {
       nvprefs_instance.unload();
     }
     return 0;
+  }
+
+  int restore_displays() {
+    auto restored = display_device::restore_once(platf::appdata() / "display_device.state", config::video);
+    proc::remove_leftover_virtual_displays();
+    return restored ? 0 : 1;
   }
 #endif
 }  // namespace args

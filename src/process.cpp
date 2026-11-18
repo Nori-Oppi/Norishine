@@ -111,6 +111,17 @@ namespace proc {
 #endif
   }
 
+  void remove_leftover_virtual_displays() {
+#ifdef _WIN32
+    if (VDISPLAY::openVDisplayDevice() != VDISPLAY::DRIVER_STATUS::OK) {
+      return;
+    }
+    VDISPLAY::setDisplayListFile(state_store::paths().dir / "virtual_displays.txt");
+    VDISPLAY::removeLeftoverDisplays();
+    VDISPLAY::closeVDisplayDevice();
+#endif
+  }
+
   class deinit_t: public platf::deinit_t {
   public:
     ~deinit_t() {

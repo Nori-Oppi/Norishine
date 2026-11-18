@@ -65,6 +65,17 @@ namespace args {
    * @examples_end
    */
   int restore_nvprefs_undo();
+
+  /**
+   * @brief Undo display changes and remove virtual displays an earlier run left behind.
+   * The service runs this when it had to kill a host that hung on stopping, and the
+   * uninstaller runs it too. A normal start does the same by itself.
+   * @return 0 when nothing is left to undo, 1 otherwise.
+   * @examples
+   * restore_displays();
+   * @examples_end
+   */
+  int restore_displays();
 #endif
 }  // namespace args
 

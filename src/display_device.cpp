@@ -753,6 +753,30 @@ namespace display_device {
     return std::make_unique<deinit_t>();
   }
 
+  bool restore_once(const std::filesystem::path &persistence_filepath, const config::video_t &video_config) {
+    std::lock_guard lock {DD_DATA.mutex};
+    if (persistence_filepath.empty() || !std::filesystem::exists(persistence_filepath)) {
+      return true;
+    }
+    if (video_config.dd.configuration_option == config::video_t::dd_t::config_option_e::disabled) {
+      // Same as a normal start with display changes turned off: forget them.
+      std::filesystem::remove(persistence_filepath);
+      return true;
+    }
+
+    auto settings_manager {make_settings_manager(persistence_filepath, video_config)};
+    if (!settings_manager) {
+      return true;
+    }
+    const auto result {settings_manager->revertSettings()};
+    if (result != SettingsManagerInterface::RevertResult::Ok) {
+      BOOST_LOG(warning) << "Couldn't undo the display changes of an earlier run (result "sv << static_cast<int>(result) << "); the next start tries again"sv;
+      return false;
+    }
+    BOOST_LOG(info) << "Undid the display changes of an earlier run"sv;
+    return true;
+  }
+
   std::string map_output_name(const std::string &output_name) {
     std::lock_guard lock {DD_DATA.mutex};
     if (!DD_DATA.sm_instance) {

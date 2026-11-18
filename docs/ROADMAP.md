@@ -205,7 +205,10 @@ deliberately broken, but is not verified until CI exists for it.
   - Error correction at stream start (**done**): the key frames a client asks for while its
     decoder starts no longer raise error correction to 30 % for the stream's first half
     minute (average 24.6 % to 20 % over the first minute).
-  - Display restore after crashes.
+  - Display restore after crashes (**done**): the service undoes the display changes of a
+    host it had to kill, at once instead of at its next start (usually the next boot), and
+    the uninstaller does too (`sunshine.exe --restore-displays`,
+    [DISPLAY-RESTORE.md](DISPLAY-RESTORE.md)).
   - Capture from a user-session helper.
   - Frame cap matched to the client.
   - AMF path evaluation.

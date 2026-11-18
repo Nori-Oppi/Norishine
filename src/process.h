@@ -199,6 +199,12 @@ namespace proc {
    */
   void remove_virtual_displays();
 
+  /**
+   * @brief Remove the virtual displays an earlier run left (it crashed, or was killed when
+   *        it hung), without starting the driver watchdog. Does nothing on other platforms.
+   */
+  void remove_leftover_virtual_displays();
+
   extern proc_t proc;
 
   extern int input_only_app_id;
