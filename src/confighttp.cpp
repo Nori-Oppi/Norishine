@@ -33,6 +33,7 @@
 #include "display_device.h"
 #include "file_handler.h"
 #include "globals.h"
+#include "host_reset.h"
 #include "httpcommon.h"
 #include "logging.h"
 #include "manage_api.h"
@@ -358,6 +359,12 @@ namespace confighttp {
 
     print_req(request);
 
+    // First start: the setup wizard until it is finished or skipped.
+    if (host_reset::setup_pending()) {
+      send_redirect(response, request, "/setup");
+      return;
+    }
+
     std::string content = file_handler::read_file(WEB_DIR "index.html");
     SimpleWeb::CaseInsensitiveMultimap headers;
     headers.emplace("Content-Type", "text/html; charset=utf-8");
@@ -506,6 +513,26 @@ namespace confighttp {
     }
 
     std::string content = file_handler::read_file(WEB_DIR "welcome.html");
+    SimpleWeb::CaseInsensitiveMultimap headers;
+    headers.emplace("Content-Type", "text/html; charset=utf-8");
+    headers.emplace("X-Frame-Options", "DENY");
+    headers.emplace("Content-Security-Policy", "frame-ancestors 'none';");
+    response->write(content, headers);
+  }
+
+  /**
+   * @brief Get the first-start setup wizard.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   */
+  void getSetupPage(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request, true)) {
+      return;
+    }
+
+    print_req(request);
+
+    std::string content = file_handler::read_file(WEB_DIR "setup.html");
     SimpleWeb::CaseInsensitiveMultimap headers;
     headers.emplace("Content-Type", "text/html; charset=utf-8");
     headers.emplace("X-Frame-Options", "DENY");
@@ -1338,6 +1365,139 @@ namespace confighttp {
   }
 
   /**
+   * @brief The setup wizard's state: whether it is still to be finished, the host name, the
+   *        display choice and an Apollo or Vibepollo whose settings can be imported.
+   *
+   * @api_examples{/api/v1/setup| GET| null}
+   */
+  void getSetupV1(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    auto values = config::schema::read_config_file(config::sunshine.config_file)["values"];
+    nlohmann::json other = nullptr;
+    if (auto found = host_reset::find_other_host()) {
+      other = {{"name", found->name}, {"installed", found->installed}};
+    }
+    send_response(response, {
+      {"status", true},
+      {"pending", host_reset::setup_pending()},
+      {"hostname", values.value("sunshine_name", ""s)},
+      {"pc_name", platf::get_host_name()},
+      {"headless_mode", values.value("headless_mode", false)},
+      {"other_host", other},
+      {"active_sessions", rtsp_stream::session_count()},
+    });
+  }
+
+  /**
+   * @brief Quick encoder check: find the encoder again (when needed) and say what it can do.
+   *
+   * @api_examples{/api/v1/setup/encoder| POST| null}
+   */
+  void checkEncoderV1(resp_https_t response, req_https_t request) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    if (rtsp_stream::session_count() > 0) {
+      send_json(response, SimpleWeb::StatusCode::client_error_conflict, {{"status", false}, {"error", "A stream is running."}});
+      return;
+    }
+    bool ok = video::probe_encoders() == 0;
+    auto encoder = std::string {video::active_encoder_name()};
+    send_response(response, {
+      {"status", ok && !encoder.empty()},
+      {"encoder", encoder},
+      {"h264", ok},
+      {"hevc", ok && video::active_hevc_mode > 1},
+      {"av1", ok && video::active_av1_mode > 1},
+      {"hdr", ok && (video::active_hevc_mode > 2 || video::active_av1_mode > 2)},
+    });
+  }
+
+  /**
+   * @brief Import an Apollo's or Vibepollo's settings and apps (wizard only).
+   *
+   * @api_examples{/api/v1/setup/import| POST| null}
+   */
+  void importSettingsV1(resp_https_t response, req_https_t request) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    if (!host_reset::setup_pending()) {
+      send_json(response, SimpleWeb::StatusCode::client_error_conflict, {{"status", false}, {"error", "Importing is part of the setup wizard."}});
+      return;
+    }
+    auto result = host_reset::import_other_host_settings();
+    if (result.ok) {
+      proc::refresh(config::stream.file_apps);
+    }
+    send_json(response, result.ok ? SimpleWeb::StatusCode::success_ok : SimpleWeb::StatusCode::server_error_internal_server_error, {
+      {"status", result.ok},
+      {"log", result.log},
+    });
+  }
+
+  /**
+   * @brief Finish (or skip) the setup wizard.
+   *
+   * @api_examples{/api/v1/setup/done| POST| null}
+   */
+  void finishSetupV1(resp_https_t response, req_https_t request) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    host_reset::set_setup_pending(false);
+    send_response(response, {{"status", true}});
+  }
+
+  /**
+   * @brief Reset the host: settings, apps, state, pairings and the sign-in move to a dated
+   *        backup when the host stops, then it starts again in the setup wizard.
+   *
+   * Only for the signed-in web UI, never for paired clients. The body must be
+   * {"confirm": "reset"}.
+   *
+   * @api_examples{/api/v1/reset| POST| {"confirm":"reset"}}
+   */
+  void resetV1(resp_https_t response, req_https_t request) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+
+    print_req(request);
+
+    auto body = nlohmann::json::parse(request->content.string(), nullptr, false);
+    if (!body.is_object() || body.value("confirm", ""s) != "reset") {
+      bad_request(response, request, "Confirm the reset with {\"confirm\": \"reset\"}.");
+      return;
+    }
+
+    BOOST_LOG(warning) << "Reset requested from the web UI"sv;
+    host_reset::request();
+    send_response(response, {{"status", true}});
+
+    // Restart once the answer is on its way.
+    std::thread([] {
+      std::this_thread::sleep_for(500ms);
+      proc::proc.terminate();
+      platf::restart();
+    }).detach();
+  }
+
+  /**
    * @brief Serve a management call (src/manage_api.h) to the signed-in web UI.
    * @param with_body The call takes a JSON body.
    * @param call Gets the ID from the path (or "") and the body (or null).
@@ -1528,6 +1688,10 @@ namespace confighttp {
           if (newPassword.empty() || newPassword != confirmPassword)
             errors.push_back("Password Mismatch");
           else {
+            // The first account opens the setup wizard.
+            if (config::sunshine.username.empty()) {
+              host_reset::set_setup_pending(true);
+            }
             http::save_user_creds(config::sunshine.credentials_file, newUsername, newPassword);
             http::reload_user_creds(config::sunshine.credentials_file);
             sessions.clear();  // everyone signs in again with the new password
@@ -2012,6 +2176,7 @@ namespace confighttp {
     server.resource["^/welcome/?$"]["GET"] = getWelcomePage;
     server.resource["^/login/?$"]["GET"] = getLoginPage;
     server.resource["^/troubleshooting/?$"]["GET"] = getTroubleshootingPage;
+    server.resource["^/setup/?$"]["GET"] = getSetupPage;
     server.resource["^/api/login$"]["POST"] = login;
     server.resource["^/api/logout$"]["POST"] = logout;
     server.resource["^/api/pin$"]["GET"] = getPendingPairings;
@@ -2038,6 +2203,11 @@ namespace confighttp {
     };
     server.resource["^/api/v1/update$"]["GET"] = getUpdateV1;
     server.resource["^/api/v1/update$"]["POST"] = managed(true, [](auto &, auto &body) { return updater::start(body); });
+    server.resource["^/api/v1/setup$"]["GET"] = getSetupV1;
+    server.resource["^/api/v1/setup/encoder$"]["POST"] = checkEncoderV1;
+    server.resource["^/api/v1/setup/import$"]["POST"] = importSettingsV1;
+    server.resource["^/api/v1/setup/done$"]["POST"] = finishSetupV1;
+    server.resource["^/api/v1/reset$"]["POST"] = resetV1;
     server.resource["^/api/v1/config/schema$"]["GET"] = getConfigSchema;
     server.resource["^/api/v1/config$"]["GET"] = getConfigV1;
     server.resource["^/api/v1/config$"]["PATCH"] = patchConfigV1;

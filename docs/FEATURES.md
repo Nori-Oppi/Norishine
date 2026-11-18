@@ -18,6 +18,15 @@
 - **Safe writes.** Configuration and state files are written atomically with backups, and
   saving only changes the lines you changed. State files are versioned and migrated.
 
+## Set up in a minute, start over safely
+
+- **Setup wizard** on first start: sign-in, host name, virtual display or monitor, an
+  encoder check, and pairing the first device with its permissions. When Apollo or
+  Vibepollo is on the PC, it can import their settings and apps first.
+- **Reset Norishine** (Troubleshooting page, or `norishine --reset`): settings, apps,
+  pairings and the sign-in move to a dated backup, never deleted, and the wizard opens
+  again. Paired clients can't trigger it. See the [guide](GUIDE.md#resetting-norishine).
+
 ## Control what each device can do
 
 - New devices may start apps, watch and send input. Clipboard sync, server commands and

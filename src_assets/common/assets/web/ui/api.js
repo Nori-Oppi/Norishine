@@ -54,17 +54,19 @@ export async function api(path, { method = 'GET', body, timeout = 15000 } = {}) 
 }
 
 /**
- * Ask the host to restart, then wait until it answers again.
+ * Ask the host to restart (unless something else already did), then wait until it answers again.
  * The restart request itself gets no answer: the host exits while handling it.
  * @returns {Promise<boolean>} Whether the host came back within the time limit.
  */
-export async function restartHost({ timeoutMs = 90000 } = {}) {
-  fetch('./api/restart', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  }).catch(() => {})
+export async function restartHost({ timeoutMs = 90000, alreadyRequested = false } = {}) {
+  if (!alreadyRequested) {
+    fetch('./api/restart', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    }).catch(() => {})
+  }
 
   const started = Date.now()
   let wentAway = false

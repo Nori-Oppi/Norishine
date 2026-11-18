@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Setup · Norishine</title>
+  <link rel="icon" type="image/x-icon" href="./images/norishine.ico">
+  <link href="@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
+  <link href="./ui/theme.css" rel="stylesheet">
+</head>
+
+<body>
+  <div id="app" v-cloak></div>
+</body>
+
+<script type="module">
+  import { createApp } from 'vue'
+  import { startPage } from './ui/init'
+  import SetupApp from './setup/SetupApp.vue'
+
+  startPage(createApp(SetupApp))
+</script>
+
+</html>

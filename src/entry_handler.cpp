@@ -183,6 +183,26 @@ namespace service_ctrl {
     }
 
     /**
+     * @brief Ask the service to stop.
+     */
+    bool stop_service() {
+      if (!service_handle) {
+        return false;
+      }
+
+      SERVICE_STATUS status;
+      if (!ControlService(service_handle, SERVICE_CONTROL_STOP, &status)) {
+        auto winerr = GetLastError();
+        if (winerr != ERROR_SERVICE_NOT_ACTIVE) {
+          BOOST_LOG(error) << "ControlService() failed: "sv << winerr;
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    /**
      * @brief Query the service status.
      * @param status The SERVICE_STATUS struct to populate.
      */
@@ -239,6 +259,57 @@ namespace service_ctrl {
 
     std::cout << std::endl;
     return true;
+  }
+
+  bool stop_service() {
+    service_controller sc {SERVICE_QUERY_STATUS | SERVICE_STOP};
+    if (!sc.stop_service()) {
+      return false;
+    }
+
+    // Stopping is asynchronous: wait up to 60 seconds for it to finish.
+    SERVICE_STATUS status;
+    for (int i = 0; i < 60; i++) {
+      if (!sc.query_service_status(status)) {
+        return false;
+      }
+      if (status.dwCurrentState == SERVICE_STOPPED) {
+        return true;
+      }
+      Sleep(1000);
+    }
+    return false;
+  }
+
+  bool is_ui_port_listening() {
+    PMIB_TCPTABLE tcp_table = nullptr;
+    ULONG table_size = 0;
+    ULONG err;
+
+    auto fg = util::fail_guard([&tcp_table]() {
+      free(tcp_table);
+    });
+
+    do {
+      err = GetTcpTable(tcp_table, &table_size, false);
+      if (err == ERROR_INSUFFICIENT_BUFFER) {
+        free(tcp_table);
+        tcp_table = (PMIB_TCPTABLE) malloc(table_size);
+      }
+    } while (err == ERROR_INSUFFICIENT_BUFFER);
+
+    if (err != NO_ERROR) {
+      return false;
+    }
+
+    uint16_t port_nbo = htons(net::map_port(confighttp::PORT_HTTPS));
+    for (DWORD i = 0; i < tcp_table->dwNumEntries; i++) {
+      auto &entry = tcp_table->table[i];
+      if (entry.dwLocalPort == port_nbo && entry.dwState == MIB_TCP_STATE_LISTEN) {
+        return true;
+      }
+    }
+    return false;
   }
 
   bool wait_for_ui_ready() {

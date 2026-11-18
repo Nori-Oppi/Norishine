@@ -5,10 +5,39 @@
 1. **Install on your host PC.** Download the Windows x64 installer from the
    [nightly release](https://github.com/Nori-Oppi/Norishine/releases/tag/nightly).
    Nightlies are unsigned development builds; there is no stable release yet.
-2. **Set up the host.** Open Norishine's local web UI and create your sign-in. Use the
-   pairing page to approve Norilight or another compatible client.
+2. **Set up the host.** Open Norishine's local web UI (<https://localhost:47990>), create
+   your sign-in and follow the [setup wizard](#first-start), which also pairs your first
+   device.
 3. **Start streaming.** Pick Desktop or an app in your client. Norishine's SudoVDA
    integration provides virtual displays that can follow the client.
+
+## First start
+
+The first time the web UI opens (and after a [reset](#resetting-norishine)), it asks for the
+account you'll sign in with, then runs a short setup wizard. Each step can be skipped, and
+everything can be changed later in Settings and on the Devices page.
+
+1. **Import** (only when Apollo or Vibepollo is on this PC, installed or left behind after
+   uninstalling): copies its settings and apps, including app covers. Paired devices, its
+   sign-in and its identity are not copied, so devices pair with Norishine as a new host.
+   The previous `sunshine.conf` and `apps.json` are kept as `*.before-import`. **Start
+   fresh** skips it. The installer's own replace option still carries everything over, as
+   described under [Coming from another host](#coming-from-another-host).
+2. **Name**: what devices show for this PC. Leave it empty for the PC's own name.
+3. **Display**: **A virtual display** gives every stream its own screen matching the device,
+   and leaves your monitors alone (the **Stream to a virtual display** setting).
+   **One of my monitors** streams a real monitor instead.
+4. **Encoder**: checks which hardware encoder works and which formats it can send (H.264,
+   HEVC, AV1, HDR). **No working encoder found** usually means an outdated GPU driver;
+   update it and press **Check again**.
+5. **First device**: start pairing in the client (in Norilight, click the PC); the request
+   appears here. Enter the PIN the client shows and press **Pair**, then choose what it may
+   do (see [Devices and permissions](#devices-and-permissions)) and its
+   [host management](#host-controls-in-norilight) access. **Later** skips this; pair from the
+   Pairing page any time.
+
+**Finish** restarts the host when a choice needs it. **Skip setup** leaves the wizard at any
+step and keeps what was already saved.
 
 ## Coming from another host
 
@@ -155,9 +184,39 @@ picks the encoder preset for its own streams. Details in [AUTOTUNE.md](AUTOTUNE.
   yourself if needed.
 - **Quit Norishine**: stops the host. Start it again from the Start menu, or restart the
   Norishine service.
+- **Reset Norishine**: starts over with the setup wizard; see
+  [Resetting Norishine](#resetting-norishine).
 
 The log below shows what the host did; filter it, search it, or copy and download it for a
 bug report.
+
+## Resetting Norishine
+
+**Troubleshooting › Reset Norishine** starts over, for example when settings are in a state
+that's hard to undo one by one. After you confirm, the host restarts, moves its files to a
+backup while it's stopped, and opens the [setup wizard](#first-start). Streams end.
+`norishine --reset`, in a Command Prompt opened as administrator, does the same: it stops the
+Norishine service, moves the files and starts the service again. Paired clients can't start
+a reset, whatever their permissions.
+
+Nothing is deleted. These move to `Norishine-backup-<date>-<time>` in the config folder
+(`C:\Program Files\Norishine\config` when installed), in the same places they had there:
+
+| What | Files |
+| --- | --- |
+| Settings | `sunshine.conf`, with its `.bak` and `.before-import` copies |
+| Apps | `apps.json` (and its copies), and app covers in `covers` |
+| Paired devices, host identity, sign-in | `state` (or `sunshine_state.json`), `credentials\cacert.pem` and `cakey.pem` |
+| Tuning recommendations, signed-in sessions | `state` |
+
+The log and display-restore files stay. Because the host's identity and the paired devices
+go with the backup, every device has to pair again; clients see a new host (remove the old
+entry in the client). Files kept elsewhere through custom paths in the settings are renamed
+next to where they are, to `<name>.backup-<date>-<time>`.
+
+To undo a reset, quit Norishine (or stop the Norishine service), move everything in the
+backup folder back into the config folder, replacing what's there, and start it again.
+The log names each file it moved, on lines starting with `Reset:`.
 
 ## Forgot the password
 
