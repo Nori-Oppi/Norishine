@@ -1,0 +1,143 @@
+{
+  "host": {
+    "name": "apollo",
+    "version": "0.4.6",
+    "source": "https://github.com/ClassicOldSong/Apollo/releases/download/v0.4.6/Apollo-0.4.6.exe"
+  },
+  "client": {
+    "name": "Moonlight",
+    "version": "6.2.0",
+    "source": "https://github.com/moonlight-stream/moonlight-qt/releases/download/v6.2.0/MoonlightPortable-x64-6.2.0.zip"
+  },
+  "recorded": "2026-11-18T15:31:58+01:00",
+  "machine": {
+    "cpu": "AMD Ryzen 7 5700X 8-Core Processor",
+    "gpu": "AMD Radeon RX 6700 XT",
+    "os": "Windows-11-10.0.26200-SP0",
+    "screen": "1920x1080"
+  },
+  "scenario": {
+    "app": "Desktop",
+    "resolution": "1920x1080",
+    "fps": 60,
+    "bitrate_kbps": 20000,
+    "codec": "HEVC",
+    "window": "windowed, V-sync and frame pacing off",
+    "clean_s": 60,
+    "warmup_s": 5,
+    "loss": "5 % random video packet loss for 10 s, then 5 blackouts of 300 ms"
+  },
+  "host_config": {
+    "upnp": "disabled",
+    "origin_web_ui_allowed": "pc",
+    "dd_configuration_option": "disabled",
+    "headless_mode": "disabled",
+    "virtual_display_mode": "disabled",
+    "system_tray": "disabled",
+    "notify_pre_releases": "disabled",
+    "min_log_level": "info"
+  },
+  "median": {
+    "ttff_ms": 5019,
+    "host_latency_ms": 5.9,
+    "decode_ms": 0.52,
+    "dropped_pct": 0.08,
+    "displayed_fps": 53.82,
+    "interval_p99_ms": 34.48,
+    "stutters_per_min": 3.0,
+    "loss_fps": 49.2,
+    "loss_dropped_pct": 5.58,
+    "recovery_ms": 47,
+    "encoder_pct": 16.91,
+    "host_cpu_pct": 0.68,
+    "system_cpu_pct": 57.93,
+    "first_packet_ms": 4031,
+    "received_fps": 60.13,
+    "render_ms": 0.42,
+    "decoder_pct": 28.84,
+    "client_cpu_pct": 0.43
+  },
+  "runs": [
+    {
+      "ttff_ms": 6738,
+      "host_cpu_pct": 0.76,
+      "client_cpu_pct": 0.51,
+      "system_cpu_pct": 57.93,
+      "encoder_pct": 17.12,
+      "decoder_pct": 29.17,
+      "displayed_fps": 42.37,
+      "interval_p99_ms": 51.19,
+      "stutters_per_min": 51.0,
+      "first_packet_ms": 5727,
+      "host_latency_ms": 5.9,
+      "decode_ms": 0.64,
+      "render_ms": 0.43,
+      "received_fps": 60.17,
+      "dropped_pct": 0.08,
+      "loss_fps": 45.2,
+      "recovery_ms": 54,
+      "recoveries_ms": [
+        55,
+        55,
+        54,
+        54,
+        54
+      ],
+      "loss_dropped_pct": 5.58
+    },
+    {
+      "ttff_ms": 4843,
+      "host_cpu_pct": 0.68,
+      "client_cpu_pct": 0.35,
+      "system_cpu_pct": 43.9,
+      "encoder_pct": 16.91,
+      "decoder_pct": 28.81,
+      "displayed_fps": 54.33,
+      "interval_p99_ms": 34.48,
+      "stutters_per_min": 3.0,
+      "first_packet_ms": 3862,
+      "host_latency_ms": 6.3,
+      "decode_ms": 0.43,
+      "render_ms": 0.33,
+      "received_fps": 60.13,
+      "dropped_pct": 0.08,
+      "loss_fps": 49.2,
+      "recovery_ms": 44,
+      "recoveries_ms": [
+        46,
+        44,
+        44,
+        60,
+        44
+      ],
+      "loss_dropped_pct": 5.65
+    },
+    {
+      "ttff_ms": 5019,
+      "host_cpu_pct": 0.6,
+      "client_cpu_pct": 0.43,
+      "system_cpu_pct": 58.62,
+      "encoder_pct": 16.82,
+      "decoder_pct": 28.84,
+      "displayed_fps": 53.82,
+      "interval_p99_ms": 34.1,
+      "stutters_per_min": 1.0,
+      "first_packet_ms": 4031,
+      "host_latency_ms": 4.3,
+      "decode_ms": 0.52,
+      "render_ms": 0.42,
+      "received_fps": 60.13,
+      "dropped_pct": 0.08,
+      "loss_fps": 52.7,
+      "recovery_ms": 47,
+      "recoveries_ms": [
+        47,
+        48,
+        47,
+        46,
+        45
+      ],
+      "loss_dropped_pct": 5.21
+    }
+  ]
+}

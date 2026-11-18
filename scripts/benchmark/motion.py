@@ -1,6 +1,6 @@
 """A window of moving, changing blocks: the same encoder load on every benchmark run.
 
-Usage: python motion.py [seconds] [width] [height]
+Usage: python motion.py [seconds] [width] [height] [borderless]
 Draws at about 60 frames per second until the time is up or the window is closed.
 The pattern is seeded, so every run shows the same frames.
 """
@@ -12,12 +12,16 @@ import tkinter
 seconds = float(sys.argv[1]) if len(sys.argv) > 1 else 90
 width = int(sys.argv[2]) if len(sys.argv) > 2 else 1280
 height = int(sys.argv[3]) if len(sys.argv) > 3 else 720
+# Without a title bar the window covers exactly width x height from the top left (compare.py)
+borderless = len(sys.argv) > 4 and sys.argv[4] == 'borderless'
 COLS, ROWS = 32, 18
 
 root = tkinter.Tk()
 root.title('Norishine benchmark motion')
 root.geometry('%dx%d+0+0' % (width, height))
 root.attributes('-topmost', True)
+if borderless:
+    root.overrideredirect(True)
 canvas = tkinter.Canvas(root, width=width, height=height, highlightthickness=0, bg='black')
 canvas.pack(fill='both', expand=True)
 

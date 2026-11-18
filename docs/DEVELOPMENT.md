@@ -40,6 +40,21 @@ test_sunshine.exe --gtest_filter=-MouseInputs/*:Configurations/AudioTest.*
 
 All tests pass; see [KNOWN-ISSUES.md](KNOWN-ISSUES.md) for the suites skipped locally.
 
+## Streaming changes: the benchmark check
+
+Norishine with Norilight must never stream worse than Apollo, Vibepollo or Sunshine with
+Moonlight. After any change to capture, encoding, the network code or the client's
+decoding (here or in Norilight), build a release and run the check on the real PC:
+
+```
+python scripts/benchmark/compare.py
+```
+
+Put its verdict (the table and the verdict line) in the pull request. If a metric is worse
+than a reference, fix it before merging, or explain in the pull request why it's
+acceptable. The check needs a GPU and a display, so CI can't run it. See
+[BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine).
+
 ## CI
 
 `.github/workflows/ci.yml` runs on pull requests and pushes to `master`. A first job

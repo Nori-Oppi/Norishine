@@ -87,7 +87,7 @@ in, with confirmation) or the command line, never from a paired client.
 
 ## Done
 
-Phases 2 to 5 are finished. Details are in the linked docs and the git history.
+Phases 2 to 5 are finished, and so are N1 and N2. Details are in the linked docs and the git history.
 
 | Milestone | What it gave | More |
 | --- | --- | --- |
@@ -99,6 +99,8 @@ Phases 2 to 5 are finished. Details are in the linked docs and the git history.
 | Updates | Update the host from the web UI or a paired client, checksum-checked | [GUIDE.md](GUIDE.md#updating) |
 | M8 Diagnostics | `GET /api/v1/stats` (host load, per-stream metrics), Stats tab in Norilight, repeatable benchmark with a baseline | [BENCHMARK.md](BENCHMARK.md) |
 | M9 Auto-tuning | Live bitrate and FEC adaptation for every client, Norilight's reports, Tuning goals with learned launch settings, encoder recommendations with Apply and Undo | [AUTOTUNE.md](AUTOTUNE.md) |
+| N1 Reset button (Norilight) | Settings › Reset Norilight: settings moved to a dated backup (D9), restart into the first-start wizard; `Norilight --reset` | [Norilight's GUIDE.md](https://github.com/Nori-Oppi/Norilight/blob/main/docs/GUIDE.md#resetting-norilight) |
+| N2 Benchmark check | `scripts/benchmark/compare.py`: Norishine with Norilight against stored Apollo, Vibepollo and Sunshine results with Moonlight, per metric better, same or worse; run after every streaming change | [BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine) |
 
 ## In progress: M10 measured improvements
 
@@ -126,43 +128,17 @@ they're listed here so there's one order for both.
 
 | # | Item | Project | Effort | Importance | Needs |
 | --- | --- | --- | --- | --- | --- |
-| N1 | Reset button | Norilight | S | High | — |
-| N2 | Benchmark check against Apollo, Vibepollo, Sunshine and Moonlight | Both | M | Very high | — |
 | N3 | Help links to a new `norilight-docs` repository | Norilight | S | Medium | the repository |
 | N4 | Setup wizard and reset button | Norishine | M | High | — |
-| N5 | Near-instant stream start | Both | L | Very high | N2 |
-| N6 | Auto-optimisation wizard | Both | M | High | N2 |
+| N5 | Near-instant stream start | Both | L | Very high | — |
+| N6 | Auto-optimisation wizard | Both | M | High | — |
 | N7 | Linux build | Norilight | M | Medium | — |
 | N8 | Separate command-line builds | Both | M | Medium | — |
 | N9 | Change settings during a stream | Both | L | High | N5 |
 | N10 | Update the host without losing the stream | Both | L | Medium | N5, N9 |
-| N11 | Linux build | Norishine | XL | Medium | N2 |
-| N12 | Android build, for handhelds | Norilight | XL | Medium–high | N2 |
+| N11 | Linux build | Norishine | XL | Medium | — |
+| N12 | Android build, for handhelds | Norilight | XL | Medium–high | — |
 | N13 | iOS build | Norilight | XL | Low | N12 |
-
-### N1. Reset button (Norilight) — S
-Settings › **Reset Norilight**: moves the settings to a backup (D9) and restarts into the
-first-start wizard. For debugging a broken setup without hunting for the settings file.
-
-### N2. Benchmark check against Apollo, Vibepollo, Sunshine and Moonlight — M
-A quick check an agent runs after every change that touches streaming (capture, encoding,
-network, the client's decoding), so new features never make streams worse than the hosts and
-clients Norishine and Norilight replace. Extends `scripts/benchmark/`:
-
-- **One command, one verdict**: streams Norishine with Norilight for about a minute and
-  prints, per metric, better, the same or worse than each reference, within a tolerance per
-  metric so noise doesn't count.
-- **References measured once and stored**: Apollo, Vibepollo and Sunshine, each with
-  Moonlight, on the same PC, network and stream settings, installed side by side on their
-  own ports (D7). Measured again only when one of them releases a new version, so a normal
-  check takes minutes.
-- **Metrics**: time to first frame, capture-to-send and decode latency, dropped frames and
-  frame pacing, recovery from simulated packet loss, encoder and CPU load.
-- **Rule**: the verdict goes in the pull request; worse than a reference is fixed before
-  merging, or explained. Runs on the real machine, not in GitHub CI (no GPU or display).
-
-It comes early because it guards every other item, and N5, N6 and N11 are only worth doing
-with numbers to show for them.
 
 ### N3. Help links to `norilight-docs` — S
 Norilight's guide and help buttons still open moonlight-docs (Setup Guide,

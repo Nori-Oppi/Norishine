@@ -1,0 +1,28 @@
+{
+  "norishine_port": 54989,
+  "client": {
+    "version": "6.2.0",
+    "url": "https://github.com/moonlight-stream/moonlight-qt/releases/download/v6.2.0/MoonlightPortable-x64-6.2.0.zip",
+    "exe": "clients/moonlight-6.2.0/Moonlight.exe"
+  },
+  "references": {
+    "apollo": {
+      "version": "0.4.6",
+      "url": "https://github.com/ClassicOldSong/Apollo/releases/download/v0.4.6/Apollo-0.4.6.exe",
+      "exe": "hosts/apollo-0.4.6/sunshine.exe",
+      "port": 51989
+    },
+    "vibepollo": {
+      "version": "2.17.6",
+      "url": "https://github.com/Nonary/Vibepollo/releases/download/2.17.6/VibepolloSetup.exe",
+      "exe": "hosts/vibepollo-2.17.6/Apollo/sunshine.exe",
+      "port": 52989
+    },
+    "sunshine": {
+      "version": "2026.914.233613",
+      "url": "https://github.com/LizardByte/Sunshine/releases/download/v2026.914.233613/Sunshine-Windows-AMD64-lite.zip",
+      "exe": "hosts/sunshine-2026.914.233613/sunshine.exe",
+      "port": 53989
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "host": {
+    "name": "vibepollo",
+    "version": "2.17.6",
+    "source": "https://github.com/Nonary/Vibepollo/releases/download/2.17.6/VibepolloSetup.exe"
+  },
+  "client": {
+    "name": "Moonlight",
+    "version": "6.2.0",
+    "source": "https://github.com/moonlight-stream/moonlight-qt/releases/download/v6.2.0/MoonlightPortable-x64-6.2.0.zip"
+  },
+  "recorded": "2026-11-18T15:39:31+01:00",
+  "machine": {
+    "cpu": "AMD Ryzen 7 5700X 8-Core Processor",
+    "gpu": "AMD Radeon RX 6700 XT",
+    "os": "Windows-11-10.0.26200-SP0",
+    "screen": "1920x1080"
+  },
+  "scenario": {
+    "app": "Desktop",
+    "resolution": "1920x1080",
+    "fps": 60,
+    "bitrate_kbps": 20000,
+    "codec": "HEVC",
+    "window": "windowed, V-sync and frame pacing off",
+    "clean_s": 60,
+    "warmup_s": 5,
+    "loss": "5 % random video packet loss for 10 s, then 5 blackouts of 300 ms"
+  },
+  "host_config": {
+    "upnp": "disabled",
+    "origin_web_ui_allowed": "pc",
+    "dd_configuration_option": "disabled",
+    "headless_mode": "disabled",
+    "virtual_display_mode": "disabled",
+    "system_tray": "disabled",
+    "notify_pre_releases": "disabled",
+    "min_log_level": "info"
+  },
+  "median": {
+    "ttff_ms": 5276,
+    "host_latency_ms": 3.3,
+    "decode_ms": 0.4,
+    "dropped_pct": 0.08,
+    "displayed_fps": 55.52,
+    "interval_p99_ms": 34.89,
+    "stutters_per_min": 1.0,
+    "loss_fps": 53.2,
+    "loss_dropped_pct": 5.53,
+    "recovery_ms": 45,
+    "encoder_pct": 16.38,
+    "host_cpu_pct": 0.39,
+    "system_cpu_pct": 56.04,
+    "first_packet_ms": 4231,
+    "received_fps": 60.06,
+    "render_ms": 0.43,
+    "decoder_pct": 29.23,
+    "client_cpu_pct": 0.51
+  },
+  "runs": [
+    {
+      "ttff_ms": 5779,
+      "host_cpu_pct": 0.82,
+      "client_cpu_pct": 0.44,
+      "system_cpu_pct": 46.27,
+      "encoder_pct": 16.38,
+      "decoder_pct": 29.99,
+      "displayed_fps": 56.0,
+      "interval_p99_ms": 34.47,
+      "stutters_per_min": 1.0,
+      "first_packet_ms": 4826,
+      "host_latency_ms": 3.3,
+      "decode_ms": 0.81,
+      "render_ms": 0.41,
+      "received_fps": 60.21,
+      "dropped_pct": 0.08,
+      "loss_fps": 57.2,
+      "recovery_ms": 42,
+      "recoveries_ms": [
+        42,
+        42,
+        43,
+        38,
+        39
+      ],
+      "loss_dropped_pct": 5.27
+    },
+    {
+      "ttff_ms": 4942,
+      "host_cpu_pct": 0.35,
+      "client_cpu_pct": 0.51,
+      "system_cpu_pct": 56.04,
+      "encoder_pct": 16.33,
+      "decoder_pct": 29.23,
+      "displayed_fps": 55.52,
+      "interval_p99_ms": 34.89,
+      "stutters_per_min": 0.0,
+      "first_packet_ms": 3926,
+      "host_latency_ms": 3.3,
+      "decode_ms": 0.34,
+      "render_ms": 0.43,
+      "received_fps": 60.06,
+      "dropped_pct": 0.08,
+      "loss_fps": 50.3,
+      "recovery_ms": 59,
+      "recoveries_ms": [
+        59,
+        60,
+        59,
+        58,
+        57
+      ],
+      "loss_dropped_pct": 5.84
+    },
+    {
+      "ttff_ms": 5276,
+      "host_cpu_pct": 0.39,
+      "client_cpu_pct": 0.56,
+      "system_cpu_pct": 66.75,
+      "encoder_pct": 16.39,
+      "decoder_pct": 28.8,
+      "displayed_fps": 52.3,
+      "interval_p99_ms": 35.27,
+      "stutters_per_min": 3.0,
+      "first_packet_ms": 4231,
+      "host_latency_ms": 3.5,
+      "decode_ms": 0.4,
+      "render_ms": 0.52,
+      "received_fps": 59.99,
+      "dropped_pct": 0.03,
+      "loss_fps": 53.2,
+      "recovery_ms": 45,
+      "recoveries_ms": [
+        45,
+        45,
+        43,
+        45,
+        44
+      ],
+      "loss_dropped_pct": 5.53
+    }
+  ]
+}
