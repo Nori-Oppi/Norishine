@@ -87,6 +87,11 @@ s, r = api(client, 'GET', '/api/v1/config/schema')
 check('schema allowed with manage_read', s == 200 and len(r['settings']) == 103, (s, str(r)[:200]))
 s, r = api(client, 'GET', '/api/v1/config')
 check('values allowed with manage_read', s == 200 and 'values' in r, (s, r))
+s, r = api(client, 'GET', '/api/v1/stats')
+host_keys = {'cpu_percent', 'process_cpu_percent', 'memory_total_mb', 'memory_used_mb', 'process_memory_mb', 'gpu_percent', 'encoder_percent'}
+check('stats allowed with manage_read', s == 200 and host_keys <= set(r.get('host', {})) and isinstance(r.get('sessions'), list), (s, r))
+check('stats report CPU and memory', isinstance(r.get('host', {}).get('cpu_percent'), (int, float)) and r['host'].get('memory_total_mb', 0) > 0, r)
+check('serverinfo lists stats', 'stats' in (client.https('serverinfo').findtext('Norishine/Features') or '').split(','))
 s, r = api(client, 'PATCH', '/api/v1/config', {'set': {'max_bitrate': 40000}})
 check('change refused with only manage_read', s == 403, (s, r))
 

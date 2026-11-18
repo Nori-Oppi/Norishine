@@ -102,14 +102,14 @@ by default, only per device from the web UI (paired devices, "Manage"):
 
 | Permission | Bit | Allows |
 | --- | --- | --- |
-| `manage_read` (Read Host Settings) | `0x10000000` | every `GET` below: status, settings, apps, devices, displays |
+| `manage_read` (Read Host Settings) | `0x10000000` | every `GET` below: status, stats, settings, apps, devices, displays |
 | `manage_write` (Change Host Settings) | `0x20000000` | the above, and every call that changes something: settings, `POST /api/v1/restart` (settings apply after a restart), apps, devices, streams, displays |
 
 `manage_write` is full control of the host: settings, app and device commands run
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,stats,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -130,6 +130,34 @@ first check); `port`, the base port in use; `port_moved_for`, on Windows the oth
 that had the default port at startup, so this run uses 48989 (empty otherwise). The same
 object (plus `device`) is what paired clients get from
 `GET /api/v1/status` on the HTTPS port.
+
+## GET /api/v1/stats
+@copydoc confighttp::getStatsV1()
+
+Host load and measured figures for each active stream, on both ports (feature `stats`).
+Poll it every few seconds; readings closer than a quarter of a second apart return the
+previous answer, and the first call takes up to two seconds.
+
+`host`: `cpu_percent` (all processes), `process_cpu_percent` (Norishine, share of all
+cores), `memory_total_mb`, `memory_used_mb`, `process_memory_mb`, `gpu_percent` (the
+busiest GPU engine, as Task Manager shows it) and `encoder_percent` (the busiest video
+encode engine; on AMD the combined encode and decode engine). Each is null where the host
+can't measure it: only Windows reports them, and GPU figures need the "GPU Engine"
+performance counters. `encoder` is as in `/api/v1/status`.
+
+`sessions`: one entry per stream, with the device's `uuid` and `name` and:
+
+| Field | Meaning |
+| --- | --- |
+| `duration_s` | Time since the first frame |
+| `window_s` | Complete seconds the recent figures cover, up to 5 (0 in the first second) |
+| `fps`, `bitrate_kbps` | Frames and video sent per second over the window (bitrate before FEC and headers); null until `window_s` > 0 |
+| `latency_ms` | `min`, `avg`, `max` from capture to handing the frame to the network, captured frames only; null if none |
+| `send_ms` | `min`, `avg`, `max` time spent sending each frame (FEC, encryption, pacing) |
+| `recent_recovery_requests` | Key frame requests and lost reference frame reports in the window |
+| `frames`, `duplicate_frames`, `bytes`, `key_frames` | Totals sent |
+| `key_frame_requests`, `ref_invalidations`, `frames_invalidated` | Totals of what the client reported lost |
+| `client_lost_frames` | From the periodic loss reports of older clients; 0 for current Moonlight |
 
 ## Apps, devices, streams and displays (/api/v1)
 

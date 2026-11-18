@@ -175,8 +175,11 @@ deliberately broken, but is not verified until CI exists for it.
   Host page uses them.
 
 ### Phase 5: diagnostics and optimisation
-- **M8** Host stats and per-session metrics behind the API; repeatable benchmark
-  procedure recorded before any tuning.
+- **M8** Host stats and per-session metrics behind the API (**in progress**: the API is
+  done, `GET /api/v1/stats` on both ports with CPU, memory, GPU and encoder load and, per
+  stream, frame rate, bitrate, latency, send time and recovery requests; see
+  `docs/api.md`). Still to do: Norilight showing it, and a repeatable benchmark procedure
+  recorded before any tuning.
 - **M9** Wizard, first version: capability discovery on both sides and conservative
   recommendations with preview and rollback.
 - **M10** Measured improvements: display restore after crashes, capture from a

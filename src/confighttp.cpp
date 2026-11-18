@@ -1173,6 +1173,20 @@ namespace confighttp {
   }
 
   /**
+   * @brief Host load (CPU, memory, GPU) and measured figures for each active stream.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   *
+   * @api_examples{/api/v1/stats| GET| null}
+   */
+  void getStatsV1(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+    send_response(response, nvhttp::host_stats());
+  }
+
+  /**
    * @brief Get the settings schema: every setting with its type, default and limits.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -1952,6 +1966,7 @@ namespace confighttp {
     server.resource["^/api/config$"]["GET"] = getConfig;
     server.resource["^/api/config$"]["POST"] = saveConfig;
     server.resource["^/api/v1/status$"]["GET"] = getStatusV1;
+    server.resource["^/api/v1/stats$"]["GET"] = getStatsV1;
     server.resource["^/api/v1/config/schema$"]["GET"] = getConfigSchema;
     server.resource["^/api/v1/config$"]["GET"] = getConfigV1;
     server.resource["^/api/v1/config$"]["PATCH"] = patchConfigV1;
