@@ -42,6 +42,7 @@
 #include "process.h"
 #include "rtsp.h"
 #include "state_store.h"
+#include "updater.h"
 #include "utility.h"
 #include "uuid.h"
 #include "web_auth.h"
@@ -1187,6 +1188,21 @@ namespace confighttp {
   }
 
   /**
+   * @brief Update state: this version, the newest one available, and a running update.
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   *
+   * @api_examples{/api/v1/update| GET| null}
+   */
+  void getUpdateV1(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+    auto query = request->parse_query_string();
+    send_response(response, updater::status(query.find("refresh") != query.end()));
+  }
+
+  /**
    * @brief Get the settings schema: every setting with its type, default and limits.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -1967,6 +1983,8 @@ namespace confighttp {
     server.resource["^/api/config$"]["POST"] = saveConfig;
     server.resource["^/api/v1/status$"]["GET"] = getStatusV1;
     server.resource["^/api/v1/stats$"]["GET"] = getStatsV1;
+    server.resource["^/api/v1/update$"]["GET"] = getUpdateV1;
+    server.resource["^/api/v1/update$"]["POST"] = managed(true, [](auto &, auto &body) { return updater::start(body); });
     server.resource["^/api/v1/config/schema$"]["GET"] = getConfigSchema;
     server.resource["^/api/v1/config$"]["GET"] = getConfigV1;
     server.resource["^/api/v1/config$"]["PATCH"] = patchConfigV1;

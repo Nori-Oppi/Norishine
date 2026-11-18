@@ -41,6 +41,7 @@
 #include "state_store.h"
 #include "stream.h"
 #include "system_tray.h"
+#include "updater.h"
 #include "utility.h"
 #include "uuid.h"
 #include "video.h"
@@ -1250,7 +1251,7 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
-    tree.put("root.Norishine.Features", "status,stats,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    tree.put("root.Norishine.Features", "status,stats,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
 
     std::ostringstream data;
 
@@ -1410,6 +1411,22 @@ namespace nvhttp {
 
     std::string path_id(req_https_t request) {
       return request->path_match.size() > 1 ? request->path_match[1].str() : std::string {};
+    }
+
+    void update_status(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (allowed(response, request, read_perm, "read host status")) {
+        auto query = request->parse_query_string();
+        send_json(response, SimpleWeb::StatusCode::success_ok, updater::status(query.find("refresh") != query.end()));
+      }
+    }
+
+    void update_start(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      nlohmann::json body;
+      if (allowed(response, request, PERM::manage_write, "update the host") && json_body(response, request, body)) {
+        send_reply(response, updater::start(body));
+      }
     }
 
     void apps_list(resp_https_t response, req_https_t request) {
@@ -2306,6 +2323,8 @@ namespace nvhttp {
     https_server.resource["^/actions/clipboard$"]["POST"] = setClipboard;
     https_server.resource["^/api/v1/status$"]["GET"] = api::status;
     https_server.resource["^/api/v1/stats$"]["GET"] = api::stats;
+    https_server.resource["^/api/v1/update$"]["GET"] = api::update_status;
+    https_server.resource["^/api/v1/update$"]["POST"] = api::update_start;
     https_server.resource["^/api/v1/config/schema$"]["GET"] = api::config_schema;
     https_server.resource["^/api/v1/config$"]["GET"] = api::config_get;
     https_server.resource["^/api/v1/config$"]["PATCH"] = api::config_patch;

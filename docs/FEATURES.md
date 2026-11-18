@@ -35,6 +35,12 @@ With [Norilight](https://github.com/Nori-Oppi/Norilight) and the matching permis
 see the host's status, search and change its settings, restart it, and manage its apps,
 paired devices and displays. See the [guide](GUIDE.md#host-controls-in-norilight).
 
+## Updates from anywhere
+
+Update the host from the web UI on any device, or from a client with permission. The
+installer is checked against GitHub's checksum before it runs, and the host comes back by
+itself. See the [guide](GUIDE.md#updating).
+
 ## Screenshots
 
 | | |

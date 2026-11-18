@@ -158,7 +158,21 @@ it: on the host PC, open a Command Prompt as administrator, run
 
 ## Updating
 
-Download the latest installer from the
+**From the web UI or a client.** When a newer version is out, the home page shows it with
+an **Update** button. This works from any device that can open the web UI, so you don't
+need to be at the PC. The host downloads the installer, checks it against the checksum
+GitHub publishes, and installs it. Streams end while the host restarts, which takes about a
+minute; the page follows along and says when the new version is running. Afterwards the
+service is started again even if the installer failed, and the home page says what went
+wrong (details in `config\updates\update.log` in the install folder). Clients with
+**Change** host management permission can start an update too (`POST /api/v1/update`).
+
+Nightlies are offered only with **Tell me about beta versions** on (Settings, General).
+Updating from here needs a host installed with the installer, from a version that has
+this feature; development builds and older installs show a **Download** link instead, so
+install the next version by hand once.
+
+**By hand.** Download the latest installer from the
 [nightly release](https://github.com/Nori-Oppi/Norishine/releases/tag/nightly) and run it
 over the installed version; settings, sign-in and paired devices are kept. The nightly is
 rebuilt when `master` changes; check its commit when you're looking for a specific change.
