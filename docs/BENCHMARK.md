@@ -206,3 +206,53 @@ What it shows:
 costs little enough on this card at 1080p60. Pre-analysis isn't turned on: its cost is
 measured, its benefit isn't. Revisit with a picture-quality measurement, or at 4K or
 120 fps, where the encoder has less room.
+
+## M10: frame cap matched to the client
+
+**Question:** would the host save work by never encoding more frames than the client's
+display shows? Measured before building anything: the same stream asked for at 120, 60 and
+30 fps. The host's display (and the client's, on this PC) runs at 60 Hz. **Balanced goal**,
+standard scenario, same build as the AMF runs; the 60 fps runs are the AMF defaults above.
+
+| Asked for | Run | fps (min / avg / max) | Latency ms (min / avg / max) | Send ms avg | Bitrate kbps avg | Recovery | Host CPU % avg | Encoder % avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 120 fps | 1 | 37.8 / 50.0 / 58.0 | 3.92 / 4.72 / 12.26 | 0.14 | 5818 | 0 | 57.3 | 39.0 |
+| | 2 | 48.4 / 55.1 / 58.8 | 3.84 / 4.56 / 11.38 | 0.11 | 6664 | 0 | 42.1 | 41.8 |
+| | 3 | 50.0 / 54.2 / 58.4 | 3.84 / 4.52 / 9.85 | 0.11 | 6549 | 0 | 39.4 | 41.1 |
+| 60 fps | 1 | 46.4 / 53.6 / 59.0 | 2.44 / 4.51 / 9.37 | 0.12 | 6755 | 0 | 49.6 | 41.0 |
+| | 2 | 43.4 / 51.8 / 58.4 | 2.14 / 4.46 / 10.39 | 0.12 | 6351 | 0 | 50.0 | 39.6 |
+| | 3 | 29.8 / 43.9 / 57.6 | 2.34 / 4.95 / 11.18 | 0.16 | 5266 | 0 | 69.2 | 33.5 |
+| 30 fps | 1 | 29.6 / 30.0 / 30.0 | 2.46 / 3.70 / 8.18 | 0.17 | 5004 | 0 | 61.8 | 23.8 |
+| | 2 | 30.0 / 30.0 / 30.0 | 2.34 / 3.27 / 7.77 | 0.16 | 5445 | 0 | 51.3 | 23.7 |
+| | 3 | 30.0 / 30.0 / 30.0 | 2.00 / 3.16 / 5.78 | 0.15 | 5722 | 0 | 29.6 | 23.6 |
+
+| Asked for | fps avg | Encoder % avg | Encoder % per 60 fps | Bitrate kbps avg | kbit per frame |
+| --- | --- | --- | --- | --- | --- |
+| 120 fps | 53.1 | 40.6 | 46.0 | 6344 | 119 |
+| 60 fps | 49.8 | 38.0 | 45.9 | 6124 | 123 |
+| 30 fps | 30.0 | 23.7 | 47.3 | 5390 | 180 |
+
+What it shows:
+
+- **The host already never encodes more frames than its own display shows.** Asked for
+  120 fps on a 60 Hz display, it sent the same 50–55 fps as at 60, at the same encoder load:
+  capture only produces a frame when the desktop changes.
+- Encoder load follows the frames sent: halving them halves it. The bitrate doesn't: at 30
+  fps each frame carries twice the motion, so 30 fps sent only 12 % less than 60.
+- A cap would only change anything when the host's display is faster than the client's
+  (say a 144 Hz host streamed to a 60 Hz phone) and the client asks for more than its display
+  shows. Then it would save encoder load, and little bitrate.
+
+**Decision: not built.** The case is narrow, and the clients cover it already:
+
+- Moonlight and Norilight turn V-sync off when the stream is faster than the display, on
+  purpose: the extra frames show up as newer parts of a torn picture, which lowers latency.
+  A host cap would take that away from users who chose a high frame rate.
+- Norilight picks the frame rate from the client's monitor when the profile matches it, and
+  the host can't tell a choice from a mistake. Neither Norilight nor stock clients send the
+  display's refresh rate to the host today (`display_hz` in the client report is accepted
+  but no client fills it in).
+
+Encoder load was 40 % with room to spare in every run, so there's nothing to win here on
+this PC. If a client-side rule is wanted instead (for example: with V-sync on, Norilight asks
+for no more than the display's refresh rate), it belongs in Norilight's launch settings.
