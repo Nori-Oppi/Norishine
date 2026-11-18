@@ -1,0 +1,143 @@
+{
+  "host": {
+    "name": "sunshine",
+    "version": "2026.914.233613",
+    "source": "https://github.com/LizardByte/Sunshine/releases/download/v2026.914.233613/Sunshine-Windows-AMD64-lite.zip"
+  },
+  "client": {
+    "name": "Moonlight",
+    "version": "6.2.0",
+    "source": "https://github.com/moonlight-stream/moonlight-qt/releases/download/v6.2.0/MoonlightPortable-x64-6.2.0.zip"
+  },
+  "recorded": "2026-11-18T15:22:44+01:00",
+  "machine": {
+    "cpu": "AMD Ryzen 7 5700X 8-Core Processor",
+    "gpu": "AMD Radeon RX 6700 XT",
+    "os": "Windows-11-10.0.26200-SP0",
+    "screen": "1920x1080"
+  },
+  "scenario": {
+    "app": "Desktop",
+    "resolution": "1920x1080",
+    "fps": 60,
+    "bitrate_kbps": 20000,
+    "codec": "HEVC",
+    "window": "windowed, V-sync and frame pacing off",
+    "clean_s": 60,
+    "warmup_s": 5,
+    "loss": "5 % random video packet loss for 10 s, then 5 blackouts of 300 ms"
+  },
+  "host_config": {
+    "upnp": "disabled",
+    "origin_web_ui_allowed": "pc",
+    "dd_configuration_option": "disabled",
+    "headless_mode": "disabled",
+    "virtual_display_mode": "disabled",
+    "system_tray": "disabled",
+    "notify_pre_releases": "disabled",
+    "min_log_level": "info"
+  },
+  "median": {
+    "ttff_ms": 4872,
+    "host_latency_ms": 4.1,
+    "decode_ms": 0.44,
+    "dropped_pct": 0.08,
+    "displayed_fps": 51.58,
+    "interval_p99_ms": 34.43,
+    "stutters_per_min": 2.0,
+    "loss_fps": 53.8,
+    "loss_dropped_pct": 5.66,
+    "recovery_ms": 50,
+    "encoder_pct": 16.88,
+    "host_cpu_pct": 0.69,
+    "system_cpu_pct": 42.92,
+    "first_packet_ms": 3896,
+    "received_fps": 60.14,
+    "render_ms": 0.34,
+    "decoder_pct": 28.65,
+    "client_cpu_pct": 0.42
+  },
+  "runs": [
+    {
+      "ttff_ms": 6304,
+      "host_cpu_pct": 0.64,
+      "client_cpu_pct": 0.45,
+      "system_cpu_pct": 16.7,
+      "encoder_pct": 16.9,
+      "decoder_pct": 28.69,
+      "displayed_fps": 51.58,
+      "interval_p99_ms": 34.43,
+      "stutters_per_min": 0.0,
+      "first_packet_ms": 5293,
+      "host_latency_ms": 4.0,
+      "decode_ms": 0.44,
+      "render_ms": 0.31,
+      "received_fps": 60.14,
+      "dropped_pct": 0.08,
+      "loss_fps": 55.1,
+      "recovery_ms": 52,
+      "recoveries_ms": [
+        52,
+        52,
+        50,
+        52,
+        50
+      ],
+      "loss_dropped_pct": 5.66
+    },
+    {
+      "ttff_ms": 4872,
+      "host_cpu_pct": 0.69,
+      "client_cpu_pct": 0.39,
+      "system_cpu_pct": 53.94,
+      "encoder_pct": 16.82,
+      "decoder_pct": 28.65,
+      "displayed_fps": 54.32,
+      "interval_p99_ms": 34.16,
+      "stutters_per_min": 3.0,
+      "first_packet_ms": 3896,
+      "host_latency_ms": 4.2,
+      "decode_ms": 0.5,
+      "render_ms": 0.4,
+      "received_fps": 60.14,
+      "dropped_pct": 0.08,
+      "loss_fps": 53.8,
+      "recovery_ms": 50,
+      "recoveries_ms": [
+        51,
+        50,
+        50,
+        48,
+        47
+      ],
+      "loss_dropped_pct": 5.54
+    },
+    {
+      "ttff_ms": 4739,
+      "host_cpu_pct": 0.69,
+      "client_cpu_pct": 0.42,
+      "system_cpu_pct": 42.92,
+      "encoder_pct": 16.88,
+      "decoder_pct": 28.62,
+      "displayed_fps": 51.45,
+      "interval_p99_ms": 34.87,
+      "stutters_per_min": 2.0,
+      "first_packet_ms": 3755,
+      "host_latency_ms": 4.1,
+      "decode_ms": 0.38,
+      "render_ms": 0.34,
+      "received_fps": 60.11,
+      "dropped_pct": 0.08,
+      "loss_fps": 53.0,
+      "recovery_ms": 50,
+      "recoveries_ms": [
+        50,
+        50,
+        50,
+        49,
+        48
+      ],
+      "loss_dropped_pct": 5.66
+    }
+  ]
+}

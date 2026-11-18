@@ -1,10 +1,200 @@
 # Stream benchmark
 
+Two tools in `scripts/benchmark/`:
+
+- **The check** (`compare.py`, roadmap N2): is Norishine with Norilight ever worse than
+  Apollo, Vibepollo or Sunshine with Moonlight? Run it after every change that touches
+  streaming. [Below](#check-against-apollo-vibepollo-and-sunshine).
+- **The host benchmark** (`stream_bench.py`, roadmap M8): Norishine's own numbers from
+  `/api/v1/stats`, for before-and-after measurements of host changes.
+  [Further down](#host-benchmark-stream_benchpy).
+
+## Check against Apollo, Vibepollo and Sunshine
+
+**Rule:** run the check after any change to capture, encoding, the network code or the
+client's decoding (in Norishine or Norilight), and put its verdict in the pull request.
+A metric that comes out worse than a reference is fixed before merging, or the pull request
+explains why it's acceptable. The check needs the real PC (GPU, display), so it never runs
+in GitHub CI.
+
+### Running it
+
+On the PC, with a release build of Norishine (`build/sunshine.exe`) and of Norilight
+(`..\Norilight\build\Norilight-x64-release`, built with `scripts\build-norilight.bat release`):
+
+```sh
+python scripts/benchmark/compare.py
+```
+
+It needs Python 3.11 or later on Windows, and no other packages. Leave the PC alone while it
+runs: windows open and close by themselves. With the default three runs it takes about
+ten minutes. A stream that doesn't start is tried once more; if it fails again, the check
+stops and leaves a screenshot and the client's log in `build/benchmark/failures/`. `--runs 1` is quicker, but is only good for trying the script out.
+
+What it does:
+
+1. Starts the Norishine build as a user process with its own config folder
+   (`build/benchmark/state/norishine`) and port base 54989. It is never installed, and the
+   installed Norishine keeps running untouched (decision D7).
+2. Copies the Norilight build to `build/benchmark/clients/norilight` as a portable copy
+   (`portable.dat`). Its settings stay there between runs, so it pairs only once. It sets
+   that copy's **Tuning goal** (`--goal`, default `performance`). The goal changes the host's
+   encoder preset, so the result names it, and only results with the same goal can be
+   compared.
+3. Streams twice, three times over (`--runs`), always the same way:
+   - **Clean stream**: the `Desktop` app at 1920×1080, 60 fps, 20 Mbps, HEVC, windowed,
+     V-sync and frame pacing off. It waits 5 seconds after the first frame, then measures
+     for 60 seconds.
+   - **Loss stream**: 10 seconds with 5 % of the video packets dropped at random, then five
+     blackouts of 300 ms in which every video packet is dropped.
+4. Prints a table: per metric, Norishine's median over the runs, and for each reference its
+   stored median and **better**, **same** or **worse**. Then the verdict, and an exit code
+   of 0 (not worse anywhere) or 1. The whole result goes to
+   `build/benchmark/compare-<time>.json`.
+
+`--norishine` and `--norilight` point at other builds, and `--label` is stored with the
+result.
+
+### The test stream
+
+`motion.py` draws seeded moving blocks over the whole screen except a strip at the bottom,
+so every host encodes the same picture. The client's stream window is moved so that only
+the top of its picture shows in that strip. That part shows the moving blocks, so it
+changes with every frame. The strip itself is never part of what it shows, so there is no
+picture-in-picture loop.
+
+Every stream goes through a relay (`bench_net.py`) on 127.0.0.2 and 127.0.0.3, even when
+nothing is dropped, so all hosts get the same path. The relay is also what drops packets.
+The clients' network discovery (mDNS) is turned off in their copies, and addresses they
+learned earlier are cleared. Without that, they would reach the host around the relay.
+
+### Metrics
+
+Every metric is measured outside the host or from the client's side, because Apollo,
+Vibepollo and Sunshine don't have `/api/v1/stats`. So every host is measured the same way,
+and none is n/a.
+
+| Metric | How it's measured | Better | Same within |
+| --- | --- | --- | --- |
+| Time to first frame | From starting the client to the first frame of the test picture in its window. Most of it is the client starting up (about 5 s), and that part is the same for every host | lower | 150 ms or 10 % |
+| Capture to send (host processing) | The host processing latency each host writes into every frame, averaged by the client (its end-of-stream statistics) | lower | 0.5 ms or 15 % |
+| Decode time | The client's average decoding time | lower | 0.3 ms or 20 % |
+| Dropped frames | Frames the client dropped for network loss or jitter, in the clean stream | lower | 0.5 points |
+| Frames shown per second | New pictures seen in the stream window per second. Watched every 4 ms; the screen refreshes at 60 Hz | higher | 2 fps or 5 % |
+| Frame interval, 99th percentile | Time between new pictures in the window | lower | 5 ms or 15 % |
+| Stutters per minute | Gaps of more than 50 ms between new pictures | lower | 2 or 25 % |
+| Frames shown at 5 % loss | Frames shown per second during the random loss | higher | 3 fps or 8 % |
+| Dropped frames, loss stream | The client's dropped frames over the whole loss stream. Mostly the 1.5 s of blackouts, so about 5 % for every host; a host whose error correction recovers less of the random loss comes out higher | lower | 1 point or 25 % |
+| Recovery after a 300 ms blackout | From the end of a blackout to the next new picture (median of five) | lower | 50 ms or 25 % |
+| Video encoder load | The host process's busiest video engine (Windows "GPU Engine" counters; on AMD the "Video Codec" engine) | lower | 5 points or 20 % |
+| Host process CPU | The host process's CPU time over the clean minute, in % of the whole PC | lower | 2 points or 25 % |
+| Whole PC CPU | All processes, including the client and the test picture. Other programs move it a lot | lower | 10 points or 30 % |
+
+"Same within 150 ms or 10 %" means the larger of the two, the percentage taken of the
+reference. The tolerances are about the spread between runs, so noise doesn't count as a
+difference. The result also stores the time to the first video packet, the frame rate
+received, render time, the client's decoder load and its CPU, for information.
+
+Not measured: picture quality (it would need decoded frames compared with the source) and
+latency on the client's screen (no camera or capture card). Capture to send is the latency
+every host reports in the same way.
+
+### References
+
+Stored in `scripts/benchmark/references/`, one file per host (`apollo.json`,
+`vibepollo.json`, `sunshine.json`). Each holds the host and client version, the PC, the
+scenario, every run and the medians. `references/setup.json` says which version of each host
+and of Moonlight is used, where it comes from, and its port base.
+
+| Reference | Version | Client |
+| --- | --- | --- |
+| Apollo | 0.4.6 (latest release) | Moonlight 6.2.0 |
+| Vibepollo | 2.17.6 (latest nightly; there are no stable releases) | Moonlight 6.2.0 |
+| Sunshine | 2026.914.233613 (latest release) | Moonlight 6.2.0 |
+
+Measure a reference again only when its host or Moonlight releases a new version, or on a
+different PC. The check warns when a reference was recorded on another CPU or GPU.
+
+```sh
+python scripts/benchmark/compare.py --record apollo     # or vibepollo, sunshine
+```
+
+`--record` streams with stock Moonlight and that host, the same way as the check, and
+overwrites the reference's file. Commit the file, along with `setup.json` if a version
+changed.
+
+The hosts and Moonlight are unpacked, never installed, into `build/benchmark/refs/`
+(ignored by git). Each runs as a user process from there, with its own config folder in
+`build/benchmark/state/<name>` and its own port base (Apollo 51989, Vibepollo 52989,
+Sunshine 53989). Every host gets the same overrides on top of its defaults: no display
+changes, no virtual display, no tray icon, UPnP off (`COMMON_CONFIG` in `compare.py`). To
+set up a new version, download the files named in `setup.json` and unpack them:
+
+| File | Unpack with | Into |
+| --- | --- | --- |
+| `Apollo-<version>.exe` (NSIS installer) | `7z x Apollo-<version>.exe -o<folder>` | `hosts/apollo-<version>/` |
+| `VibepolloSetup.exe` | It wraps an MSI: cut out the part from the first `D0 CF 11 E0 A1 B1 1A E1` to the end as `Vibepollo.msi`, then `msiexec /a Vibepollo.msi /qn TARGETDIR=<folder>` (unpacks only, installs nothing) | `hosts/vibepollo-<version>/` (the host is in `Apollo\`) |
+| `Sunshine-Windows-AMD64-lite.zip` | any unzip; take the `Sunshine` folder | `hosts/sunshine-<version>/` |
+| `MoonlightPortable-x64-<version>.zip` | any unzip, then create an empty `portable.dat` next to `Moonlight.exe` | `clients/moonlight-<version>/` |
+
+Then update `setup.json` and record. Each host pairs with Moonlight by itself on its first
+run.
+
+What the reference hosts do to the PC while they run (the same as they do when installed):
+
+- They switch the default playback device to a streaming device during a stream and back
+  afterwards, as Norishine does.
+- Vibepollo captures with Windows.Graphics.Capture through its helper by default. It writes
+  the helper's log to `%APPDATA%\Sunshine\logs`. At start it tries to restart the Sunshine
+  virtual display adapter when one is installed; as a user process that's refused, and it
+  goes on with the active display.
+
+### Results
+
+First references recorded on 18 November 2026. PC: AMD Ryzen 7 5700X, AMD Radeon RX 6700 XT
+(AMF, HEVC), Windows 11, one 1920×1080 60 Hz display. Then the check ran against `master` at
+`d25025f0`, with Norilight `main` at `46fcc987`, **Performance goal**, three runs:
+
+| Metric | Norishine | Apollo 0.4.6 | Vibepollo 2.17.6 | Sunshine 2026.914.233613 |
+| --- | --- | --- | --- | --- |
+| Time to first frame (ms) | 5156 | 5019 same | 5276 same | 4872 same |
+| Capture to send (ms) | 3.0 | 5.9 **better** | 3.3 same | 4.1 **better** |
+| Decode time (ms) | 0.48 | 0.52 same | 0.40 same | 0.44 same |
+| Dropped frames (%) | 0.28 | 0.08 same | 0.08 same | 0.08 same |
+| Frames shown per second | 55.2 | 53.8 same | 55.5 same | 51.6 **better** |
+| Frame interval, 99th percentile (ms) | 34.0 | 34.5 same | 34.9 same | 34.4 same |
+| Stutters per minute | 3 | 3 same | 1 same | 2 same |
+| Frames shown per second at 5 % loss | 53.2 | 49.2 **better** | 53.2 same | 53.8 same |
+| Dropped frames, loss stream (%) | 5.9 | 5.6 same | 5.5 same | 5.7 same |
+| Recovery after a 300 ms blackout (ms) | 48 | 47 same | 45 same | 50 same |
+| Video encoder load (%) | 17.0 | 16.9 same | 16.4 same | 16.9 same |
+| Host process CPU (%) | 0.75 | 0.68 same | 0.39 same | 0.69 same |
+| Whole PC CPU (%) | 44 | 58 same | 56 same | 43 same |
+
+**Verdict: not worse than any reference on any metric.**
+
+What it shows:
+
+- Capture to send is where the hosts differ most: Norishine 2.7–3.6 ms, Vibepollo 3.3–3.5,
+  Sunshine 4.0–4.2, Apollo 4.3–6.3. Everything else is within the spread between runs.
+- Recovery after a blackout is about 50 ms everywhere: once packets flow again, every host
+  sends a key frame within a few frames.
+- Time to first frame is about 5 seconds for every host, and nearly all of it is the client
+  starting up. Roadmap N5 needs a finer measurement of the steps.
+- **To watch:** Norishine with Norilight dropped 0.2–0.3 % of frames in every clean run, the
+  references 0.03–0.08 %. That's within the tolerance (half a point), but it's consistent.
+  These are frames the client counts as lost on the network, on a loopback connection with
+  nothing dropped. The cause (Norilight or the host) is not yet known.
+- Apollo had one run with 51 stutters a minute and only 42 frames a second; its other runs
+  were normal. The medians keep one bad run from deciding the result.
+
+## Host benchmark (stream_bench.py)
+
 A fixed stream, run the same way each time, so changes to the host (encoder settings,
 capture, auto-tuning) can be compared against numbers measured before them. Roadmap M8
 ([ROADMAP.md](ROADMAP.md)).
 
-## What it does
+### What it does
 
 `scripts/benchmark/stream_bench.py`:
 
@@ -33,7 +223,7 @@ The summary has, over the sampled minute:
 | `host_limited_samples` | Seconds the adaptive controller saw the encoder fall behind |
 | `adaptive_end` | Where the adaptive bitrate and FEC ended up |
 
-## Running it
+### Running it
 
 On the host, with a development build running (`build/sunshine.exe dev/sunshine.conf`, see
 [DEVELOPMENT.md](DEVELOPMENT.md)) and a Norilight paired with it that may start apps:
@@ -56,7 +246,7 @@ python scripts/benchmark/stream_bench.py --client C:\path\to\Norilight.exe --lab
 Close other programs on the host first, and run it three times: one run varies by a few
 frames per second and some host load.
 
-## Baseline
+### Baseline
 
 Measured on 18 November 2026, before M9.4 (encoder setting recommendations) and any other
 tuning, with the defaults above. Host and client on the same PC (Norilight streams over
