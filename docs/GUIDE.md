@@ -41,7 +41,8 @@ the certificate from pairing, so it never needs the web UI password.
 1. In the host's web UI, open **Devices**, edit your Norilight device, and under
    **Host management** choose **View** (look only) or **Manage** (change things too).
    Manage is full control of the PC, because app and device commands run on it.
-2. In Norilight, right-click the host and choose **Host Settings** or **Manage Host**.
+2. In Norilight, click the gear on the host's tile (or right-click the host) and choose
+   **Host settings** or **Manage host**.
 
 A device can't change its own permissions. Settings with lists or scripts are changed in
 the web UI.
