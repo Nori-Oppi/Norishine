@@ -1,14 +1,14 @@
 # Norishine architecture decisions and roadmap
 
-Status key: **done**, **in progress**, **planned**. Updated 2026-11-17. Evidence for the
+Status key: **done**, **in progress**, **planned**. Updated 2026-11-18. Evidence for the
 decisions is in [PHASE1-RESEARCH.md](PHASE1-RESEARCH.md).
 
 ## Decisions
 
 ### D1. Baseline: Apollo `master` (`adc5c5a0`), with full history
 
-Confirmed 2026-11-15. A switch to Sunshine as the base was considered and declined
-for now; it is re-evaluated at the review point below.
+Confirmed 2026-11-15. A switch to Sunshine as the base was considered and declined,
+and declined again at the review after M2: Norishine stays on Apollo.
 Merge Apollo's history into this repository (unrelated-histories merge, so the
 existing initial commit and remote stay valid and nothing is force-pushed). Keep
 `apollo` and `sunshine` as remotes for future cherry-picks.
@@ -20,8 +20,8 @@ existing initial commit and remote stay valid and nothing is force-pushed). Keep
   most; estimated at several weeks before anything streams.
 - Consequence: Norishine carries Apollo's maintenance. Sunshine security fixes are
   ported first, before any feature work.
-- Review point: after milestone M2, re-estimate a re-base onto Sunshine. By then the
-  settings and API layers will be our own code and easier to carry across.
+- Review after M2 (**done**): a re-base onto Sunshine was re-estimated and not
+  taken. Sunshine fixes keep coming in by cherry-pick (D6).
 
 ### D2. Web UI: small schema-first rewrite, not a port
 None of the three existing frontends meets the goals. Apollo's is hand-written
