@@ -140,6 +140,14 @@ they're listed here so there's one order for both.
 | N12 | Android build, for handhelds | Norilight | XL | Medium–high | — |
 | N13 | iOS build | Norilight | XL | Low | N12 |
 
+Small fixes found by the benchmark check (N2). They aren't regressions, so they can be done
+whenever there's room, between the items above:
+
+| # | Item | Project | Effort | Importance |
+| --- | --- | --- | --- | --- |
+| N14 | Fewer full-queue frame drops in the pacer | Norilight | S–M | Medium |
+| N15 | Benchmark streams that show no picture | Norishine (check script) | S | Low |
+
 ### N3. Help links to `norilight-docs` — S
 Norilight's guide and help buttons still open moonlight-docs (Setup Guide,
 Troubleshooting, Fixing Hardware Decoding Problems, Gamepad Mapping). Create
@@ -209,6 +217,22 @@ profiles matched to the built-in screen, and a battery-aware tuning goal.
 Last: another separate codebase (Moonlight iOS or Qt for iOS), and unsigned nightlies can't
 be installed on iOS without a developer account or sideloading. Done after Android, reusing
 its decisions.
+
+### N14. Fewer full-queue frame drops in the pacer (Norilight) — S–M
+The client's frame pacer throws away frames that arrive while its queue is already full:
+about 0.15–0.3 % of frames, a few a minute. Moonlight 6.2.0 drops the same frames, so this
+isn't a regression, but fewer drops would put Norilight ahead of Moonlight. Find why the queue
+is full when a frame arrives (decode or present timing, V-sync off with the Performance goal,
+queue depth) and reduce it; prove it with the benchmark check (no other metric worse). See
+[BENCHMARK.md](BENCHMARK.md), the section on the extra frame drops.
+
+### N15. Benchmark streams that show no picture (check script) — S
+About one stream in eleven in the benchmark check shows no picture: the client recreates its
+renderer just as the script moves the stream window, and the window stays one flat colour. It
+happens with every host and client alike and the retry always works, but it makes runs slower
+and less predictable. Change how the script places the window (for example wait for the first
+frame, or start the client on the target position) so streams don't need a retry. See
+[BENCHMARK.md](BENCHMARK.md#streams-that-show-no-picture).
 
 ## Not planned
 WebRTC browser streaming, PyroWave, Playnite and Lutris integration, custom gamepad
