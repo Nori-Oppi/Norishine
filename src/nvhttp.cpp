@@ -31,6 +31,7 @@
 #include "file_handler.h"
 #include "globals.h"
 #include "host_stats.h"
+#include "recommend.h"
 #include "httpcommon.h"
 #include "logging.h"
 #include "manage_api.h"
@@ -1253,7 +1254,7 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
-    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + "status,stats,session,adaptive,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + "status,stats,session,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
 
     std::ostringstream data;
 
@@ -1315,6 +1316,52 @@ namespace nvhttp {
         return;
       }
       send_json(response, SimpleWeb::StatusCode::success_ok, host_stats());
+    }
+
+    SimpleWeb::StatusCode recommend_status(int code) {
+      switch (code) {
+        case 200:
+          return SimpleWeb::StatusCode::success_ok;
+        case 400:
+          return SimpleWeb::StatusCode::client_error_bad_request;
+        case 409:
+          return SimpleWeb::StatusCode::client_error_conflict;
+        default:
+          return SimpleWeb::StatusCode::server_error_internal_server_error;
+      }
+    }
+
+    void recommendations_get(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, read_perm, "read host settings")) {
+        return;
+      }
+      auto encoder = recommend::encoder_for(video::active_encoder_name());
+      send_json(response, SimpleWeb::StatusCode::success_ok, recommend::store().describe(encoder, config::sunshine.config_file));
+    }
+
+    /**
+     * @brief POST /api/v1/recommendations/apply and /rollback: change settings like PATCH /api/v1/config.
+     */
+    void recommendations_change(resp_https_t response, req_https_t request, bool apply) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, PERM::manage_write, "change host settings")) {
+        return;
+      }
+      nlohmann::json body;
+      if (!request->content.string().empty()) {
+        body = nlohmann::json::parse(request->content.string(), nullptr, false);
+        if (body.is_discarded()) {
+          send_json(response, SimpleWeb::StatusCode::client_error_bad_request, {{"status", false}, {"error", "Invalid JSON"}});
+          return;
+        }
+      }
+      auto encoder = recommend::encoder_for(video::active_encoder_name());
+      auto reply = apply ? recommend::store().apply(body, encoder, config::sunshine.config_file) : recommend::store().rollback(config::sunshine.config_file);
+      if (reply.code == 200) {
+        BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] "sv << (apply ? "applied"sv : "undid"sv) << " recommended settings"sv;
+      }
+      send_json(response, recommend_status(reply.code), reply.body);
     }
 
     void config_schema(resp_https_t response, req_https_t request) {
@@ -2392,6 +2439,13 @@ namespace nvhttp {
     https_server.resource["^/api/v1/session/report$"]["POST"] = api::session_report;
     https_server.resource["^/api/v1/update$"]["GET"] = api::update_status;
     https_server.resource["^/api/v1/update$"]["POST"] = api::update_start;
+    https_server.resource["^/api/v1/recommendations$"]["GET"] = api::recommendations_get;
+    https_server.resource["^/api/v1/recommendations/apply$"]["POST"] = [](auto resp, auto req) {
+      api::recommendations_change(resp, req, true);
+    };
+    https_server.resource["^/api/v1/recommendations/rollback$"]["POST"] = [](auto resp, auto req) {
+      api::recommendations_change(resp, req, false);
+    };
     https_server.resource["^/api/v1/config/schema$"]["GET"] = api::config_schema;
     https_server.resource["^/api/v1/config$"]["GET"] = api::config_get;
     https_server.resource["^/api/v1/config$"]["PATCH"] = api::config_patch;

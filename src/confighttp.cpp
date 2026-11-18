@@ -40,11 +40,13 @@
 #include "nvhttp.h"
 #include "platform/common.h"
 #include "process.h"
+#include "recommend.h"
 #include "rtsp.h"
 #include "state_store.h"
 #include "updater.h"
 #include "utility.h"
 #include "uuid.h"
+#include "video.h"
 #include "web_auth.h"
 #include "version.h"
 
@@ -1188,6 +1190,50 @@ namespace confighttp {
   }
 
   /**
+   * @brief Recommended encoder settings from what earlier streams measured, and what the
+   *        last apply changed (for undo).
+   * @param response The HTTP response object.
+   * @param request The HTTP request object.
+   *
+   * @api_examples{/api/v1/recommendations| GET| null}
+   */
+  void getRecommendationsV1(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+    auto encoder = recommend::encoder_for(video::active_encoder_name());
+    send_response(response, recommend::store().describe(encoder, config::sunshine.config_file));
+  }
+
+  /**
+   * @brief Apply recommendations ({"keys": [...]}, or all), or undo the last apply.
+   */
+  void changeRecommendationsV1(resp_https_t response, req_https_t request, bool apply) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+    print_req(request);
+
+    std::stringstream ss;
+    ss << request->content.rdbuf();
+    nlohmann::json body;
+    if (!ss.str().empty()) {
+      body = nlohmann::json::parse(ss.str(), nullptr, false);
+      if (body.is_discarded()) {
+        bad_request(response, request, "Invalid JSON");
+        return;
+      }
+    }
+    auto encoder = recommend::encoder_for(video::active_encoder_name());
+    auto reply = apply ? recommend::store().apply(body, encoder, config::sunshine.config_file) : recommend::store().rollback(config::sunshine.config_file);
+    auto code = reply.code == 200 ? SimpleWeb::StatusCode::success_ok :
+                reply.code == 400 ? SimpleWeb::StatusCode::client_error_bad_request :
+                reply.code == 409 ? SimpleWeb::StatusCode::client_error_conflict :
+                                    SimpleWeb::StatusCode::server_error_internal_server_error;
+    send_json(response, code, reply.body);
+  }
+
+  /**
    * @brief Update state: this version, the newest one available, and a running update.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -1983,6 +2029,13 @@ namespace confighttp {
     server.resource["^/api/config$"]["POST"] = saveConfig;
     server.resource["^/api/v1/status$"]["GET"] = getStatusV1;
     server.resource["^/api/v1/stats$"]["GET"] = getStatsV1;
+    server.resource["^/api/v1/recommendations$"]["GET"] = getRecommendationsV1;
+    server.resource["^/api/v1/recommendations/apply$"]["POST"] = [](auto resp, auto req) {
+      changeRecommendationsV1(resp, req, true);
+    };
+    server.resource["^/api/v1/recommendations/rollback$"]["POST"] = [](auto resp, auto req) {
+      changeRecommendationsV1(resp, req, false);
+    };
     server.resource["^/api/v1/update$"]["GET"] = getUpdateV1;
     server.resource["^/api/v1/update$"]["POST"] = managed(true, [](auto &, auto &body) { return updater::start(body); });
     server.resource["^/api/v1/config/schema$"]["GET"] = getConfigSchema;

@@ -14,7 +14,7 @@ Some settings can only be chosen when a stream starts; others can change while i
 | --- | --- | --- |
 | Before the stream (launch) | Resolution, frame rate, codec, HDR, 4:4:4, start bitrate, decoder, V-sync and frame pacing | Norilight, from what both sides can do (capability discovery) |
 | During the stream (live) | Bitrate, error correction (FEC) | The host, from host measurements and the client's reports |
-| Between streams | Next start bitrate and frame rate for this host and network; host encoder settings | Norilight and the host, from what earlier streams measured |
+| Between streams | Next start bitrate and frame rate for this host and network; host encoder settings (recommended, applied by hand) | Norilight and the host, from what earlier streams measured |
 
 The live part runs on the host, so stock Moonlight and Artemis clients benefit too. Norilight
 adds what only a client can measure.
@@ -138,10 +138,35 @@ default) turns this off. Checks: `tests/unit/test_tuning.cpp`.
 
 ## Host settings (Norishine)
 
-**Planned (M9.4).** Recommendations for encoder settings from the GPU, the encoder and the load
-earlier streams measured (for example a faster NVENC preset when the encoder was the
-bottleneck), shown with the current value and applied with `PATCH /api/v1/config`, with
-the previous values kept for undo.
+**Done (M9.4).** The host recommends changes to its own encoder settings from what earlier
+streams measured. Nothing changes until someone applies a recommendation, in the web UI
+(Settings, "Recommended") or in Norilight (Host Settings).
+
+**What each stream leaves behind.** Once a second while a stream runs, the host notes whether
+the encoder kept up (the adaptive controller's test: fewer frames than asked while each takes
+most of a frame interval), the capture-to-network latency, the video encoder load (Windows),
+the frames the client reported lost and each time the adaptive controller raised error
+correction. Streams of 30
+seconds or more (not counting the first 5) are kept, the last 10 per encoder, in
+`state/recommendations.json`, with the client's tuning goal and the values the host ran with.
+
+**Rules.** Only the newest 5 streams that ran with a setting's current value count for that
+setting, and at least 2 are needed: after a change, streams with the old value no longer count.
+
+| Reason | When | Recommends |
+| --- | --- | --- |
+| `encoder_limited` | In at least half the streams that used the host's own preset (Balanced goal, or clients without a goal), the encoder fell behind in 10 % of the seconds or more, or was 90 % busy on average | One step faster: `nvenc_preset` P(n−1), `amd_quality` speed, `qsv_preset` and `sw_preset` the next faster |
+| `headroom` | Every stream: encoder behind in under 2 % of the seconds, encoder load under 60 %, latency under half a frame interval; and most asked for Quality | One step higher quality, up to P5, `quality`, `slow` or `fast` |
+| `loss` | In at least half the streams, 3 or more frames lost a minute, or error correction raised at least twice and at least once every two minutes (a raise in the first 5 seconds doesn't count) | `fec_percentage` +10, up to 50 |
+
+The higher-quality preset needs the encoder load, so it isn't recommended where the host
+can't measure it (software encoding, Linux, macOS). VA-API and VideoToolbox have no preset
+setting; only error correction is recommended for them.
+
+**Apply and undo.** Apply writes the values through the same path as `PATCH /api/v1/config`
+and keeps the values from before; Undo puts those back (a setting changed by hand since is
+left alone). Encoder settings take effect after the host restarts. See [api.md](api.md),
+`/api/v1/recommendations`. Checks: `tests/unit/test_recommend.cpp`.
 
 ## Platforms
 

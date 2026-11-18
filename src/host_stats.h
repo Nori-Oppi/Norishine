@@ -5,6 +5,7 @@
 #pragma once
 
 // standard includes
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -49,6 +50,9 @@ namespace host_stats {
 
   /// Current host load. The first call takes about a quarter of a second.
   stats_t current();
+
+  /// The last reading current() took, if it is younger than max_age; never waits.
+  std::optional<stats_t> latest(std::chrono::steady_clock::duration max_age);
 
   nlohmann::json to_json(const stats_t &stats);
 }  // namespace host_stats

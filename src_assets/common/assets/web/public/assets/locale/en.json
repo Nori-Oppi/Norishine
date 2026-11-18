@@ -719,6 +719,21 @@
     "save_shortcut": "Ctrl+S",
     "not_used": "Not used now"
   },
+  "recommend": {
+    "title": "Recommended",
+    "apply": "Apply",
+    "apply_all": "Apply all",
+    "undo": "Undo",
+    "applied_title": "Applied recommendations",
+    "applied": "Applied.",
+    "undone": "Undone.",
+    "skipped": "Changed since, so kept: {keys}",
+    "failed": "Couldn't change it: {error}",
+    "reason_encoder_limited": "Encoder was the bottleneck",
+    "reason_headroom": "Encoder has room to spare",
+    "reason_loss": "Frequent frame loss",
+    "help": "How recommendations work"
+  },
   "account": {
     "title": "Sign in to Norishine",
     "sign_in": "Sign in",
