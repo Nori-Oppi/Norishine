@@ -5,7 +5,6 @@ import SealMark from '../ui/SealMark.vue'
 import HelpLink from '../ui/HelpLink.vue'
 import { api } from '../ui/api'
 import { confirmAction, notify } from '../ui/dialogs'
-import ApolloVersion from '../apollo_version'
 import { parseLog } from '../troubleshooting/logs'
 
 const i18n = inject('i18n')
@@ -14,7 +13,7 @@ const t = (...args) => i18n.t(...args)
 const status = ref(null)
 const statusError = ref('')
 const fatal = ref([])
-const update = ref(null)  // {kind: 'stable' | 'pre', name, url} or {kind: 'latest'} / {kind: 'ahead'}
+const update = ref(null)  // GET /api/v1/update
 const busy = ref(false)
 let timer = null
 
@@ -38,29 +37,56 @@ async function loadLogs() {
   }
 }
 
-async function checkUpdates(version, preReleases) {
+async function loadUpdate(refresh = false) {
   try {
-    const current = new ApolloVersion(null, version)
-    const stable = new ApolloVersion(await (await fetch('https://api.github.com/repos/Nori-Oppi/Norishine/releases/latest')).json(), null)
-    if (stable.isGreater(current)) {
-      update.value = { kind: 'stable', name: stable.release.name || stable.version, url: stable.release.html_url }
+    update.value = await api('./api/v1/update' + (refresh ? '?refresh=1' : ''), { timeout: 45000 })
+  } catch {
+    // Offline, or the host is restarting: keep what we had.
+  }
+}
+
+const updating = computed(() => update.value && ['downloading', 'installing'].includes(update.value.state))
+const progress = computed(() => {
+  const p = update.value?.progress
+  return p && p.total ? Math.floor((p.bytes / p.total) * 100) : 0
+})
+
+async function installUpdate() {
+  const target = update.value.available
+  if (!await confirmAction({ title: t('home.update_title', { version: target.version }), body: t('home.update_body'), confirm: t('home.update_now') })) {
+    return
+  }
+  try {
+    await api('./api/v1/update', { method: 'POST', body: { version: target.version } })
+    startedFrom = status.value?.version || ''
+    await loadUpdate()
+    watchUpdate()
+  } catch (e) {
+    notify(t('home.update_failed', { error: e.message }), 'error')
+    loadUpdate()
+  }
+}
+
+// While an update runs: follow its progress, then wait for the new host to answer.
+let startedFrom = ''
+let updateTimer = null
+function watchUpdate() {
+  clearInterval(updateTimer)
+  updateTimer = setInterval(async () => {
+    await refresh()
+    if (startedFrom && status.value && !statusError.value && status.value.version !== startedFrom) {
+      clearInterval(updateTimer)
+      startedFrom = ''
+      notify(t('home.updated', { version: status.value.version }))
+      loadUpdate()
       return
     }
-    if (preReleases) {
-      const list = await (await fetch('https://api.github.com/repos/Nori-Oppi/Norishine/releases')).json()
-      const pre = list.find((r) => r.prerelease)
-      if (pre) {
-        const preVersion = new ApolloVersion(pre, null)
-        if (preVersion.isGreater(current, true)) {
-          update.value = { kind: 'pre', name: pre.name || pre.tag_name, url: pre.html_url }
-          return
-        }
-      }
+    await loadUpdate()
+    if (!updating.value && update.value?.state === 'failed') {
+      clearInterval(updateTimer)
+      startedFrom = ''
     }
-    update.value = { kind: current.isGreater(stable) ? 'ahead' : 'latest' }
-  } catch {
-    update.value = null  // No releases yet, or offline: say nothing.
-  }
+  }, 2000)
 }
 
 onMounted(async () => {
@@ -68,14 +94,18 @@ onMounted(async () => {
   timer = setInterval(refresh, 5000)
   loadLogs()
   if (status.value) {
-    let preReleases = false
-    try {
-      preReleases = !!(await api('./api/v1/config')).values.notify_pre_releases
-    } catch { /* default off */ }
-    checkUpdates(status.value.version, preReleases)
+    await loadUpdate()
+    if (updating.value) {
+      // Opened while an update runs (another tab, or a client started it).
+      startedFrom = status.value.version
+      watchUpdate()
+    }
   }
 })
-onBeforeUnmount(() => clearInterval(timer))
+onBeforeUnmount(() => {
+  clearInterval(timer)
+  clearInterval(updateTimer)
+})
 
 const devBuild = computed(() => (status.value?.version || '').includes('dirty') || /^0\.0\.0/.test(status.value?.version || ''))
 
@@ -156,12 +186,29 @@ const clients = [
         <HelpLink page="GUIDE.md#coming-from-another-host" :label="$t('help.page')" />
       </div>
 
-      <div v-if="update && (update.kind === 'stable' || update.kind === 'pre')" class="notice notice-warning section">
+      <div v-if="updating" class="notice notice-warning section">
         <span class="grow">
-          <strong>{{ update.kind === 'stable' ? $t('home.update_stable') : $t('home.update_pre') }}</strong>
-          {{ update.name }}
+          <strong>{{ update.state === 'downloading' ? $t('home.update_downloading', { percent: progress }) : $t('home.update_installing') }}</strong>
+          {{ update.target?.version }}
         </span>
-        <a class="btn btn-small" :href="update.url" target="_blank" rel="noopener">{{ $t('home.download') }}</a>
+      </div>
+      <div v-else-if="update && update.available" class="notice notice-warning section">
+        <span class="grow">
+          <strong>{{ update.available.prerelease ? $t('home.update_pre') : $t('home.update_stable') }}</strong>
+          {{ update.available.version }}
+          <span v-if="update.state === 'failed'" class="block small">{{ update.error }}</span>
+        </span>
+        <button v-if="update.supported" type="button" class="btn btn-small" @click="installUpdate">
+          <i class="fas fa-download" aria-hidden="true"></i> {{ $t('home.update_now') }}
+        </button>
+        <a v-else class="btn btn-small" :href="update.available.url" target="_blank" rel="noopener" :title="update.unsupported_reason">{{ $t('home.download') }}</a>
+      </div>
+      <div v-if="!updating && update && update.last_update && update.last_update.result === 'failed'" class="notice notice-warning section">
+        <span class="grow">
+          <strong>{{ $t('home.update_last_failed', { version: update.last_update.to }) }}</strong>
+          {{ update.last_update.error }}
+        </span>
+        <a href="./troubleshooting#logs">{{ $t('home.view_logs') }}</a>
       </div>
 
       <section class="section" v-if="status">
@@ -220,7 +267,7 @@ const clients = [
       </section>
 
       <p class="small muted footer">
-        <span v-if="update && update.kind === 'latest'">{{ $t('home.up_to_date') }} · </span>
+        <span v-if="update && !update.available && update.checked_at && !update.check_error && !devBuild">{{ $t('home.up_to_date') }} · </span>
         <span v-if="devBuild">{{ $t('home.dev_build') }} · </span>
         <a href="https://github.com/Nori-Oppi/Norishine" target="_blank" rel="noopener">GitHub</a> ·
         <a href="https://github.com/Nori-Oppi/Norishine/blob/master/LICENSE" target="_blank" rel="noopener">{{ $t('home.license') }}</a> ·

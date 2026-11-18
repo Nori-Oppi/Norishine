@@ -109,7 +109,7 @@ by default, only per device from the web UI (paired devices, "Manage"):
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,stats,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,stats,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -158,6 +158,37 @@ performance counters. `encoder` is as in `/api/v1/status`.
 | `frames`, `duplicate_frames`, `bytes`, `key_frames` | Totals sent |
 | `key_frame_requests`, `ref_invalidations`, `frames_invalidated` | Totals of what the client reported lost |
 | `client_lost_frames` | From the periodic loss reports of older clients; 0 for current Moonlight |
+
+## GET /api/v1/update
+@copydoc confighttp::getUpdateV1()
+
+Feature `update`. Needs `manage_read` on the HTTPS port. The host checks GitHub's release
+list at most every ten minutes; `?refresh=1` checks again, at most once a minute.
+
+| Field | Meaning |
+| --- | --- |
+| `current` | This host's version |
+| `include_pre_releases` | The `notify_pre_releases` setting: whether nightlies are offered |
+| `supported`, `unsupported_reason` | Whether this host can update itself (Windows, installed with the installer, not a development build), and why not |
+| `checked_at`, `check_error` | Last check of GitHub, and why it failed |
+| `available` | The newest release newer than this one, or null: `version`, `name`, `url` (release page), `published_at`, `prerelease`, `size` |
+| `state` | `idle`, `downloading`, `installing` (the installer runs; the host stops and restarts), or `failed` |
+| `error`, `target`, `progress` | Why it failed; the release being installed; `bytes` and `total` while downloading |
+| `last_update` | The previous update, as the new host found it: `from`, `to`, `result` (`updated` or `failed`), `finished`, `error`; or null |
+
+## POST /api/v1/update
+
+`{"version": "<available.version>"}` starts the update. Needs `manage_write` on the HTTPS
+port (and the CSRF header on the web UI port). The answer is 202 with `state` and `target`.
+It is 409 when the host can't update itself, an update is already running, or `version`
+isn't the one on offer (so a client can't install something it didn't show), and 400 for a
+malformed body.
+
+The host downloads installers only from this project's GitHub releases, refuses one unless
+its size and SHA-256 match the `digest` GitHub publishes for it, and runs
+`scripts\apply-update.ps1` outside the service's process group. The script runs the
+installer silently, starts the service again if it isn't running afterwards, and writes
+`config\updates\update-status.json` and `update.log`.
 
 ## Apps, devices, streams and displays (/api/v1)
 

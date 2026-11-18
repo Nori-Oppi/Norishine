@@ -57,6 +57,9 @@ install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/migration/"
 install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/path/"
         DESTINATION "scripts"
         COMPONENT assets)
+install(DIRECTORY "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/update/"
+        DESTINATION "scripts"
+        COMPONENT assets)
 # bin\ is what goes on PATH (scripts/update-path.bat)
 install(FILES "${SUNSHINE_SOURCE_ASSETS_DIR}/windows/misc/bin/norishine.cmd"
         DESTINATION "bin"
