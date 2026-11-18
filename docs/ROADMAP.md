@@ -209,7 +209,10 @@ deliberately broken, but is not verified until CI exists for it.
     host it had to kill, at once instead of at its next start (usually the next boot), and
     the uninstaller does too (`sunshine.exe --restore-displays`,
     [DISPLAY-RESTORE.md](DISPLAY-RESTORE.md)).
-  - Capture from a user-session helper.
+  - Capture from a user-session helper (**designed**, not built:
+    [CAPTURE-HELPER.md](CAPTURE-HELPER.md)). WGC measured 0.6 ms lower than Desktop
+    Duplication, but its latency clock starts later, so the gain isn't shown yet; it needs a
+    client-side latency figure and a host installed as a service to test.
   - Frame cap matched to the client (**not built**, measured): the host already encodes
     no more frames than its own display shows (120 fps asked on a 60 Hz display: 53 fps and
     the same encoder load as 60). A cap would only help a faster host display than the

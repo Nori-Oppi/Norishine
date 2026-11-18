@@ -256,3 +256,24 @@ What it shows:
 Encoder load was 40 % with room to spare in every run, so there's nothing to win here on
 this PC. If a client-side rule is wanted instead (for example: with V-sync on, Norilight asks
 for no more than the display's refresh rate), it belongs in Norilight's launch settings.
+
+## M10: capture method
+
+**Question:** what would capturing with Windows.Graphics.Capture from a user-session helper
+bring ([CAPTURE-HELPER.md](CAPTURE-HELPER.md))? The development host runs as the user, so it
+can use `capture = wgc` directly. **Balanced goal**, standard scenario, same build as the AMF
+runs; Desktop Duplication is the AMF defaults above.
+
+| Capture | Run | fps (min / avg / max) | Latency ms (min / avg / max) | Send ms avg | Bitrate kbps avg | Recovery | Host CPU % avg | Encoder % avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Desktop Duplication (default) | 1 | 46.4 / 53.6 / 59.0 | 2.44 / 4.51 / 9.37 | 0.12 | 6755 | 0 | 49.6 | 41.0 |
+| | 2 | 43.4 / 51.8 / 58.4 | 2.14 / 4.46 / 10.39 | 0.12 | 6351 | 0 | 50.0 | 39.6 |
+| | 3 | 29.8 / 43.9 / 57.6 | 2.34 / 4.95 / 11.18 | 0.16 | 5266 | 0 | 69.2 | 33.5 |
+| `capture = wgc` | 1 | 53.6 / 55.6 / 57.4 | 2.05 / 3.85 / 6.15 | 0.11 | 7041 | 0 | 18.3 | 43.1 |
+| | 2 | 45.2 / 54.8 / 58.2 | 1.90 / 3.96 / 7.92 | 0.12 | 6830 | 0 | 32.3 | 42.5 |
+| | 3 | 34.0 / 45.8 / 54.6 | 1.67 / 4.22 / 9.23 | 0.15 | 5437 | 0 | 63.1 | 35.5 |
+
+WGC measured 0.6 ms lower on average (4.01 against 4.64 ms) at the same encoder load. The
+latency clock doesn't start at the same point, though: Desktop Duplication stamps a frame
+when the app presented it, WGC when the desktop was composed, which is later. So this doesn't
+show WGC is faster; that needs latency measured at the client.
