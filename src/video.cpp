@@ -1761,6 +1761,12 @@ namespace video {
         }
       }
 
+      // The client's tuning goal for this stream replaces the host's preset.
+      for (auto &[name, value] : config::tuned_options(encoder.name, config.videoFormat, config.tuning)) {
+        av_dict_set(&options, name.c_str(), value.c_str(), 0);
+        BOOST_LOG(info) << "Tuning ("sv << config::to_string(config.tuning) << "): "sv << name << " = "sv << value;
+      }
+
       auto bitrate = config.bitrate * 1000;
       ctx->rc_max_rate = bitrate;
       ctx->bit_rate = bitrate;

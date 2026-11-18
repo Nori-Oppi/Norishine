@@ -5,6 +5,7 @@
 #pragma once
 
 // local includes
+#include "config.h"
 #include "input.h"
 #include "platform/common.h"
 #include "thread_safe.h"
@@ -48,6 +49,7 @@ namespace video {
 
     int encodingFramerate; // Requested display framerate
     bool input_only;
+    config::tuning_e tuning = config::tuning_e::host;  ///< The client's tuning goal for this stream.
   };
 
   platf::mem_type_e map_base_dev_type(AVHWDeviceType type);

@@ -505,6 +505,7 @@ namespace nvhttp {
     launch_session->enable_hdr = util::from_view(get_arg(args, "hdrMode", "0"));
     launch_session->virtual_display = util::from_view(get_arg(args, "virtualDisplay", "0")) || named_cert_p->always_use_virtual_display;
     launch_session->scale_factor = util::from_view(get_arg(args, "scaleFactor", "100"));
+    launch_session->tuning = config::tuning_from_view(get_arg(args, "norishineTuning", ""));
 
     launch_session->client_do_cmds = named_cert_p->do_cmds;
     launch_session->client_undo_cmds = named_cert_p->undo_cmds;
@@ -1252,7 +1253,7 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
-    tree.put("root.Norishine.Features", "status,stats,session,adaptive,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + "status,stats,session,adaptive,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
 
     std::ostringstream data;
 
@@ -1443,6 +1444,7 @@ namespace nvhttp {
       entry["start_bitrate_kbps"] = info.bitrate_kbps;
       entry["codec"] = info.codec >= 0 && info.codec < 3 ? codecs[info.codec] : "unknown";
       entry["hdr"] = info.hdr;
+      entry["tuning"] = std::string {config::to_string(info.tuning)};
       entry["adaptive"] = info.adaptive ? adaptive::to_json(*info.adaptive) : nlohmann::json(nullptr);
       return {{"status", true}, {"stream", entry}};
     }

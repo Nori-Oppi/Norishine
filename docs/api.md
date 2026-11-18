@@ -109,7 +109,7 @@ by default, only per device from the web UI (paired devices, "Manage"):
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>status,stats,session,adaptive,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,status,stats,session,adaptive,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -180,7 +180,15 @@ Feature `session`. HTTPS port only. The requesting device's own stream; no manag
 permission is needed, since a device only sees its own. 404 when it has no stream running.
 
 `stream`: the per-stream fields of `/api/v1/stats` (including `adaptive`), plus `width`,
-`height`, `target_fps`, `start_bitrate_kbps`, `codec` and `hdr`.
+`height`, `target_fps`, `start_bitrate_kbps`, `codec`, `hdr` and `tuning` (the goal the
+encoder was set up for, or empty).
+
+## Launch parameter norishineTuning
+
+Feature `tuning` (listed only while the `client_tuning` setting is on). `/launch` and
+`/resume` take an optional `norishineTuning=performance|balanced|quality`: the encoder preset
+for that stream ([AUTOTUNE.md](AUTOTUNE.md), "Encoder per goal"). Other values, and the
+parameter on hosts without the feature, are ignored.
 
 ## POST /api/v1/session/report
 

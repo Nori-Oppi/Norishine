@@ -359,6 +359,81 @@ namespace config {
     }
   }  // namespace sw
 
+  tuning_e tuning_from_view(std::string_view goal) {
+    if (!video.client_tuning) {
+      return tuning_e::host;
+    }
+    if (goal == "performance"sv) {
+      return tuning_e::performance;
+    }
+    if (goal == "balanced"sv) {
+      return tuning_e::balanced;
+    }
+    if (goal == "quality"sv) {
+      return tuning_e::quality;
+    }
+    return tuning_e::host;
+  }
+
+  std::string_view to_string(tuning_e tuning) {
+    switch (tuning) {
+      case tuning_e::performance:
+        return "performance"sv;
+      case tuning_e::balanced:
+        return "balanced"sv;
+      case tuning_e::quality:
+        return "quality"sv;
+      case tuning_e::host:
+        break;
+    }
+    return ""sv;
+  }
+
+  std::vector<std::pair<std::string, std::string>> tuned_options(std::string_view encoder, int video_format, tuning_e tuning) {
+    bool fast = tuning == tuning_e::performance;
+    if (!fast && tuning != tuning_e::quality) {
+      return {};
+    }
+    auto n = [](auto value) {
+      return std::to_string(static_cast<int>(value));
+    };
+
+    if (encoder == "amdvce"sv) {
+      switch (video_format) {
+        case 2:
+          return {{"quality", n(fast ? amd::quality_av1_e::speed : amd::quality_av1_e::quality)}};
+        case 1:
+          return {{"quality", n(fast ? amd::quality_hevc_e::speed : amd::quality_hevc_e::quality)}};
+        default:
+          return {{"quality", n(fast ? amd::quality_h264_e::speed : amd::quality_h264_e::quality)}};
+      }
+    }
+    if (encoder == "quicksync"sv) {
+      return {{"preset", n(fast ? qsv::veryfast : qsv::slow)}};
+    }
+    if (encoder == "software"sv) {
+      if (video_format == 2) {
+        return {{"preset", n(sw::svtav1_preset_from_view(fast ? "ultrafast"sv : "veryfast"sv))}};
+      }
+      return {{"preset", fast ? "ultrafast"s : "veryfast"s}};
+    }
+    return {};
+  }
+
+  nvenc::nvenc_config tuned_nvenc(const nvenc::nvenc_config &host, tuning_e tuning) {
+    auto config = host;
+    if (tuning == tuning_e::performance) {
+      config.quality_preset = 1;
+      config.two_pass = nvenc::nvenc_two_pass::disabled;
+    } else if (tuning == tuning_e::quality) {
+      config.quality_preset = std::max(host.quality_preset, 4);
+      if (config.two_pass == nvenc::nvenc_two_pass::disabled) {
+        config.two_pass = nvenc::nvenc_two_pass::quarter_resolution;
+      }
+    }
+    return config;
+  }
+
   namespace dd {
     video_t::dd_t::config_option_e config_option_from_view(const ::std::string_view value) {
 #define _CONVERT_(x) \
@@ -519,6 +594,7 @@ namespace config {
     "1920x1080x60",  // fallback_mode
     false, // isolated Display
     false, // ignore_encoder_probe_failure
+    true,  // client_tuning
   };
 
   audio_t audio {
@@ -1277,6 +1353,7 @@ namespace config {
 
     int_f(vars, "max_bitrate", video.max_bitrate);
     double_between_f(vars, "minimum_fps_target", video.minimum_fps_target, {0.0, 1000.0});
+    bool_f(vars, "client_tuning", video.client_tuning);
 
     string_f(vars, "fallback_mode", video.fallback_mode);
     bool_f(vars, "isolated_virtual_display_option", video.isolated_virtual_display_option);

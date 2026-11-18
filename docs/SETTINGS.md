@@ -81,6 +81,8 @@ Encoder, codecs and frame rate.
   <br>`max_bitrate` · default: No limit · advanced
 - **Minimum frame rate**: When nothing on screen changes, keep sending at least this many frames per second. Automatic suits most devices.
   <br>`minimum_fps_target` · default: 0.0 fps · advanced
+- **Let devices tune the encoder**: A device's Performance or Quality tuning picks a faster or a higher-quality encoder preset for its own stream. Balanced, and devices without tuning, use the encoder settings here.
+  <br>`client_tuning` · default: On · advanced
 - **Capture at the stream's frame rate**: Don't capture faster than the device asked for. Turning it off can cause lag on some devices.
   <br>`limit_framerate` · default: On · advanced
 - **Video encoder**: Automatic picks the best one. A graphics card you choose here must be the one your monitor is connected to.

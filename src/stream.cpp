@@ -2086,6 +2086,7 @@ namespace stream {
       result.hdr = session.config.monitor.dynamicRange != 0;
       result.state = state(session);
       result.metrics = session.metrics.snapshot();
+      result.tuning = session.config.monitor.tuning;
       if (session.adaptive) {
         result.adaptive = session.adaptive->state();
       }

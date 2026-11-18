@@ -43,7 +43,7 @@ TEST(ConfigSchemaTests, KeysAreUniqueAndComplete) {
     EXPECT_FALSE(s.category.empty()) << s.key;
     EXPECT_NE(s.platforms, 0u) << s.key;
   }
-  EXPECT_EQ(keys.size(), 106u);
+  EXPECT_EQ(keys.size(), 107u);
   EXPECT_EQ(find("dd_wa_hdr_toggle"), nullptr) << "dead setting: config.cpp never reads it";
 }
 

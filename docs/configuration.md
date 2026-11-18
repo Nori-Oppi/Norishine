@@ -2143,6 +2143,32 @@ editing the `conf` file in a text editor. Use the examples as reference.
     </tr>
 </table>
 
+### client_tuning
+
+<table>
+    <tr>
+        <td>Description</td>
+        <td colspan="2">
+            Let a client choose the encoder preset for its own stream with its tuning goal
+            (Norilight's Performance, Balanced or Quality). Performance uses the fastest preset,
+            Quality a slower, higher-quality one, and Balanced keeps the encoder settings here.
+            See [AUTOTUNE.md](AUTOTUNE.md).
+        </td>
+    </tr>
+    <tr>
+        <td>Default</td>
+        <td colspan="2">@code{}
+            enabled
+            @endcode</td>
+    </tr>
+    <tr>
+        <td>Example</td>
+        <td colspan="2">@code{}
+            client_tuning = enabled
+            @endcode</td>
+    </tr>
+</table>
+
 ### adaptive_bitrate
 
 <table>

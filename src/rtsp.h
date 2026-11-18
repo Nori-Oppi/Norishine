@@ -11,6 +11,7 @@
 #include <vector>
 
 // local includes
+#include "config.h"
 #include "crypto.h"
 #include "thread_safe.h"
 
@@ -55,6 +56,7 @@ namespace rtsp_stream {
     bool enable_sops;
     bool virtual_display;
     uint32_t scale_factor;
+    config::tuning_e tuning = config::tuning_e::host;  ///< norishineTuning: the client's goal for the encoder.
 
     std::optional<crypto::cipher::gcm_t> rtsp_cipher;
     std::string rtsp_url_scheme;

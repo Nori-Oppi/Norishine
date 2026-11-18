@@ -105,6 +105,7 @@ namespace config::schema {
         // Video
         integer("max_bitrate", "video", tier::advanced, ALL, 0, 0, INT_MAX_D),
         number("minimum_fps_target", "video", tier::advanced, ALL, 0, 0, 1000),
+        boolean("client_tuning", "video", tier::advanced, ALL, true),
         boolean("limit_framerate", "video", tier::advanced, ALL, true),
         choice("encoder", "video", tier::advanced, ALL, "", {{""}, {"nvenc", W | L}, {"quicksync", W | L}, {"amdvce", W}, {"vaapi", L}, {"videotoolbox", M}, {"software"}}),
         choice("capture", "video", tier::advanced, W | L, "", {{""}, {"ddx", W}, {"wgc", W}, {"nvfbc", L}, {"wlr", L}, {"kms", L}, {"x11", L}}),
