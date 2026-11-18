@@ -138,6 +138,14 @@ settings** adds the rarely needed ones to each page, and shows each setting's na
 Most changes take effect after the host restarts: **Save and restart** does both, **Save
 only** keeps them for the next restart. Ctrl+S saves.
 
+## Tuning
+
+Each stream's bitrate and error correction follow the network by themselves, for every
+client (**Adapt to the network**, Settings, Network and pairing; on by default). After a
+few streams the host may recommend encoder settings at the top of Settings, under **Recommended**:
+**Apply** changes them, **Undo** puts the earlier values back. Norilight's Tuning goal also
+picks the encoder preset for its own streams. Details in [AUTOTUNE.md](AUTOTUNE.md).
+
 ## Troubleshooting
 
 - **Close the running app**: when a client says an app is still running. Streams of it end.
@@ -186,6 +194,6 @@ isn't verified here.
 - [Settings](SETTINGS.md): every setting explained
 - [Features](FEATURES.md), with screenshots
 - [Known issues](KNOWN-ISSUES.md)
-- [Roadmap](ROADMAP.md)
+- [Roadmap](ROADMAP.md): what's done and what's next, ranked
 - [Management API](api.md), for client authors
 - [Development](DEVELOPMENT.md): building, installers and test hosts

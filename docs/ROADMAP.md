@@ -1,6 +1,7 @@
 # Norishine architecture decisions and roadmap
 
-Status key: **done**, **in progress**, **planned**. Updated 2026-11-18. Evidence for the
+Status key: **done**, **in progress**, **planned**. Updated 2026-11-18: phases 2–5 are done, and the next
+items are ranked under [Next](#next). Evidence for the
 decisions is in [PHASE1-RESEARCH.md](PHASE1-RESEARCH.md).
 
 ## Decisions
@@ -74,154 +75,152 @@ existing Apollo, Vibepollo or Sunshine installation on the same machine is untou
 
 ### D8. Platform scope
 Windows is the developed and tested target. Linux and macOS code is kept and not
-deliberately broken, but is not verified until CI exists for it.
+deliberately broken, but is not verified until CI exists for it. A Linux build is planned
+(N11): it starts with Linux CI, and Windows-only features (SudoVDA virtual displays, the
+installer, display restore) are marked as such rather than ported first.
 
-## Roadmap
+### D9. Reset
+A reset never deletes outright: configuration and state are moved to a dated backup folder
+next to them, then the host or client starts as on first run, in its setup wizard. Putting
+the folder back undoes the reset. On the host a reset is started from the web UI (signed
+in, with confirmation) or the command line, never from a paired client.
 
-### Phase 2: establish the baseline
-- **M0.1** Merge Apollo history (**done**); rename project identifiers and branding
-  without changing file formats or ports (**done**): service `NorishineService`,
-  install and config folder `Norishine`, firewall rule, logo and tray icons, web UI
-  text, default mDNS name. Kept: `APOLLO_*` app environment variables (so existing app
-  scripts work) and the Linux app ID `dev.lizardbyte.app.Sunshine`.
-- **M0.2** Clean Windows build (**done**; see `docs/DEVELOPMENT.md`); installer builds
-  locally and in CI and keeps the SudoVDA and ViGEmBus drivers shared with Apollo and
-  Vibepollo. Replacing Vibepollo tested on one machine. **Deferred** until after M1:
-  fresh install without Apollo or Vibepollo, the keep-both path (port 48989), and going
-  back (uninstall Norishine, reinstall Vibepollo, settings carried back).
-  Needed two fixes to Apollo itself and a newer FFmpeg for AMD encoders
-  (`docs/UPSTREAM-SYNC.md`).
-- **M0.3** Unit tests build and run, all pass (**done**); CI builds on Windows and runs
-  the tests (`.github/workflows/ci.yml`, **done**). Fixing the stale tests found one real
-  Apollo bug: display mode remapping by FPS never matched with the automatic refresh
-  rate option.
-- **M0.4** Port Sunshine security fixes, each with a test. **Done:** control packet
-  parsing, input packet validation, exact client certificate match, pairing request IDs
-  (adapted to OTP), log redaction, bounded hex parsing, duplicate client records, audio
-  and video UDP endpoints, URL opening, PATH writing. CSRF tokens follow in M3.
-- **M0.5** Smoke test streaming: Norilight pairs and streams the Desktop app (HEVC on
-  AMD AMF, D3D11VA decode) from a development host (**done**, loopback only), and from
-  an installed host over the network (**done**). Stock Moonlight: **deferred** until
-  after M1.
-- **M0.6** Permission defaults (**done**): the first paired device gets launch, view and
-  input only (was every permission); clipboard and server commands are always granted
-  explicitly. Checked end to end, with virtual displays, by `scripts/e2e/host_check.py`.
+## Done
 
-### Phase 3: settings and UI
-- **M1 (first feature milestone)** Host-owned settings schema with server-side
-  validation (**done**): schema table in C++ (`src/config_schema.cpp`) covering all 103
-  keys config.cpp reads (the 104th, `dd_wa_hdr_toggle`, is dead and left out),
-  `GET /api/v1/config/schema`, `GET /api/v1/config` (typed values, unknown and invalid
-  entries), `PATCH /api/v1/config` (validated partial updates with per-key errors,
-  rewriting only the changed lines), atomic writes with a `.bak` copy for the config,
-  state, credentials and apps files, and tests for all of it. config.cpp still parses the
-  file itself; a test keeps its keys and the schema identical. No visible UI change yet;
-  this is what both the new web UI and Norilight build on.
-- **M2** New settings UI on the schema (**done**): the settings page is rebuilt from
-  `GET /api/v1/config/schema` and saves with `PATCH /api/v1/config`
-  (`src_assets/common/assets/web/settings/`), on a shared Norilight-matched theme and
-  header (`web/ui/`, light and dark). Categories reworked into General, Display, Video,
-  Audio, Input, Network and pairing, Apps and commands, the encoders and Files. Search
-  covers every setting (titles, help and value names); Basic / Advanced switch;
-  confirmation before saving dangerous settings; per-key errors from the host shown at
-  each setting with a summary; a restart notice with a restart button; reset to default
-  per setting; settings that depend on another are indented and say when they have no
-  effect. Real editors for commands, key mappings and display mode remapping. The schema
-  gained optional `depends_on`, `value_titles` and category groups (additive); every
-  setting now has English help text and every choice a readable name (tested), and the
-  dead `dd_wa_hdr_toggle` strings are gone. Other pages keep their layout until M3; they
-  share the new header colours. Pages stay separate HTML entries rather than one
-  vue-router app, since the host serves each page at its own path.
-- **M3** Remaining pages, login hardening and CSRF (**done**). Every page now uses the
-  M2 theme and shell, and Bootstrap is gone from the web UI: home with host status, the
-  running app and active streams (device, address, resolution, frame rate, codec, HDR,
-  bitrate) with close and disconnect (`GET /api/v1/status`, now also with `sessions` for
-  paired clients); pairing by PIN from the client or one-time PIN from the host; a new
-  Devices page with permissions as plain choices (streaming level, input, extras, host
-  management), per-device display mode and commands; apps with an editor, cover search,
-  reordering, launch and close; troubleshooting with a live, filterable log and the
-  close / restart / display-reset / quit actions; account page. Sign-in: several
-  sessions at once, HttpOnly session cookie, CSRF token required on every change (and a
-  matching Origin), sessions that survive a restart of the host, per-address lockout
-  after failed sign-ins, PBKDF2 password hashes
-  (old ones converted at the next sign-in), sign out, and no more passwords kept in the
-  browser (`src/web_auth.*`, tested).
-- **M4** State file split and migrations; import from Apollo (**done**). Import from an
-  Apollo or Vibepollo install, and carrying settings back on uninstall, were done first
-  (`src_assets/windows/misc/migration/other-hosts.ps1`). The state now has versions and
-  one-way migrations (`src/state_store.*`): version 1 splits `sunshine_state.json` into
-  `state/host.json` (unique ID), `state/pairing.json` (paired devices) and
-  `state/credentials.json` (web UI account) on first start, keeping the old file as
-  `sunshine_state.json.v0.bak`; settings stay in `sunshine.conf`. An unreadable file is
-  never overwritten (nothing is saved that run), an interrupted migration completes on
-  the next start, files from a newer version are used as they are, and a separate
-  `credentials_file` stays where it is. Unique ID, pairings and the account carry over;
-  tested from Apollo-format files and on a dev host. The uninstaller's carry-back rebuilds
-  an Apollo-readable `sunshine_state.json`. Password hashes moved to PBKDF2 in M3.
+Phases 2 to 5 are finished. Details are in the linked docs and the git history.
 
-### Phase 4: Nori integration
-- **M5** Capability element in serverinfo; client-certificate authentication for
-  `/api/v1`; management permission bits and the UI to grant them (**done**: see
-  `docs/api.md`, "Management API for paired clients").
-- **M6** Norilight: host status and read-only settings view, then editing (**done**:
-  readable titles, help text and categories in the schema with `?locale=`,
-  `POST /api/v1/restart`, and a Host Settings page in Norilight that shows the status,
-  edits the settings with per-key errors and confirmation for dangerous ones, and
-  restarts the host; settings with lists or scripts stay read-only there).
-- **M7** Apps, clients, displays and active sessions managed from Norilight (**done**):
-  `/api/v1` calls for apps (list, add, change, remove, reorder, start, close), paired
-  devices (list, change, unpair, end a stream) and displays (list, reset saved changes),
-  on both ports, checked end to end (`scripts/e2e/manage_check.py`); Norilight's Manage
-  Host page uses them.
+| Milestone | What it gave | More |
+| --- | --- | --- |
+| M0.1–M0.6 Baseline | Apollo history merged, renamed to Norishine, clean Windows build, installer that replaces or sits next to Apollo and Vibepollo, CI with tests, Sunshine security fixes, safer permission defaults | [DEVELOPMENT.md](DEVELOPMENT.md), [UPSTREAM-SYNC.md](UPSTREAM-SYNC.md) |
+| M1 Settings schema | One C++ schema for all 103 settings, validated `/api/v1/config`, atomic writes with backups | [api.md](api.md) |
+| M2–M3 Web UI | Every page rebuilt on the schema, searchable settings, devices and permissions, live log; Bootstrap gone; hardened sign-in with CSRF and PBKDF2 | [GUIDE.md](GUIDE.md), [FEATURES.md](FEATURES.md) |
+| M4 State and migrations | State split into host, pairing and credentials files with versioned migrations; import from Apollo and Vibepollo, carry-back on uninstall | [KNOWN-ISSUES.md](KNOWN-ISSUES.md) |
+| M5–M7 Norilight integration | Capability element, client-certificate management API with permission bits; Norilight's Host Settings and Manage Host pages | [api.md](api.md) |
+| Updates | Update the host from the web UI or a paired client, checksum-checked | [GUIDE.md](GUIDE.md#updating) |
+| M8 Diagnostics | `GET /api/v1/stats` (host load, per-stream metrics), Stats tab in Norilight, repeatable benchmark with a baseline | [BENCHMARK.md](BENCHMARK.md) |
+| M9 Auto-tuning | Live bitrate and FEC adaptation for every client, Norilight's reports, Tuning goals with learned launch settings, encoder recommendations with Apply and Undo | [AUTOTUNE.md](AUTOTUNE.md) |
 
-### Phase 5: diagnostics and optimisation
-- **M8** Host stats and per-session metrics behind the API (**done**: the API is
-  done, `GET /api/v1/stats` on both ports with CPU, memory, GPU and encoder load and, per
-  stream, frame rate, bitrate, latency, send time and recovery requests; see
-  `docs/api.md`); a repeatable benchmark with a first baseline, measured before any tuning
-  ([BENCHMARK.md](BENCHMARK.md), `scripts/benchmark/`); Norilight's Manage Host page shows
-  host load and each stream on a Stats tab.
-- **M9** Auto-tuning ([AUTOTUNE.md](AUTOTUNE.md)): the best settings for each display, network
-  and machine, kept up to date while streaming (**done**).
-  - **M9.1** Live adaptation on the host (**done**): each stream's bitrate and error correction
-    follow the network (`src/adaptive.*`, settings `adaptive_bitrate`, `adaptive_min_bitrate`,
-    `adaptive_max_fec`), for every client; `GET /api/v1/session` and
-    `POST /api/v1/session/report` let a client see its own stream and report what it measures.
-  - **M9.2** Norilight reports its measurements during the stream and shows what the host does
-    in the performance overlay (**done**, Norilight #18).
-  - **M9.3** Launch settings (**done**): a Tuning goal per Norilight profile (Performance,
-    Balanced, Quality, Off) picks codec, HDR, V-sync, frame pacing and the start bitrate from
-    both machines' hardware, the display, the link and earlier streams to that host on that
-    network (learned per host and network); the host sets the encoder preset for the goal
-    (`norishineTuning`, setting `client_tuning`). Picks apply to one stream and never change
-    the profile, so there's nothing to roll back; Off turns them off.
-  - **M9.4** Host encoder setting recommendations from what earlier streams measured, with
-    preview and rollback (**done**): a faster preset when the encoder was the bottleneck, a
-    higher-quality one with room to spare and Quality clients, more error correction with
-    frequent loss (`src/recommend.*`, `/api/v1/recommendations`, `.../apply`, `.../rollback`),
-    shown with Apply and Undo in the web UI's settings and Norilight's Host Settings.
-- **M10** Measured improvements, each benchmarked before and after
-  ([BENCHMARK.md](BENCHMARK.md)).
-  - Error correction at stream start (**done**): the key frames a client asks for while its
-    decoder starts no longer raise error correction to 30 % for the stream's first half
-    minute (average 24.6 % to 20 % over the first minute).
-  - Display restore after crashes (**done**): the service undoes the display changes of a
-    host it had to kill, at once instead of at its next start (usually the next boot), and
-    the uninstaller does too (`sunshine.exe --restore-displays`,
-    [DISPLAY-RESTORE.md](DISPLAY-RESTORE.md)).
-  - Capture from a user-session helper (**designed**, not built:
-    [CAPTURE-HELPER.md](CAPTURE-HELPER.md)). WGC measured 0.6 ms lower than Desktop
-    Duplication, but its latency clock starts later, so the gain isn't shown yet; it needs a
-    client-side latency figure and a host installed as a service to test.
-  - Frame cap matched to the client (**not built**, measured): the host already encodes
-    no more frames than its own display shows (120 fps asked on a 60 Hz display: 53 fps and
-    the same encoder load as 60). A cap would only help a faster host display than the
-    client's, and would undo the clients' deliberate V-sync-off for high frame rates
-    ([BENCHMARK.md](BENCHMARK.md#m10-frame-cap-matched-to-the-client)).
-  - AMF path evaluation (**done**, nothing changed): on an RX 6700 XT at 1080p60 every
-    option measured within 0.5 ms of the others; the higher-quality ones cost about 4 points
-    of encoder load. The defaults (`ultralowlatency`, `balanced`) stay
-    ([BENCHMARK.md](BENCHMARK.md#m10-amf-options)).
+## In progress: M10 measured improvements
+
+Each one benchmarked before and after ([BENCHMARK.md](BENCHMARK.md)).
+
+- Error correction at stream start (**done**): start-up key frame requests no longer raise
+  FEC (average over the first minute 24.6 % to 20 %).
+- Display restore after crashes (**done**): the service and the uninstaller undo the display
+  changes of a host that had to be killed ([DISPLAY-RESTORE.md](DISPLAY-RESTORE.md)).
+- AMF options (**done**, nothing changed): every option within 0.5 ms of the others; the
+  defaults stay ([BENCHMARK.md](BENCHMARK.md#m10-amf-options)).
+- Frame cap matched to the client (**measured, not built**): the host already encodes no
+  more frames than its display shows; a cap would undo the clients' V-sync-off for high
+  frame rates ([BENCHMARK.md](BENCHMARK.md#m10-frame-cap-matched-to-the-client)).
+- Capture from a user-session helper (**designed, not built**): WGC measured 0.6 ms lower,
+  but proving it needs a client-side latency figure ([CAPTURE-HELPER.md](CAPTURE-HELPER.md)).
+
+## Next
+
+Ranked by importance against effort: cheap, important items first; large items, and items
+whose value depends on earlier ones, later. Effort: **S** days, **M** one to two weeks,
+**L** several weeks, **XL** a month or more. Norilight-only items are also in
+[Norilight's roadmap](https://github.com/Nori-Oppi/Norilight/blob/main/docs/ROADMAP.md);
+they're listed here so there's one order for both.
+
+| # | Item | Project | Effort | Importance | Needs |
+| --- | --- | --- | --- | --- | --- |
+| N1 | Reset button | Norilight | S | High | — |
+| N2 | Help links to a new `norilight-docs` repository | Norilight | S | Medium | the repository |
+| N3 | Setup wizard and reset button | Norishine | M | High | — |
+| N4 | Comparison test suite | Both | M–L | High | — |
+| N5 | Near-instant stream start | Both | L | Very high | N4 |
+| N6 | Auto-optimisation wizard | Both | M | High | N4 |
+| N7 | Linux build | Norilight | M | Medium | — |
+| N8 | Separate command-line builds | Both | M | Medium | — |
+| N9 | Change settings during a stream | Both | L | High | N5 |
+| N10 | Update the host without losing the stream | Both | L | Medium | N5, N9 |
+| N11 | Linux build | Norishine | XL | Medium | N4 |
+| N12 | Android build, for handhelds | Norilight | XL | Medium–high | N4 |
+| N13 | iOS build | Norilight | XL | Low | N12 |
+
+### N1. Reset button (Norilight) — S
+Settings › **Reset Norilight**: moves the settings to a backup (D9) and restarts into the
+first-start wizard. For debugging a broken setup without hunting for the settings file.
+
+### N2. Help links to `norilight-docs` — S
+Norilight's guide and help buttons still open moonlight-docs (Setup Guide,
+Troubleshooting, Fixing Hardware Decoding Problems, Gamepad Mapping). Create
+`Nori-Oppi/norilight-docs` with those pages rewritten for Norilight and Norishine, and
+point every link there.
+
+### N3. Setup wizard and reset button (Norishine) — M
+First start in the web UI, like Norilight's: create the sign-in, host name, virtual or
+physical display, a quick encoder check, pair the first device and choose its permissions,
+with an optional import when Apollo or Vibepollo is installed. Then **Reset Norishine**
+(Troubleshooting page, and `norishine --reset`): configuration, apps and state are moved to
+a backup (D9) and the host restarts into the wizard. Pairings and the sign-in go with it,
+so clients pair again.
+
+### N4. Comparison test suite — M–L
+Extends `scripts/benchmark/` into an unattended run that compares hosts (Norishine, Apollo,
+Vibepollo, Sunshine) and clients (Norilight, Moonlight) on the same machines and network:
+time to first frame, latency, frame pacing, loss recovery and encoder load. Hosts are
+installed side by side on their own ports (D7); each run gives one table, kept with the
+commit it measured. It comes early because N5, N6 and N11 are only worth doing with
+numbers to show for them.
+
+### N5. Near-instant stream start — L
+Measure each step from choosing an app to the first frame (launch request, display change
+or virtual display, encoder setup, RTSP handshake, first key frame, decoder start), then
+cut the slow ones. Likely candidates: reuse the previous stream's encoder probe instead of
+probing again, skip display changes that are already in place, keep the last session's
+virtual display for a while, and run independent steps at the same time. The target is set
+after measuring; resuming a running app should take well under a second.
+
+### N6. Auto-optimisation wizard — M
+One button in Norilight (and the web UI): short test streams per candidate setting (codec,
+resolution, frame rate, bitrate, encoder preset), measured with M8's stats, and the best
+saved as the profile's and the host's settings, with Undo. Builds on M9's tuning goals and
+recommendations, which today only adjust after real streams.
+
+### N7. Linux build (Norilight) — M
+Moonlight's Linux build code is kept, so this is mostly CI, an AppImage or Flatpak, and
+checking Norilight's own features there (several stream windows, monitor targeting,
+clipboard; the screenshot pass-through stays Windows-only).
+
+### N8. Separate command-line builds — M
+`norilight-cli`: pair, list, stream and quit without the Qt GUI, for scripts and headless
+machines. A Norishine CLI: status, settings, apps, devices and updates through `/api/v1`,
+with a paired certificate or the web sign-in. The test suite (N4) drives both.
+
+### N9. Change settings during a stream — L
+Without reconnecting, in steps: host settings that don't need a restart apply at once;
+bitrate, FEC and encoder preset change live (the adaptive controller already rebuilds the
+encoder for bitrate, see [AUTOTUNE.md](AUTOTUNE.md)); then resolution, frame rate and codec
+through a new Norishine control message that rebuilds encoder and decoder behind one key
+frame. Additive only (D4): Norilight with Norishine; other clients reconnect as they do now.
+
+### N10. Update the host without losing the stream — L
+An update replaces the host process, so streams end now. First step: Norilight waits for
+the host to come back and reconnects to the same app by itself, which N5 makes quick. A
+real handover (the new process taking over the running session) is only looked at after
+that, if the reconnect is still noticeable.
+
+### N11. Linux build (Norishine) — XL
+Sunshine's Linux capture (KMS, wlroots, X11) and encoders are still in the tree, but none of
+Norishine's additions have been built there: state store, web sign-in, adaptive bitrate,
+stats, recommendations, updates. Linux CI first, then packages (Flatpak, deb or AppImage)
+and a systemd service. Virtual displays and display restore stay Windows-only at first.
+
+### N12. Android build, for handhelds (Norilight) — XL
+Moonlight PC doesn't target Android. Two ways: port Norilight with Qt for Android (one
+codebase, but decoding, input and controllers need new work), or start from Artemis, the
+Android client whose Apollo features Norilight follows, and add Norilight's features
+(profiles, tuning reports, host management). A short spike decides; Artemis is likely the
+faster route. For handhelds (Retroid, AYN Odin, Ayaneo): controller-first navigation,
+profiles matched to the built-in screen, and a battery-aware tuning goal.
+
+### N13. iOS build (Norilight) — XL
+Last: another separate codebase (Moonlight iOS or Qt for iOS), and unsigned nightlies can't
+be installed on iOS without a developer account or sideloading. Done after Android, reusing
+its decisions.
 
 ## Not planned
 WebRTC browser streaming, PyroWave, Playnite and Lutris integration, custom gamepad
