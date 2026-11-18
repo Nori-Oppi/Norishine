@@ -65,7 +65,13 @@ loopback), so the network adds nothing.
 - Host: development build of `master` at `e19a2afc`, all encoder and network settings at
   their defaults (`amd_quality` balanced, `fec_percentage` 20, `adaptive_bitrate` on).
 - PC: AMD Ryzen 7 5700X, 32 GB, AMD Radeon RX 6700 XT (encoder `amdvce`), Windows 11.
-- Client: Norilight `main` at `74e179a8` (portable), Balanced tuning goal.
+- Client: Norilight `main` at `74e179a8` (portable). Its Tuning goal changes the host's
+  encoder preset for the stream ([AUTOTUNE.md](AUTOTUNE.md)), so each table names it.
+
+The benchmark doesn't set the goal: it streams with the client profile's. Note it with the
+results (`--label`); the host's log says which one a stream used (`Tuning (performance)`).
+
+**Performance goal** (the host used AMF Speed for these streams):
 
 | Run | fps (min / avg / max) | Latency ms (min / avg / max) | Send ms avg | Bitrate kbps avg | Recovery | Host CPU % avg | Encoder % avg |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -73,13 +79,25 @@ loopback), so the network adds nothing.
 | 2 | 41.6 / 51.7 / 58.8 | 2.50 / 4.64 / 10.47 | 0.14 | 6299 | 0 | 52.3 | 39.3 |
 | 3 | 50.0 / 56.2 / 59.0 | 2.07 / 4.40 / 6.40 | 0.13 | 7272 | 0 | 42.6 | 42.8 |
 
+**Balanced goal** (the host's own preset, `amd_quality` balanced). Measured the same day with
+the M9.4 build, which records each stream for its recommendations but encodes and sends the
+same way:
+
+| Run | fps (min / avg / max) | Latency ms (min / avg / max) | Send ms avg | Bitrate kbps avg | Recovery | Host CPU % avg | Encoder % avg |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 38.4 / 49.6 / 57.8 | 2.63 / 4.65 / 6.76 | 0.14 | 5866 | 0 | 54.4 | 38.4 |
+| 2 | 47.2 / 53.8 / 58.4 | 1.99 / 4.34 / 8.00 | 0.12 | 6851 | 0 | 35.8 | 40.9 |
+| 3 | 52.6 / 56.5 / 58.6 | 1.86 / 4.23 / 7.06 | 0.11 | 7149 | 0 | 32.7 | 43.1 |
+
 What it shows:
 
 - The encoder keeps up: about 4.5 ms from capture to network, under a third of the 16.7 ms
-  frame interval, at about 40 % encoder load. The controller never saw it fall behind.
+  frame interval, at about 40 % encoder load. The controller never saw it fall behind. Speed
+  and Balanced presets measure the same here, within the spread between runs.
 - The frame rate is below 60 because the host's desktop doesn't change 60 times a second
-  everywhere; it follows the motion window, and dips when the host's CPU is busy (run 2).
-- Nothing was lost on loopback, so error correction stayed at 20 %. The adaptive bitrate
+  everywhere; it follows the motion window, and dips when the host's CPU is busy (Performance run 2, Balanced run 1).
+- Nothing was lost on loopback. Error correction still went to 30 % in each stream's first
+  seconds and back to 20 % about 20 seconds later; the cause isn't known yet. The adaptive bitrate
   stayed at the stream's start: 14988 kbps, the 20000 the client asked for less room for
   error correction and audio.
 - Bitrate sent is much lower than the target: the test picture compresses well.

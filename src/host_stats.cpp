@@ -201,24 +201,50 @@ namespace host_stats {
 
         last = sample;
         result = stats;
+        result_at = now;
         return stats;
+      }
+
+      std::optional<stats_t> latest(std::chrono::steady_clock::duration max_age) {
+        std::lock_guard lg {mutex};
+        if (!result_at || std::chrono::steady_clock::now() - *result_at > max_age) {
+          return std::nullopt;
+        }
+        return result;
       }
 
     private:
       std::mutex mutex;
       std::optional<sample_t> last;
       stats_t result;
+      std::optional<std::chrono::steady_clock::time_point> result_at;
       gpu_query_t gpu;
     };
 #endif
   }  // namespace
 
+#ifdef _WIN32
+  namespace {
+    sampler_t &sampler() {
+      static sampler_t instance;
+      return instance;
+    }
+  }  // namespace
+#endif
+
   stats_t current() {
 #ifdef _WIN32
-    static sampler_t sampler;
-    return sampler.current();
+    return sampler().current();
 #else
     return {};
+#endif
+  }
+
+  std::optional<stats_t> latest(std::chrono::steady_clock::duration max_age) {
+#ifdef _WIN32
+    return sampler().latest(max_age);
+#else
+    return std::nullopt;
 #endif
   }
 

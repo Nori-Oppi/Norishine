@@ -3,6 +3,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, 
 import AppShell from '../ui/AppShell.vue'
 import { api, restartHost } from '../ui/api'
 import SettingRow from './SettingRow.vue'
+import Recommendations from './Recommendations.vue'
 import HelpLink from '../ui/HelpLink.vue'
 import {
   RESET, computeChange, effective, formatValue, isDependencyMet, matches, same, searchWords,
@@ -274,6 +275,21 @@ async function doSave() {
     saving.value = false
   }
   return false
+}
+
+// A recommendation was applied or undone: take the new values as the baseline.
+async function onRecommendationChange(restartRequired) {
+  if (restartRequired) {
+    restartNeeded.value = true
+  }
+  try {
+    const values = await api('./api/v1/config')
+    stored.value = values.values || {}
+    invalid.value = values.invalid || {}
+    unknown.value = values.unknown || {}
+  } catch {
+    // The next load shows it.
+  }
 }
 
 async function restart() {
@@ -574,6 +590,8 @@ const rowProps = (s, inSearch) => ({
         </div>
 
         <template v-else-if="schema">
+          <Recommendations v-if="!searching" :by-key="byKey" @changed="onRecommendationChange" />
+
           <!-- Search results, across all categories -->
           <template v-if="searching">
             <p class="small muted results-count">{{ $t('settings.result_count', { n: resultCount }, resultCount) }}</p>

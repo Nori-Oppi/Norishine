@@ -109,7 +109,7 @@ by default, only per device from the web UI (paired devices, "Manage"):
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,status,stats,session,adaptive,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,status,stats,session,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -173,6 +173,36 @@ performance counters. `encoder` is as in `/api/v1/status`.
 | `client_reports` | The client sent a report in the last 3 seconds |
 | `host_limited`, `client_limited` | The host can't encode, or the client can't decode, as fast as asked; the bitrate isn't raised meanwhile |
 | `base_rtt_ms` | Lowest round-trip time the client reported in the last minute, or null |
+
+## GET /api/v1/recommendations
+@copydoc confighttp::getRecommendationsV1()
+
+Feature `recommendations`. On both ports (`manage_read` on the HTTPS port). Recommended
+encoder settings from what earlier streams on this host measured
+([AUTOTUNE.md](AUTOTUNE.md), "Host settings"):
+
+| Field | Meaning |
+| --- | --- |
+| `encoder` | The encoder they are for (as in `/api/v1/status`; before the host's first encoder check, the one the last stream used) |
+| `streams` | Streams recorded for it (up to 10) |
+| `recommendations` | One entry per setting: `key`, `current` and `recommended` (typed as in `/api/v1/config`), `reason` (`encoder_limited`, `headroom` or `loss`), `streams` (how many it is based on), `restart_required` |
+| `applied` | What the last apply changed, for undo, or null: `at` (Unix time) and `settings`, each with `key`, `previous`, `value` (what apply set) and `current` |
+
+## POST /api/v1/recommendations/apply
+
+`{"keys": ["nvenc_preset", ...]}` applies those recommendations; an empty body or `{}`
+applies all of them. Needs `manage_write` on the HTTPS port (and the CSRF header on the web
+UI port). The change goes through the same path as `PATCH /api/v1/config` and answers the
+same way (`changed`, `restart_required`). The values from before are kept (in
+`state/recommendations.json`) until undone; applying again keeps the oldest ones, so one
+undo goes all the way back. 409 when a key has no recommendation or there's nothing to
+apply, 400 for a malformed body.
+
+## POST /api/v1/recommendations/rollback
+
+Puts back the values from before the last apply: settings that weren't in the config file
+are removed again. A setting changed since the apply is left as it is and listed in
+`skipped`. Answers as apply; 409 when there is nothing to undo.
 
 ## GET /api/v1/session
 

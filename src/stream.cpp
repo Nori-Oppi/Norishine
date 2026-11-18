@@ -27,11 +27,13 @@ extern "C" {
 #include "crypto.h"
 #include "display_device.h"
 #include "globals.h"
+#include "host_stats.h"
 #include "input.h"
 #include "logging.h"
 #include "network.h"
 #include "platform/common.h"
 #include "process.h"
+#include "recommend.h"
 #include "stream.h"
 #include "sync.h"
 #include "system_tray.h"
@@ -432,6 +434,7 @@ namespace stream {
 
     stream_metrics::recorder_t metrics;
     std::unique_ptr<adaptive::controller_t> adaptive;  ///< Empty when adaptive_bitrate is off.
+    std::unique_ptr<recommend::recorder_t> summary;  ///< For the host's setting recommendations; empty for input-only streams.
   };
 
   /**
@@ -979,6 +982,36 @@ namespace stream {
     }
   }
 
+  /**
+   * @brief Note this second of the stream for the host's setting recommendations (recommend.h).
+   */
+  void summarize(session_t &session, std::chrono::steady_clock::time_point now) {
+    // Host load is read on the task pool: the first reading after a pause takes a moment.
+    static std::atomic<std::int64_t> last_load_request {0};
+    auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    auto previous = last_load_request.load(std::memory_order_relaxed);
+    if (now_ms - previous >= 2000 && last_load_request.compare_exchange_strong(previous, now_ms)) {
+      task_pool.push([]() {
+        host_stats::current();
+      });
+    }
+
+    auto metrics = session.metrics.snapshot(now);
+    recommend::tick_t tick;
+    tick.fps = metrics.fps;
+    if (metrics.latency_ms) {
+      tick.latency_ms = metrics.latency_ms->avg;
+    }
+    tick.recovery_total = metrics.key_frame_requests + metrics.ref_invalidations;
+    if (auto load = host_stats::latest(std::chrono::seconds(5))) {
+      tick.encoder_percent = load->encoder_percent;
+    }
+    if (session.adaptive) {
+      tick.fec_percent = session.adaptive->fec_percent();
+    }
+    session.summary->tick(tick, now);
+  }
+
   void controlBroadcastThread(control_server_t *server) {
     server->map(packetTypes[IDX_PERIODIC_PING], [](session_t *session, const std::string_view &payload) {
       BOOST_LOG(verbose) << "type [IDX_PERIODIC_PING]"sv;
@@ -1241,6 +1274,9 @@ namespace stream {
 
             if (session->adaptive && session->state.load(std::memory_order_relaxed) == session::state_e::RUNNING) {
               adapt(*session, now);
+            }
+            if (session->summary && session->state.load(std::memory_order_relaxed) == session::state_e::RUNNING) {
+              summarize(*session, now);
             }
           }
 
@@ -2238,6 +2274,13 @@ namespace stream {
         platf::streaming_will_stop();
       }
 
+      if (session.summary) {
+        auto ended = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        if (auto summary = session.summary->finish(std::string {config::to_string(session.config.monitor.tuning)}, recommend::running_settings(), ended)) {
+          recommend::store().record(std::string {video::active_encoder_name()}, *summary);
+        }
+      }
+
       BOOST_LOG(debug) << "Session ended"sv;
     }
 
@@ -2335,6 +2378,9 @@ namespace stream {
         settings.base_fec = config::stream.fec_percentage;
         settings.max_fec = std::max(config::stream.adaptive_max_fec, config::stream.fec_percentage);
         session->adaptive = std::make_unique<adaptive::controller_t>(settings, config.monitor.bitrate, config.monitor.framerate, video::live_bitrate_supported());
+      }
+      if (!config.monitor.input_only) {
+        session->summary = std::make_unique<recommend::recorder_t>(config.monitor.framerate);
       }
       session->video.lowseq = 0;
       session->video.ping_payload = launch_session.av_ping_payload;

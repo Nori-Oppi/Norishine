@@ -18,6 +18,7 @@
 #include "main.h"
 #include "nvhttp.h"
 #include "process.h"
+#include "recommend.h"
 #include "state_store.h"
 #include "system_tray.h"
 #include "upnp.h"
@@ -190,6 +191,7 @@ int main(int argc, char *argv[]) {
 
   // Before anything reads or writes the paired devices or the web UI account.
   state_store::init();
+  recommend::init(config::sunshine.config_file);
 
   if (!config::sunshine.cmd.name.empty()) {
     auto fn = cmd_to_func.find(config::sunshine.cmd.name);
