@@ -108,7 +108,8 @@ that stream only; the profile is never changed. Inputs:
   profile's maximum.
 - After a stream to that host on that network: if the host had to lower the bitrate, start at
   what it held (×1.0, 1.2 or 1.3 by goal); if it never had to, start 25 % higher than last
-  time, so the start bitrate climbs until the network says stop.
+  time, so the start bitrate climbs until the network says stop. Performance never climbs
+  past its own start.
 - Other hosts can't lower the bitrate during a stream, so the start stays near the
   recommended bitrate: ×0.75 (Performance), 1 or 1.25 (Quality).
 
