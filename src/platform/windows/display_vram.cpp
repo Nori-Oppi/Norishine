@@ -1085,7 +1085,7 @@ namespace platf::dxgi {
       }
 
       auto nvenc_colorspace = nvenc::nvenc_colorspace_from_sunshine_colorspace(colorspace);
-      if (!nvenc_d3d->create_encoder(config::video.nv, client_config, nvenc_colorspace, buffer_format)) {
+      if (!nvenc_d3d->create_encoder(config::tuned_nvenc(config::video.nv, client_config.tuning), client_config, nvenc_colorspace, buffer_format)) {
         return false;
       }
 

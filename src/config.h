@@ -11,7 +11,9 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 // local includes
@@ -151,6 +153,7 @@ namespace config {
     std::string fallback_mode;
     bool isolated_virtual_display_option;
     bool ignore_encoder_probe_failure;
+    bool client_tuning;  ///< Let clients pick the encoder speed/quality per stream (norishineTuning).
   };
 
   struct audio_t {
@@ -303,6 +306,33 @@ namespace config {
   };
 
   extern video_t video;
+
+  /**
+   * @brief A client's tuning goal for one stream (launch parameter norishineTuning).
+   *        Balanced keeps the host's encoder settings.
+   */
+  enum class tuning_e : int {
+    host = 0,  ///< None asked for, or client_tuning is off: the host's settings.
+    performance = 1,  ///< Fastest encoder preset.
+    balanced = 2,  ///< The host's settings.
+    quality = 3,  ///< A slower, higher-quality encoder preset.
+  };
+
+  tuning_e tuning_from_view(std::string_view goal);
+  std::string_view to_string(tuning_e tuning);
+
+  /**
+   * @brief FFmpeg options that replace the host's for a tuning goal.
+   * @param encoder The encoder's name (video::encoder_t::name).
+   * @param video_format 0 H.264, 1 HEVC, 2 AV1.
+   * @return Empty for the host's settings, or for encoders without presets.
+   */
+  std::vector<std::pair<std::string, std::string>> tuned_options(std::string_view encoder, int video_format, tuning_e tuning);
+
+  /**
+   * @brief NVENC settings for a tuning goal, starting from the host's.
+   */
+  nvenc::nvenc_config tuned_nvenc(const nvenc::nvenc_config &host, tuning_e tuning);
   extern audio_t audio;
   extern stream_t stream;
   extern nvhttp_t nvhttp;

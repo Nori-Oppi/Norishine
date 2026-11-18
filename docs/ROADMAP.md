@@ -188,10 +188,14 @@ deliberately broken, but is not verified until CI exists for it.
     `POST /api/v1/session/report` let a client see its own stream and report what it measures.
   - **M9.2** Norilight reports its measurements during the stream and shows what the host does
     in the performance overlay (**done**, Norilight #18).
-  - **M9.3** Launch settings: capability discovery on both sides (display, decoder, encoder,
-    network) and "Auto" picks in Norilight's profiles, with preview and rollback.
-  - **M9.4** Learning between streams (start bitrate per host and network) and host encoder
-    setting recommendations, with preview and rollback.
+  - **M9.3** Launch settings (**done**): a Tuning goal per Norilight profile (Performance,
+    Balanced, Quality, Off) picks codec, HDR, V-sync, frame pacing and the start bitrate from
+    both machines' hardware, the display, the link and earlier streams to that host on that
+    network (learned per host and network); the host sets the encoder preset for the goal
+    (`norishineTuning`, setting `client_tuning`). Picks apply to one stream and never change
+    the profile, so there's nothing to roll back; Off turns them off.
+  - **M9.4** Host encoder setting recommendations from what earlier streams measured, with
+    preview and rollback.
 - **M10** Measured improvements: display restore after crashes, capture from a
   user-session helper, frame cap matched to the client, AMF path evaluation.
 

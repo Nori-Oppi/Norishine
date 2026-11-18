@@ -72,27 +72,73 @@ Checks: `tests/unit/test_adaptive.cpp`.
 Reports older than 3 s are ignored, so a client that stops reporting falls back to host-only
 signals.
 
+## Tuning goals
+
+Each Norilight profile has a **Tuning** goal: **Performance**, **Balanced** (the default),
+**Quality** or **Off**. It steers every choice below; Off leaves the profile's settings as
+they are.
+
+| | Performance | Balanced | Quality |
+| --- | --- | --- | --- |
+| Codec (when the profile's codec is automatic) | HEVC if both sides do it in hardware | HEVC if both sides do it in hardware | AV1 if both sides do it in hardware, else HEVC |
+| HDR | Off | Profile's setting | On when the display shows HDR and both sides can do 10-bit |
+| V-sync and frame pacing | Off | Profile's settings | On |
+| Start bitrate | Less | | More |
+| Host encoder preset | Fastest | Host's settings | Higher quality |
+
 ## Launch settings (Norilight)
 
-**Planned.** Norilight's "Auto" choice for a profile setting picks it at each launch:
+**Done.** At each launch Norilight looks at both machines and picks the settings above for
+that stream only; the profile is never changed. Inputs:
 
 | Input | Where it comes from |
 | --- | --- |
-| Display resolution, refresh rate, HDR | Norilight's display list (Windows and macOS) |
-| Decoder: hardware support per codec, 10-bit, 4:4:4, maximum resolution | Norilight's decoder probe (D3D11VA, DXVA2, VideoToolbox) |
-| Host encoder: codecs, HDR, 4:4:4 | serverinfo (`ServerCodecModeSupport`), plus `encoder` from `/api/v1/status` |
-| Network: wired or wireless, link speed, round-trip time | The client OS, and a timed request to the host |
-| Earlier streams to this host on this network | Norilight, from `GET /api/v1/session` at the end of each stream |
+| Display resolution and refresh rate | The target monitor (the profile's "match the monitor" options) |
+| Display HDR | Windows: the monitor's DXGI output colour space (HDR on in Windows settings); macOS: the screen's extended dynamic range |
+| Decoder: hardware HEVC, AV1, 10-bit | Norilight's decoder probe at the stream's resolution and frame rate (D3D11VA, DXVA2, VideoToolbox) |
+| Host encoder: HEVC, AV1, 10-bit | serverinfo (`ServerCodecModeSupport`, `MaxLumaPixelsHEVC`) |
+| Link: Ethernet, Wi-Fi, other (VPN, tunnel) | The local interface that routes to the host |
+| Earlier streams to this host on this network | Norilight's settings (`autotune` group), see below |
 
-Picks, most important first: resolution and frame rate of the display the stream opens on
-(capped by decoder and encoder limits), the most efficient codec both sides do in hardware,
-HDR when display, decoder and encoder all can, and a start bitrate from resolution, frame rate
-and codec, capped by the link and by what earlier streams on this network sustained.
-Changes are shown before they're saved, and the previous values can be restored.
+**Start bitrate**, when the profile's bitrate is the recommended one:
+
+- Hosts that adapt (Norishine, feature `adaptive`): the recommended bitrate (×1.25 for HDR),
+  times 2.5 on Ethernet or 1.5 on Wi-Fi and other links, times 0.6 (Performance), 1 or 1.4
+  (Quality). Capped at 300 Mbps (Ethernet), 150 Mbps (Wi-Fi), 100 Mbps (other) and the
+  profile's maximum.
+- After a stream to that host on that network: if the host had to lower the bitrate, start at
+  what it held (×1.0, 1.2 or 1.3 by goal); if it never had to, start 25 % higher than last
+  time, so the start bitrate climbs until the network says stop. Performance never climbs
+  past its own start.
+- Other hosts can't lower the bitrate during a stream, so the start stays near the
+  recommended bitrate: ×0.75 (Performance), 1 or 1.25 (Quality).
+
+**Learning.** At the end of a stream of 30 seconds or more, Norilight keeps, per host and per
+network (link type and subnet), what the host sustained: the median bitrate after the first
+seconds if it lowered it, otherwise the start bitrate. Two limited streams in a row are
+averaged. The network is identified without sending anything.
+
+Checks: `tests/autotune` in Norilight.
+
+## Encoder per goal (Norishine)
+
+**Done.** Norilight sends its goal with the launch request (`norishineTuning`, feature
+`tuning`), and the host picks the encoder preset for that stream only:
+
+| Encoder | Performance | Quality |
+| --- | --- | --- |
+| NVENC | P1, single pass | At least P4, two-pass (quarter resolution) |
+| AMD AMF | Speed | Quality |
+| Intel Quick Sync | veryfast | slow |
+| Software x264/x265 | ultrafast | veryfast |
+| Software SVT-AV1 | 12 | 10 |
+
+Balanced keeps the host's settings, as do VA-API and VideoToolbox. `client_tuning` (on by
+default) turns this off. Checks: `tests/unit/test_tuning.cpp`.
 
 ## Host settings (Norishine)
 
-**Planned.** Recommendations for encoder settings from the GPU, the encoder and the load
+**Planned (M9.4).** Recommendations for encoder settings from the GPU, the encoder and the load
 earlier streams measured (for example a faster NVENC preset when the encoder was the
 bottleneck), shown with the current value and applied with `PATCH /api/v1/config`, with
 the previous values kept for undo.

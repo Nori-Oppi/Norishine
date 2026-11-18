@@ -262,6 +262,8 @@
     "fallback_mode_error": "Invalid fallback mode. Format: [Width]x[Height]x[FPS]",
     "fec_percentage": "Error correction",
     "fec_percentage_desc": "Extra data sent to repair lost packets. Raise it on unreliable Wi-Fi; it uses more bandwidth.",
+    "client_tuning": "Let devices tune the encoder",
+    "client_tuning_desc": "A device's Performance or Quality tuning picks a faster or a higher-quality encoder preset for its own stream. Balanced, and devices without tuning, use the encoder settings here.",
     "adaptive_bitrate": "Adapt to the network",
     "adaptive_bitrate_desc": "During each stream, lower the bitrate and raise error correction when the network can't keep up, then return to the device's bitrate when it can. The device's bitrate is never exceeded.",
     "adaptive_min_bitrate": "Lowest adapted bitrate",

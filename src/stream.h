@@ -75,6 +75,7 @@ namespace stream {
       state_e state = state_e::STOPPED;
       stream_metrics::snapshot_t metrics;  ///< Measured frame rate, bitrate, latency and recovery.
       std::optional<adaptive::state_t> adaptive;  ///< Bitrate and error correction now, when adapting.
+      config::tuning_e tuning = config::tuning_e::host;  ///< The client's tuning goal for the encoder.
     };
 
     info_t describe(session_t &session);
