@@ -87,7 +87,7 @@ in, with confirmation) or the command line, never from a paired client.
 
 ## Done
 
-Phases 2 to 5 are finished, and so are N1 to N6 and N14. Details are in the linked docs and the git history.
+Phases 2 to 5 are finished, and so are N1 to N6, N9, N10 and N14. Details are in the linked docs and the git history.
 
 | Milestone | What it gave | More |
 | --- | --- | --- |
@@ -105,6 +105,8 @@ Phases 2 to 5 are finished, and so are N1 to N6 and N14. Details are in the link
 | N5 Near-instant stream start | Host and Norilight log every step from choosing the app to the first frame; the host no longer probes every encoder again on the first stream after it starts, and Norilight opens the audio device once, in the background, and checks each decoder once. Launch 1060 → 895 ms, resume 975 → 824 ms, first launch 2228 → 1080 ms; `scripts/benchmark/start_time.py` measures it | [BENCHMARK.md](BENCHMARK.md#stream-start-start_timepy) |
 | N6 Optimise | Norilight's Optimise (a Norishine host's menu): short test streams of the host's test picture per codec, then lower frame rate or resolution if needed, then higher bitrates; the profile's Tuning goal picks among those that keep up, and Save writes it to the profile with Undo. The host's encoder test (`/api/v1/optimise`, Test encoder in the web UI) times each encoder preset on the test picture and applies the best, undone like the recommendations | [Norilight Guide](https://github.com/Nori-Oppi/norilight-docs/wiki/Norilight-Guide#optimise), [api.md](api.md#get-apiv1optimise) |
 | N14 Fewer pacer drops (Norilight) | The full-queue drops all came from the first second of a stream: the decoder starts after the stream, so it began with a backlog of stale frames. A new decoder now shows its first frame and skips that backlog for a fresh key frame. Dropped frames 0.08 → 0.03 % in the benchmark check | [BENCHMARK.md](BENCHMARK.md#dropped-frames-norilight-counted-drops-moonlight-620-doesnt) |
+| N9 Settings during a stream | Host settings that need no restart apply at once, in running streams too; a client changes its stream's bitrate, error correction, encoder preset, resolution, frame rate and codec without reconnecting (`POST /api/v1/session/settings`, control message `0x3100` for a new format); Norilight's Stream settings menu (Ctrl+Alt+Shift+O). Other clients reconnect as before | [AUTOTUNE.md](AUTOTUNE.md#settings-during-a-stream-n9), [api.md](api.md#post-apiv1sessionsettings) |
+| N10 Through a host update | The host tells streaming clients it restarts (update or settings restart) and names each run (`RunId`); Norilight waits and starts the same app again by itself, 0.5 s after the host answers. A real handover isn't planned: the gap is the host's own downtime | [BENCHMARK.md](BENCHMARK.md#reconnect-after-a-host-restart-n10) |
 | N2 Benchmark check | `scripts/benchmark/compare.py`: Norishine with Norilight against stored Apollo, Vibepollo and Sunshine results with Moonlight, per metric better, same or worse; run after every streaming change | [BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine) |
 
 ## In progress: M10 measured improvements
@@ -135,8 +137,6 @@ they're listed here so there's one order for both.
 | --- | --- | --- | --- | --- | --- |
 | N7 | Linux build | Norilight | M | Medium | — |
 | N8 | Separate command-line builds | Both | M | Medium | — |
-| N9 | Change settings during a stream | Both | L | High | — |
-| N10 | Update the host without losing the stream | Both | L | Medium | N9 |
 | N11 | Linux build | Norishine | XL | Medium | — |
 | N12 | Android build, for handhelds | Norilight | XL | Medium–high | — |
 | N13 | iOS build | Norilight | XL | Low | N12 |
@@ -147,6 +147,8 @@ whenever there's room, between the items above:
 | # | Item | Project | Effort | Importance |
 | --- | --- | --- | --- | --- |
 | N15 | Benchmark streams that show no picture | Norishine (check script) | S | Low |
+| N16 | Steadier benchmark runs | Norishine (check script) | S | Medium |
+| N17 | Virtual display follows a resolution change during a stream | Norishine | S–M | Low |
 
 ### N7. Linux build (Norilight) — M
 Moonlight's Linux build code is kept, so this is mostly CI, an AppImage or Flatpak, and
@@ -157,19 +159,6 @@ clipboard; the screenshot pass-through stays Windows-only).
 `norilight-cli`: pair, list, stream and quit without the Qt GUI, for scripts and headless
 machines. A Norishine CLI: status, settings, apps, devices and updates through `/api/v1`,
 with a paired certificate or the web sign-in. The benchmark check (N2) can drive both.
-
-### N9. Change settings during a stream — L
-Without reconnecting, in steps: host settings that don't need a restart apply at once;
-bitrate, FEC and encoder preset change live (the adaptive controller already rebuilds the
-encoder for bitrate, see [AUTOTUNE.md](AUTOTUNE.md)); then resolution, frame rate and codec
-through a new Norishine control message that rebuilds encoder and decoder behind one key
-frame. Additive only (D4): Norilight with Norishine; other clients reconnect as they do now.
-
-### N10. Update the host without losing the stream — L
-An update replaces the host process, so streams end now. First step: Norilight waits for
-the host to come back and reconnects to the same app by itself, which N5 makes quick. A
-real handover (the new process taking over the running session) is only looked at after
-that, if the reconnect is still noticeable.
 
 ### N11. Linux build (Norishine) — XL
 Sunshine's Linux capture (KMS, wlroots, X11) and encoders are still in the tree, but none of
@@ -197,6 +186,18 @@ happens with every host and client alike and the retry always works, but it make
 and less predictable. Change how the script places the window (for example wait for the first
 frame, or start the client on the target position) so streams don't need a retry. See
 [BENCHMARK.md](BENCHMARK.md#streams-that-show-no-picture).
+
+### N16. Steadier benchmark runs (check script) — S
+On 2026-11-19 single runs of the check, unchanged master included, showed 100–200 stutters a
+minute or 10 fps less at 5 % loss, and the host's capture-to-send figure switched between about
+2.3 and 4.1 ms from run to run. With three runs one such run can make the verdict "worse"
+(N9's PRs explain it with a master run next to them). More runs, dropping the worst one, or
+finding what the bad runs have in common would make the verdict trustworthy again.
+
+### N17. Virtual display follows a resolution change — S–M
+A resolution changed during a stream (N9) scales the captured display. A virtual display made
+for the stream keeps the size it was created with; changing its mode too would give a sharp
+picture at the new size.
 
 ## Not planned
 WebRTC browser streaming, PyroWave, Playnite and Lutris integration, custom gamepad
