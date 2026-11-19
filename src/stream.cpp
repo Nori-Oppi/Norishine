@@ -2200,20 +2200,27 @@ namespace stream {
   namespace {
     std::mutex restart_mutex;
     std::string restart_why;
-  }
+    std::chrono::steady_clock::time_point restart_announced;
+  }  // namespace
 
-  std::chrono::milliseconds announce_restart(std::string_view reason) {
+  std::chrono::milliseconds announce_restart(std::string_view reason, std::chrono::steady_clock::time_point now) {
     {
       std::lock_guard lock {restart_mutex};
       restart_why = reason;
+      restart_announced = now;
     }
     auto streams = rtsp_stream::session_count();
     BOOST_LOG(info) << "Host restarts ("sv << reason << "); streams running: "sv << streams;
     return streams > 0 ? std::chrono::milliseconds(1500) : std::chrono::milliseconds(0);
   }
 
-  std::string restart_reason() {
+  std::string restart_reason(std::chrono::steady_clock::time_point now) {
     std::lock_guard lock {restart_mutex};
+    if (!restart_why.empty() && now - restart_announced > restart_announcement_lifetime) {
+      // Still running long after saying it restarts: the restart or update didn't happen
+      BOOST_LOG(warning) << "Host restart ("sv << restart_why << ") was announced but didn't happen; streams carry on"sv;
+      restart_why.clear();
+    }
     return restart_why;
   }
 
@@ -2354,12 +2361,16 @@ namespace stream {
       if (video_format && !video::live_bitrate_supported()) {
         return "This host's encoder can't change during a stream";
       }
-      if (change.codec) {
-        if ((*change.codec == 1 && video::active_hevc_mode == 1) || (*change.codec == 2 && video::active_av1_mode == 1)) {
-          return "This host doesn't stream that codec";
-        }
-        if (*change.codec == 0 && session.config.monitor.dynamicRange) {
-          return "H.264 can't stream HDR";
+      if (video_format) {
+        // The format after the change; what the encoder still can't take, it goes back from
+        std::lock_guard lock {session.video.change_mutex};
+        const auto &monitor = session.config.monitor;
+        auto codec = change.codec.value_or(session.video.desired.video_format.value_or(monitor.videoFormat));
+        auto width = change.width.value_or(session.video.desired.width.value_or(monitor.width));
+        auto height = change.height.value_or(session.video.desired.height.value_or(monitor.height));
+        bool hdr = change.codec && monitor.dynamicRange != 0;  // only a new codec is checked for HDR, as before
+        if (auto error = video::live_format_error(codec, width, height, hdr); !error.empty()) {
+          return error;
         }
       }
 

@@ -20,6 +20,7 @@
 #include <src/network.h>
 #include <src/rtsp.h>
 #include <src/stream.h>
+#include <src/video.h>
 
 namespace stream {
   std::vector<uint8_t> concat_and_insert(uint64_t insert_size, uint64_t slice_size, const std::string_view &data1, const std::string_view &data2);
@@ -158,4 +159,45 @@ TEST(LiveChangeTests, ParsesPictureSizeFrameRateAndCodec) {
   EXPECT_NE(error({{"width", 100}, {"height", 100}}), "");
   EXPECT_NE(error({{"fps", 5}}), "");
   EXPECT_NE(error({{"codec", 1}}), "");
+}
+
+// N9: with several streams on one display, the display captures at the highest rate any
+// of them asked for, so one stream's change doesn't slow the others down.
+TEST(LiveChangeTests, SharedDisplayCapturesAtTheHighestRate) {
+  EXPECT_EQ(video::shared_capture_fps({60}), 60);
+  EXPECT_EQ(video::shared_capture_fps({30, 120, 60}), 120);
+  EXPECT_EQ(video::shared_capture_fps({120, 30}), 120);  // the second stream lowered its rate
+}
+
+TEST(LiveChangeTests, RefusesFormatsTheEncoderCantTake) {
+  auto hevc = video::active_hevc_mode;
+  auto av1 = video::active_av1_mode;
+  video::active_hevc_mode = 2;  // HEVC 8-bit only
+  video::active_av1_mode = 1;  // no AV1
+
+  EXPECT_EQ(video::live_format_error(0, 1920, 1080, false), "");
+  EXPECT_EQ(video::live_format_error(1, 3840, 2160, false), "");
+  EXPECT_NE(video::live_format_error(2, 1920, 1080, false), "");  // AV1 off
+  EXPECT_EQ(video::live_format_error(1, 1920, 1080, true), "");  // HEVC without 10-bit: SDR, as at launch
+  EXPECT_NE(video::live_format_error(0, 1920, 1080, true), "");  // H.264 HDR
+  EXPECT_NE(video::live_format_error(0, 7680, 4320, false), "");  // H.264 above 4096
+  EXPECT_EQ(video::live_format_error(1, 7680, 4320, false), "");
+
+  video::active_hevc_mode = hevc;
+  video::active_av1_mode = av1;
+}
+
+// N10: an announced restart that never happened (a failed update) stops being reported,
+// so a client whose stream ends later doesn't wait for a restart that won't come.
+TEST(RestartAnnouncementTests, ExpiresWhenTheRestartDoesntHappen) {
+  auto start = std::chrono::steady_clock::now();
+  stream::announce_restart("update", start);
+  EXPECT_EQ(stream::restart_reason(start + std::chrono::seconds(30)), "update");
+  EXPECT_EQ(stream::restart_reason(start + stream::restart_announcement_lifetime + std::chrono::seconds(1)), "");
+  EXPECT_EQ(stream::restart_reason(start + std::chrono::seconds(30)), "");  // cleared for good
+
+  stream::announce_restart("restart", start);
+  EXPECT_EQ(stream::restart_reason(start), "restart");
+  stream::announce_restart("restart", start - stream::restart_announcement_lifetime * 2);
+  EXPECT_EQ(stream::restart_reason(start), "");
 }

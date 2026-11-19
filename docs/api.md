@@ -252,7 +252,9 @@ encoder was set up for, or empty).
 
 Optional, added later (feature `reconnect`, roadmap N10): `host_restarting` is `update` or
 `restart` once the host is about to restart (an update is being installed, or a restart was
-asked for from the web UI, the tray or `POST /api/v1/restart`), otherwise null. With streams
+asked for from the web UI, the tray or `POST /api/v1/restart`), otherwise null. It goes back
+to null after 2 minutes if the host is still running then (an update that failed before it
+stopped the host), so a stream that ends later isn't taken for a restart. With streams
 running, a restart waits 1.5 s after saying so, and an update about 3 s (apply-update.ps1),
 so a client reporting once a second hears it. Norilight then waits for the host and starts
 the app again. To know the restarted host from the old one, serverinfo's `<Norishine>`
@@ -284,8 +286,8 @@ field optional, at least one needed):
 | `bitrate_kbps` | The bitrate to stream at, 500 to 1000000, counted as at launch (before error correction, audio and packet overhead; capped by `max_bitrate`). It becomes the stream's new ceiling for the adaptive controller too |
 | `fec_percent` | Error correction, 1 to 255 %: used at once, and the level the controller returns to |
 | `tuning` | `performance`, `balanced` or `quality`: the encoder preset, as `norishineTuning` at launch. Needs the `tuning` feature |
-| `width`, `height` | Size of the streamed picture, together, even, 256 to 8192. Feature `session.video` |
-| `fps` | Frame rate, 10 to 480; the host's capture starts again at it. Feature `session.video` |
+| `width`, `height` | Size of the streamed picture, together, even, 256 to 8192 (H.264 up to 4096). Feature `session.video` |
+| `fps` | Frame rate, 10 to 480. Only this stream's frame rate changes: a display shared by several streams captures at the highest one any of them uses, and starts again only when that changes. Feature `session.video` |
 | `codec` | `H.264`, `HEVC` or `AV1` (any case); 409 when the host doesn't stream it, or H.264 for an HDR stream. Feature `session.video` |
 
 A new bitrate or preset rebuilds the encoder: the client gets one key frame, as after a
@@ -295,7 +297,8 @@ the client: before the first frame in the new format, the control stream sends m
 first frame number (32 bits), the `VIDEO_FORMAT_*` value of moonlight-common-c (32), width,
 height and frame rate (16 each). Frames from that number on are in the new format and start
 with a key frame. Norilight's moonlight-common-c switches its depacketizer there and asks the
-client to rebuild its decoder. Answers as `GET /api/v1/session`. 400 for a malformed
+client to rebuild its decoder. When the encoder can't take the new format after all, the host
+goes back to the last one that worked and sends `0x3100` again for it; the stream carries on. Answers as `GET /api/v1/session`. 400 for a malformed
 body or a value out of range, 404 without a stream, 409 when the stream can't change (not
 running yet, an encoder that can't be rebuilt during a stream, or `tuning` while
 `client_tuning` is off).

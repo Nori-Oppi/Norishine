@@ -286,7 +286,7 @@ def video_format(host, client, stream, log):
         changed = wait_for(lambda: client_log(stream, 'Video format changed by the host', t), timeout=10)
         if 'fps' in body:
             text = log.new()
-            check('%s: the capture started again at %d fps' % (label, body['fps']), 'Capture: frame rate %d' % body['fps'] in text, text[-300:])
+            check('%s: the capture started again at %d fps' % (label, body['fps']), re.search(r'Capture: frame rate (\d+ -> )?%d\b' % body['fps'], text) is not None, text[-300:])
         check('%s: Norilight rebuilt its decoder' % label, changed, [l for _, l in stream.lines[-4:]])
         check('%s: the host reports it' % label, wait_for(lambda: done(status_session(host)), timeout=5), status_session(host))
         time.sleep(4)
