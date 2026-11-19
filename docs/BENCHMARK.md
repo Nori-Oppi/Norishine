@@ -29,7 +29,8 @@ python scripts/benchmark/compare.py
 It needs Python 3.11 or later on Windows, and no other packages. Leave the PC alone while it
 runs: windows open and close by themselves. With the default three runs it takes about
 ten minutes. A stream that doesn't start is tried once more; if it fails again, the check
-stops and leaves a screenshot and the client's log in `build/benchmark/failures/`. `--runs 1` is quicker, but is only good for trying the script out.
+stops and leaves a screenshot and the client's log in `build/benchmark/failures/`. Every
+stream's client log is kept in `build/benchmark/logs/`. `--runs 1` is quicker, but is only good for trying the script out.
 
 What it does:
 
@@ -219,8 +220,26 @@ frames in every clean run, the references 0.03–0.08 %. Found and fixed on 18 N
 | Norishine + Norilight, per run | 0.18, 0.28, 0.28 % (all pacer drops) | 0.08, 0.08, 0.08 % (counted like Moonlight 6.2.0); all pacer drops 0.26 % |
 | References | 0.03–0.08 % | 0.03–0.08 % |
 
-The full-queue drops themselves (about 0.15–0.3 %, a few frames a minute) happen in Moonlight
-6.2.0 as well; they aren't something Norishine or Norilight added.
+The full-queue drops themselves (about 0.15–0.3 %) happen in Moonlight 6.2.0 as well; they
+aren't something Norishine or Norilight added.
+
+**Fewer full-queue drops (roadmap N14, 19 November 2026).** The client logs showed every
+full-queue drop in the first second of a stream, none later. The stream starts before the
+client's window and decoder exist, so for about a second nobody reads the decode queue: it
+overflows, and the new decoder got a backlog of frames 150–300 ms old, decoded about ten of
+them at once, and the pacer threw them away. Norilight now shows the decoder's first frame
+and, when the next one has already waited more than two frame intervals, skips that backlog
+for the fresh key frame it asked for (Norilight #31). The skipped frames aren't counted as
+drops, like the ones the overflow already discards. Three runs each, back to back:
+
+| | Norilight before | After |
+| --- | --- | --- |
+| Full-queue drops per stream | 1–13 | 0 (one stream: 1) |
+| Dropped frames | 0.08 % | 0.03 % |
+| Time to first frame | 5259 ms | 5210 ms |
+| Stutters per minute | 8 | 1 |
+
+Creating the decoder before the stream starts (N5) would stop the backlog from building at all.
 
 #### Warm start
 
