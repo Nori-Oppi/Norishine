@@ -56,7 +56,9 @@ works and is converted at the next sign-in.
 Each setting has `key`, `category` (an `id` from `categories`), `type` (`boolean`, `integer`,
 `number`, `string`, `choice`, `path`, `prep_commands`, `server_commands`, `keybindings`,
 `mode_remapping`), `tier` (`basic`, `advanced`, `dangerous`), `platforms`, `available` (on
-this host), `default`, `restart_required`, `label` and `description` (keys into the web UI
+this host), `default`, `restart_required` (false for settings the running host takes over as
+soon as they're saved, also in running streams; see [AUTOTUNE.md](AUTOTUNE.md#settings-during-a-stream-n9)),
+`label` and `description` (keys into the web UI
 locale files), and where it applies `min`, `max` and `choices` (an empty choice means
 automatic). The table is `src/config_schema.cpp`.
 
@@ -168,7 +170,7 @@ performance counters. `encoder` is as in `/api/v1/status`.
 | `bitrate_kbps` | Bitrate the encoder is set to now |
 | `max_kbps`, `min_kbps` | Bounds: the stream's start bitrate, and `adaptive_min_bitrate` |
 | `fec_percent` | Error correction now |
-| `last_reason`, `last_change_s` | Why and when (seconds into the stream) it last changed something: `congestion`, `delay`, `loss`, `probe`, `fec_relax` or `none` |
+| `last_reason`, `last_change_s` | Why and when (seconds into the stream) it last changed something: `congestion`, `delay`, `loss`, `probe`, `fec_relax`, `settings` (the host's settings changed) or `none` |
 | `decreases`, `increases` | Bitrate changes so far |
 | `client_reports` | The client sent a report in the last 3 seconds |
 | `host_limited`, `client_limited` | The host can't encode, or the client can't decode, as fast as asked; the bitrate isn't raised meanwhile |

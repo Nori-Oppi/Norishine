@@ -34,6 +34,7 @@ extern "C" {
 #include "platform/common.h"
 #include "process.h"
 #include "recommend.h"
+#include "rtsp.h"
 #include "stream.h"
 #include "stream_start.h"
 #include "sync.h"
@@ -381,6 +382,7 @@ namespace stream {
       safe::mail_raw_t::event_t<bool> idr_events;
       safe::mail_raw_t::event_t<std::pair<int64_t, int64_t>> invalidate_ref_frames_events;
       safe::mail_raw_t::event_t<int> bitrate_events;
+      safe::mail_raw_t::event_t<video::change_t> change_events;
 
       std::atomic_int fec_percentage;  ///< Error correction for this stream, adapted while it runs.
 
@@ -2112,6 +2114,53 @@ namespace stream {
     audio::capture(session->mail, session->config.audio, session);
   }
 
+  /**
+   * @brief The adaptation settings from the host's config (adaptive.h).
+   */
+  adaptive::settings_t adaptive_settings() {
+    adaptive::settings_t settings;
+    settings.min_kbps = config::stream.adaptive_min_bitrate;
+    settings.base_fec = config::stream.fec_percentage;
+    settings.max_fec = std::max(config::stream.adaptive_max_fec, config::stream.fec_percentage);
+    return settings;
+  }
+
+  void settings_changed(const std::vector<std::string> &keys) {
+    bool encoder = false;
+    bool network = false;
+    for (const auto &key : keys) {
+      auto kind = config::live_kind(key);
+      encoder = encoder || kind == config::live_e::encoder;
+      network = network || kind == config::live_e::stream_network;
+    }
+    if (!encoder && !network) {
+      return;
+    }
+    for (const auto &uuid : rtsp_stream::get_all_session_uuids()) {
+      auto session = rtsp_stream::find_session(uuid);
+      if (!session || session::state(*session) != session::state_e::RUNNING || session->config.monitor.input_only) {
+        continue;
+      }
+      if (network) {
+        if (session->adaptive) {
+          auto decision = session->adaptive->update_settings(adaptive_settings(), config::video.max_bitrate);
+          session->video.fec_percentage = decision.fec_percent;
+          if (decision.bitrate_kbps) {
+            session->video.bitrate_events->raise(*decision.bitrate_kbps);
+          }
+        } else {
+          session->video.fec_percentage = config::stream.fec_percentage;
+        }
+      }
+      if (encoder) {
+        video::change_t change;
+        change.rebuild = true;
+        session->video.change_events->raise(change);
+      }
+      BOOST_LOG(info) << "Stream for ["sv << session->device_name << "] takes over the new settings"sv;
+    }
+  }
+
   namespace session {
     std::atomic_uint running_sessions;
 
@@ -2382,12 +2431,10 @@ namespace stream {
       session->video.idr_events = mail->event<bool>(mail::idr);
       session->video.invalidate_ref_frames_events = mail->event<std::pair<int64_t, int64_t>>(mail::invalidate_ref_frames);
       session->video.bitrate_events = mail->event<int>(mail::bitrate);
+      session->video.change_events = mail->event<video::change_t>(mail::video_change);
       session->video.fec_percentage = config::stream.fec_percentage;
       if (config::stream.adaptive_bitrate && !config.monitor.input_only) {
-        adaptive::settings_t settings;
-        settings.min_kbps = config::stream.adaptive_min_bitrate;
-        settings.base_fec = config::stream.fec_percentage;
-        settings.max_fec = std::max(config::stream.adaptive_max_fec, config::stream.fec_percentage);
+        auto settings = adaptive_settings();
         session->adaptive = std::make_unique<adaptive::controller_t>(settings, config.monitor.bitrate, config.monitor.framerate, video::live_bitrate_supported());
       }
       if (!config.monitor.input_only) {

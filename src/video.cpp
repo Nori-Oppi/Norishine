@@ -1912,6 +1912,8 @@ namespace video {
   }
 
   std::unique_ptr<encode_session_t> make_encode_session(platf::display_t *disp, const encoder_t &encoder, const config_t &config, int width, int height, std::unique_ptr<platf::encode_device_t> encode_device) {
+    // Settings can change while the host runs (config::apply_live).
+    std::lock_guard live_lock {config::live_mutex()};
     if (dynamic_cast<platf::avcodec_encode_device_t *>(encode_device.get())) {
       auto avcodec_encode_device = boost::dynamic_pointer_cast<platf::avcodec_encode_device_t>(std::move(encode_device));
       return make_avcodec_encode_session(disp, encoder, config, width, height, std::move(avcodec_encode_device));
@@ -1971,6 +1973,7 @@ namespace video {
     auto idr_events = mail->event<bool>(mail::idr);
     auto invalidate_ref_frames_events = mail->event<std::pair<int64_t, int64_t>>(mail::invalidate_ref_frames);
     auto bitrate_events = mail->event<int>(mail::bitrate);
+    auto change_events = mail->event<change_t>(mail::video_change);
 
     {
       // Load a dummy image into the AVFrame to ensure we have something to encode
@@ -2071,8 +2074,8 @@ namespace video {
       //
       // Ensure that this check occurs as close as possible to the encode call to prevent packets
       // in flight after encoder teardown.
-      // d) A new bitrate was asked for: capture_async() rebuilds the encoder with it.
-      if (shutdown_event->peek() || !images->running() || ((reinit_event.peek() || bitrate_events->peek()) && frame_nr > 1)) {
+      // d) A new bitrate or another change was asked for: capture_async() rebuilds the encoder with it.
+      if (shutdown_event->peek() || !images->running() || ((reinit_event.peek() || bitrate_events->peek() || change_events->peek()) && frame_nr > 1)) {
         break;
       }
 
@@ -2120,6 +2123,8 @@ namespace video {
   }
 
   std::unique_ptr<platf::encode_device_t> make_encode_device(platf::display_t &disp, const encoder_t &encoder, const config_t &config) {
+    // NVENC reads its settings here; they can change while the host runs (config::apply_live).
+    std::lock_guard live_lock {config::live_mutex()};
     std::unique_ptr<platf::encode_device_t> result;
 
     auto colorspace = colorspace_from_client_config(config, disp.is_hdr());
@@ -2418,6 +2423,7 @@ namespace video {
     auto touch_port_event = mail->event<input::touch_port_t>(mail::touch_port);
     auto hdr_event = mail->event<hdr_info_t>(mail::hdr);
     auto bitrate_events = mail->event<int>(mail::bitrate);
+    auto change_events = mail->event<change_t>(mail::video_change);
 
     // Encoding takes place on this thread
     platf::adjust_thread_priority(platf::thread_priority_e::high);
@@ -2447,6 +2453,13 @@ namespace video {
         if (auto kbps = bitrate_events->pop(0ms); kbps && *kbps > 0 && *kbps != config.bitrate) {
           BOOST_LOG(info) << "Video bitrate: "sv << config.bitrate << " -> "sv << *kbps << " kbps"sv;
           config.bitrate = *kbps;
+        }
+      }
+
+      // Host settings or the client changed something else (N9): rebuild with it.
+      if (change_events->peek()) {
+        if (auto change = change_events->pop(0ms); change && change->rebuild) {
+          BOOST_LOG(info) << "Video encoder: rebuilt with the host's new settings"sv;
         }
       }
 

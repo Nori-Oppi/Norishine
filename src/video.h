@@ -56,6 +56,14 @@ namespace video {
     config::tuning_e tuning = config::tuning_e::host;  ///< The client's tuning goal for this stream.
   };
 
+  /**
+   * @brief A change to a running stream's encoder (mail::video_change, N9). The encoder
+   *        is rebuilt, and the client gets a key frame, as after a bitrate change.
+   */
+  struct change_t {
+    bool rebuild = false;  ///< Rebuild with the host's current encoder settings.
+  };
+
   platf::mem_type_e map_base_dev_type(AVHWDeviceType type);
   platf::pix_fmt_e map_pix_fmt(AVPixelFormat fmt);
 

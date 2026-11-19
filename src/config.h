@@ -8,6 +8,7 @@
 #include <bitset>
 #include <chrono>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -341,6 +342,36 @@ namespace config {
    * @brief NVENC settings for a tuning goal, starting from the host's.
    */
   nvenc::nvenc_config tuned_nvenc(const nvenc::nvenc_config &host, tuning_e tuning);
+
+  /**
+   * @brief How a setting that applies without a restart takes effect (N9).
+   */
+  enum class live_e {
+    restart,  ///< Read at startup only: needs a restart.
+    next_stream,  ///< Read when a stream starts, or when it is asked for.
+    encoder,  ///< Read when an encoder is built: running streams rebuild theirs.
+    stream_network,  ///< Error correction and adaptation bounds: running streams change at once.
+  };
+
+  /**
+   * @brief Whether and how a setting applies without restarting the host.
+   */
+  live_e live_kind(std::string_view key);
+
+  /**
+   * @brief Apply settings that need no restart to the running host, from config file
+   *        values. Only keys with a live_kind other than restart are applied.
+   * @param vars Values as text, as the config file stores them. A key in `keys` that is
+   *        missing here keeps its current value: pass the default to reset it.
+   * @param keys The settings to apply.
+   * @return The keys applied.
+   */
+  std::vector<std::string> apply_live(const std::unordered_map<std::string, std::string> &vars, const std::vector<std::string> &keys);
+
+  /**
+   * @brief Held while settings are applied live, and while an encoder reads them.
+   */
+  std::mutex &live_mutex();
   extern audio_t audio;
   extern stream_t stream;
   extern nvhttp_t nvhttp;

@@ -102,6 +102,8 @@ namespace adaptive {
         return "probe";
       case reason_e::fec_relax:
         return "fec_relax";
+      case reason_e::settings:
+        return "settings";
       case reason_e::none:
         break;
     }
@@ -208,6 +210,38 @@ namespace adaptive {
     client_limited = fresh && last_report->decode_ms && *last_report->decode_ms > frame_ms * 0.9;
 
     return t;
+  }
+
+  decision_t controller_t::update_settings(const settings_t &new_settings, int cap_kbps, clock::time_point now) {
+    std::lock_guard lg {mutex};
+    decision_t decision;
+    const bool at_base = fec == settings.base_fec;
+    settings.base_fec = new_settings.base_fec;
+    settings.max_fec = std::max(new_settings.max_fec, new_settings.base_fec);
+    settings.min_kbps = new_settings.min_kbps;
+    if (cap_kbps > 0 && cap_kbps < max_kbps) {
+      max_kbps = cap_kbps;
+    }
+    min_kbps = std::clamp(settings.min_kbps, 1, max_kbps);
+
+    // Error correction the controller hasn't raised follows the setting; a raised one stays
+    // within the new bounds.
+    auto new_fec = at_base ? settings.base_fec : std::clamp(fec, settings.base_fec, settings.max_fec);
+    if (new_fec != fec) {
+      fec = new_fec;
+      last_fec_change = now;
+      last_reason = reason_e::settings;
+      last_change = now;
+    }
+    if (bitrate_kbps > max_kbps) {
+      bitrate_kbps = max_kbps;
+      last_change = now;
+      last_reason = reason_e::settings;
+      recent_recovery.clear();
+      decision.bitrate_kbps = bitrate_kbps;
+    }
+    decision.fec_percent = fec;
+    return decision;
   }
 
   void controller_t::change_bitrate(int kbps, reason_e reason, clock::time_point now, decision_t &decision) {

@@ -345,3 +345,41 @@ TEST(AdaptiveTests, StateAsJson) {
   EXPECT_TRUE(j["last_change_s"].is_number());
   EXPECT_TRUE(j["base_rtt_ms"].is_null());
 }
+
+TEST(AdaptiveTests, HostSettingsChangeDuringTheStream) {
+  settings_t settings;
+  settings.base_fec = 20;
+  settings.max_fec = 50;
+  sim_t s(20000, settings);
+  s.clean(5);
+
+  // Error correction the controller hasn't raised follows the new setting at once.
+  settings.base_fec = 10;
+  auto d = s.c.update_settings(settings, 0, s.t);
+  EXPECT_EQ(d.fec_percent, 10);
+  EXPECT_FALSE(d.bitrate_kbps);
+  EXPECT_EQ(s.state().last_reason, reason_e::settings);
+
+  // A lower max_bitrate caps the stream from now on.
+  d = s.c.update_settings(settings, 12000, s.t);
+  ASSERT_TRUE(d.bitrate_kbps);
+  EXPECT_EQ(*d.bitrate_kbps, 12000);
+  EXPECT_EQ(s.state().max_kbps, 12000);
+  s.clean(60);
+  EXPECT_EQ(s.state().bitrate_kbps, 12000);
+
+  // A higher cap doesn't raise the stream above where it started.
+  d = s.c.update_settings(settings, 40000, s.t);
+  EXPECT_EQ(s.state().max_kbps, 12000);
+
+  // A raised error correction stays within the new bounds.
+  s.clean(10);
+  for (int i = 0; i < 4; ++i) {
+    s.second(2);
+  }
+  auto raised = s.state().fec_percent;
+  ASSERT_GT(raised, 10);
+  settings.max_fec = 15;
+  d = s.c.update_settings(settings, 0, s.t);
+  EXPECT_EQ(d.fec_percent, 15);
+}

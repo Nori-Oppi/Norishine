@@ -5,6 +5,8 @@
 #include "../tests_common.h"
 
 // standard includes
+#include <filesystem>
+#include <fstream>
 #include <map>
 #include <set>
 #include <string>
@@ -357,4 +359,60 @@ TEST(ConfigUpdateTextTests, CrlfEmptyAndNoTrailingNewline) {
   EXPECT_EQ(config::update_config_text("qp = 20", {{"min_threads", "4"}}, {}), "qp = 20\nmin_threads = 4\n");
   EXPECT_EQ(config::update_config_text("qp = 20\r\nmin_threads = 2\r\n", {{"qp", "25"}}, {"min_threads"}), "qp = 25\r\n");
   EXPECT_EQ(config::update_config_text("qp = 20\n", {}, {}), "qp = 20\n");
+}
+
+TEST(ConfigSchemaTests, LiveSettingsNeedNoRestart) {
+  for (auto key : {"nvenc_preset", "amd_quality", "qsv_preset", "sw_preset", "fec_percentage", "adaptive_max_fec", "max_bitrate", "minimum_fps_target"}) {
+    ASSERT_NE(find(key), nullptr) << key;
+    EXPECT_FALSE(find(key)->restart_required) << key;
+  }
+  for (auto key : {"port", "encoder", "capture", "output_name", "sunshine_name", "nvenc_intra_refresh"}) {
+    ASSERT_NE(find(key), nullptr) << key;
+    EXPECT_TRUE(find(key)->restart_required) << key;
+  }
+  // Every live setting is in the schema.
+  int live = 0;
+  for (const auto &setting : settings()) {
+    live += setting.restart_required ? 0 : 1;
+  }
+  EXPECT_EQ(live, 30);
+}
+
+TEST(ConfigSchemaTests, LiveChangeAppliesToTheRunningHost) {
+  auto dir = std::filesystem::temp_directory_path() / "norishine-test-live";
+  std::filesystem::create_directories(dir);
+  auto host_file = (dir / "host.conf").string();
+  auto other_file = (dir / "other.conf").string();
+  std::ofstream(host_file) << "fec_percentage = 20\n";
+  std::ofstream(other_file) << "";
+
+  auto saved_file = config::sunshine.config_file;
+  auto saved_fec = config::stream.fec_percentage;
+  auto saved_preset = config::video.nv.quality_preset;
+  auto saved_sw = config::video.sw.sw_preset;
+  config::sunshine.config_file = host_file;
+
+  auto result = apply_change(validate_change(json {{"set", {{"fec_percentage", 35}, {"nvenc_preset", 4}, {"sw_preset", "fast"}, {"port", 48000}}}}), host_file);
+  EXPECT_TRUE(result.written);
+  EXPECT_TRUE(result.restart_required);  // port
+  EXPECT_EQ(std::set<std::string>(result.live.begin(), result.live.end()), (std::set<std::string> {"fec_percentage", "nvenc_preset", "sw_preset"}));
+  EXPECT_EQ(config::stream.fec_percentage, 35);
+  EXPECT_EQ(config::video.nv.quality_preset, 4);
+  EXPECT_EQ(config::video.sw.sw_preset, "fast");
+
+  // Reset goes back to the default.
+  result = apply_change(validate_change(json {{"reset", {"fec_percentage"}}}), host_file);
+  EXPECT_FALSE(result.restart_required);
+  EXPECT_EQ(config::stream.fec_percentage, 20);
+
+  // Another file doesn't change the running host.
+  result = apply_change(validate_change(json {{"set", {{"fec_percentage", 40}}}}), other_file);
+  EXPECT_TRUE(result.live.empty());
+  EXPECT_EQ(config::stream.fec_percentage, 20);
+
+  config::sunshine.config_file = saved_file;
+  config::stream.fec_percentage = saved_fec;
+  config::video.nv.quality_preset = saved_preset;
+  config::video.sw.sw_preset = saved_sw;
+  std::filesystem::remove_all(dir);
 }
