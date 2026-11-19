@@ -35,6 +35,7 @@ extern "C" {
 #include "process.h"
 #include "recommend.h"
 #include "stream.h"
+#include "stream_start.h"
 #include "sync.h"
 #include "system_tray.h"
 #include "thread_safe.h"
@@ -1518,6 +1519,7 @@ namespace stream {
 
       auto session = (session_t *) packet->channel_data;
       auto lowseq = session->video.lowseq;
+      const bool session_first_frame = lowseq == 0;
 
       std::string_view payload {(char *) packet->data(), packet->data_size()};
       std::vector<uint8_t> payload_with_replacements;
@@ -1803,6 +1805,9 @@ namespace stream {
         session->video.lowseq = lowseq;
 
         auto frame_sent = std::chrono::steady_clock::now();
+        if (session_first_frame) {
+          stream_start::first_frame_sent();
+        }
         session->metrics.frame_sent(packet->data_size(), frame_latency, frame_sent - frame_send_start, packet->is_idr(), frame_sent);
       } catch (const std::exception &e) {
         BOOST_LOG(error) << "Broadcast video failed "sv << e.what();
@@ -2081,6 +2086,7 @@ namespace stream {
     auto address = session->video.peer.address();
     session->video.qos = platf::enable_socket_qos(ref->video_sock.native_handle(), address, session->video.peer.port(), platf::qos_data_type_e::video, session->config.videoQosType != 0);
 
+    stream_start::mark("video ping");
     BOOST_LOG(debug) << "Start capturing Video"sv;
     video::capture(session->mail, session->config.monitor, session);
   }

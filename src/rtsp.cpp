@@ -29,6 +29,7 @@ extern "C" {
 #include "network.h"
 #include "rtsp.h"
 #include "stream.h"
+#include "stream_start.h"
 #include "sync.h"
 #include "video.h"
 
@@ -780,6 +781,7 @@ namespace rtsp_stream {
   }
 
   void cmd_option(rtsp_server_t *server, tcp::socket &sock, launch_session_t &session, msg_t &&req) {
+    stream_start::mark("RTSP OPTIONS");
     OPTION_ITEM option {};
 
     // I know these string literals will not be modified
@@ -792,6 +794,7 @@ namespace rtsp_stream {
   }
 
   void cmd_describe(rtsp_server_t *server, tcp::socket &sock, launch_session_t &session, msg_t &&req) {
+    stream_start::mark("RTSP DESCRIBE");
     OPTION_ITEM option {};
 
     // I know these string literals will not be modified
@@ -934,6 +937,7 @@ namespace rtsp_stream {
   }
 
   void cmd_announce(rtsp_server_t *server, tcp::socket &sock, launch_session_t &session, msg_t &&req) {
+    stream_start::mark("RTSP ANNOUNCE");
     OPTION_ITEM option {};
 
     // I know these string literals will not be modified
@@ -1187,6 +1191,7 @@ namespace rtsp_stream {
   }
 
   void cmd_play(rtsp_server_t *server, tcp::socket &sock, launch_session_t &session, msg_t &&req) {
+    stream_start::mark("RTSP PLAY");
     OPTION_ITEM option {};
 
     // I know these string literals will not be modified

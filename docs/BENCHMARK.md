@@ -8,6 +8,8 @@ Two tools in `scripts/benchmark/`:
 - **The host benchmark** (`stream_bench.py`, roadmap M8): Norishine's own numbers from
   `/api/v1/stats`, for before-and-after measurements of host changes.
   [Further down](#host-benchmark-stream_benchpy).
+- **Stream start** (`start_time.py`, roadmap N5): each step from choosing an app to the
+  first frame, in Norilight and in Norishine. [Further down](#stream-start-start_timepy).
 
 ## Check against Apollo, Vibepollo and Sunshine
 
@@ -184,7 +186,8 @@ What it shows:
 - Recovery after a blackout is 40–50 ms everywhere: once packets flow again, every host
   sends a key frame within a few frames.
 - Time to first frame is about 5 seconds for every host, and nearly all of it is the client
-  starting up. Roadmap N5 needs a finer measurement of the steps.
+  starting up. Roadmap N5 measured the steps and cut it; see
+  [Stream start](#stream-start-start_timepy).
 - Apollo had one run with 28 stutters a minute and Vibepollo one with 8; their other runs
   were normal. The medians keep one bad run from deciding the result.
 
@@ -259,6 +262,104 @@ its first frame, but its window stays one flat colour after it recreates its ren
 the check moves the window. It happens with every host and client alike, so it's the test's
 window handling, not streaming. The stream is tried again (each one worked the second time);
 the screenshot and log are in `build/benchmark/failures/`.
+
+## Stream start (start_time.py)
+
+Roadmap N5. Both programs log each step of a stream start as one line:
+
+- Norilight, from choosing the app to the first frame on screen:
+  `Stream start: checked 445 (+445), launch sent 519 (+76), ..., first frame shown 921 (+9) ms`
+- Norishine, from the launch or resume request to the first frame sent:
+  `Stream start (launch): display configured 7 (+7), encoders probed 13 (+6), ..., first frame sent 347 (+18) ms`
+
+Each step shows its time since the start and, in brackets, since the step before.
+
+```sh
+python scripts/benchmark/start_time.py --norilight ..\Norilight\build\Norilight-x64-release
+```
+
+It sets up the host and client like the check (own folders and ports, through the relay),
+then streams:
+
+- **First launch**: the first stream after the host started, reported on its own (the host
+  may still have start-up work left).
+- **Launch**: no app runs on the host; the stream starts the `Desktop` app. Five times
+  (`--runs`).
+- **Resume**: the app still runs from the stream before; only the stream was ended.
+
+It prints the median of every step on both sides, and the time from starting the client
+process to the first picture seen in its window. The whole result, with each stream's client
+log and the time of each line, goes to `build/benchmark/start-<time>.json`.
+
+Measure before and after back to back, on the same day: the PC's state moves these times by
+seconds (see below), so results from different days don't compare.
+
+### What was slow (N5)
+
+Builds with the timelines and nothing else, against the same with the changes below,
+measured back to back on 19 November 2026, three streams of each kind, same PC and scenario
+as the check, **Performance goal**. Medians, from choosing the app to the first frame shown:
+
+| Step | First launch | Launch | Resume |
+| --- | --- | --- | --- |
+| Norilight: checks before the launch (decoder checks, audio test, gamepads) | 707 ms | 590 ms | 584 ms |
+| of which the audio test | 495 ms | 400 ms | 395 ms |
+| Norilight: launch request to connected | 1203 ms | 248 ms | 218 ms |
+| of which the host answering the launch | 954 ms | 38 ms | 28 ms |
+| Norilight: window, decoder and first frame | 314 ms | 219 ms | 169 ms |
+| **Choosing the app to first frame shown** | **2228 ms** | **1060 ms** | **975 ms** |
+| Norishine: request to first frame sent | 1391 ms | 351 ms | 268 ms |
+| of which probing the encoders | 918 ms | 6 ms | 7 ms |
+
+What the steps showed:
+
+- **The host probed every encoder again on the first stream after it started.** It probes at
+  start-up, but noted the GPUs it saw only at the first stream, so that stream always probed
+  again (about a second), trying NVENC and Quick Sync first on this AMD PC.
+- **The audio device was opened twice.** The launch check opened it to test it and closed it
+  again (400–500 ms), then the stream opened it again while its connection waited.
+- **The same decoder check ran twice.** Each check creates a test decoder (about 170 ms);
+  HEVC was checked for the codec order and again for the Tuning goal.
+- The host's own steps are short: capture 90–210 ms, creating the encoder about 60 ms, the
+  RTSP handshake about 80 ms.
+
+The day before, on the same PC and builds, opening the audio device took about a second each
+time instead (the whole launch took 4.2 s, the connection waiting a second for audio while
+video arrived; the decode queue overflowed and the client asked for three key frames). That
+depended on the PC's state at the time, not on the code; the next morning the same builds
+started in about a second. Taking the audio device off the critical path also removes that
+case.
+
+### What changed
+
+- **Norishine** notes the GPUs after every successful encoder probe, so the first stream after
+  start-up doesn't probe again unless they changed. The software encoder still probes every
+  time, as before.
+- **Norilight** opens the audio device once, in the background as soon as the launch starts,
+  and the stream takes it over. The connection no longer waits for it: the first audio
+  samples are dropped until it's ready. With surround sound the launch still waits for the
+  test, because falling back to stereo changes what the host is asked for. If the device
+  can't be opened, the stream window says so.
+- **Norilight** makes each decoder check once per launch.
+
+### Result
+
+| From choosing the app to the first frame shown | Before | After |
+| --- | --- | --- |
+| **First launch after the host started** | 2228 ms | **1080 ms** |
+| **Launch** | 1060 ms | **895 ms** |
+| **Resume** | 975 ms | **824 ms** |
+| Norishine, request to first frame sent: first launch, launch, resume | 1391, 351, 268 ms | 418, 332, 260 ms |
+| Client process start to first picture seen: launch, resume | 1837, 1746 ms | 1663, 1596 ms |
+
+**Target** (set from these measurements): on this PC, from choosing the app to the first
+frame, a launch within 0.9 seconds, a resume within 0.85 seconds and the first launch after
+the host started within 1.1 seconds; the host within 0.45 seconds of the request. All are
+met. What's left on the client: two decoder checks (about 330 ms), launching and connecting
+(about 220 ms), creating the window and decoder after the connection (about 150 ms).
+
+Not measured here: virtual displays and display changes, which the benchmark turns off on
+every host. They add their own time on PCs that use them.
 
 ## Host benchmark (stream_bench.py)
 

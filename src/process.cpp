@@ -36,6 +36,7 @@
 #include "platform/common.h"
 #include "process.h"
 #include "state_store.h"
+#include "stream_start.h"
 #include "httpcommon.h"
 #include "system_tray.h"
 #include "utility.h"
@@ -233,6 +234,7 @@ namespace proc {
       // Ensure starting from a clean slate
       terminate(false, false);
     }
+    stream_start::mark("previous app ended");
 
     _app = app;
     _app_id = util::from_view(app.id);
@@ -353,6 +355,7 @@ namespace proc {
 
         if (!vdisplayName.empty()) {
           BOOST_LOG(info) << "Virtual Display created at " << vdisplayName;
+          stream_start::mark("virtual display created");
 
           // Don't change display settings when no params are given
           if (launch_session->width && launch_session->height && launch_session->fps) {
@@ -385,6 +388,7 @@ namespace proc {
     }
 
     display_device::configure_display(config::video, *launch_session);
+    stream_start::mark("display configured");
 
     // We should not preserve display state when using virtual display.
     // It is already handled by Windows properly.
@@ -402,7 +406,9 @@ namespace proc {
     // encoder matches the active GPU (which could have changed
     // due to hotplugging, driver crash, primary monitor change,
     // or any number of other factors).
-    if (rtsp_stream::session_count() == 0 && video::probe_encoders()) {
+    auto probe_failed = rtsp_stream::session_count() == 0 && video::probe_encoders();
+    stream_start::mark("encoders probed");
+    if (probe_failed) {
       if (config::video.ignore_encoder_probe_failure) {
         BOOST_LOG(warning) << "Encoder probe failed, but continuing due to user configuration.";
       } else {
@@ -517,6 +523,9 @@ namespace proc {
       }
     }
 
+    if (_app_prep_begin != std::end(_app.prep_cmds)) {
+      stream_start::mark("prep commands done");
+    }
     _env["APOLLO_APP_STATUS"] = "RUNNING";
 
     for (auto &cmd : _app.detached) {
@@ -548,6 +557,7 @@ namespace proc {
     }
 
     _app_launch_time = std::chrono::steady_clock::now();
+    stream_start::mark("app started");
 
   #ifdef _WIN32
     auto resetHDRThread = std::thread([this, enable_hdr = launch_session->enable_hdr]{
