@@ -62,6 +62,7 @@ namespace video {
    */
   struct change_t {
     bool rebuild = false;  ///< Rebuild with the host's current encoder settings.
+    std::optional<config::tuning_e> tuning;  ///< The client's new tuning goal (encoder preset).
   };
 
   platf::mem_type_e map_base_dev_type(AVHWDeviceType type);

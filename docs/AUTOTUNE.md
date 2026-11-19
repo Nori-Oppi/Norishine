@@ -185,6 +185,13 @@ recommendation or the encoder test. Running streams take them over without recon
 | `max_bitrate` | Lowered below a stream's bitrate: the stream drops to it and never goes above it again |
 | `adaptive_bitrate`, `client_tuning`, `ping_timeout` | Next stream |
 
+**From the client.** Norilight's stream settings menu (Ctrl+Alt+Shift+O during a stream)
+changes the running stream's bitrate, error correction and encoder preset through
+`POST /api/v1/session/settings` (feature `session.settings`, [api.md](api.md)). A new bitrate
+or preset rebuilds the encoder behind one key frame; the bitrate also becomes the controller's
+new ceiling. A stream whose bitrate was picked by hand doesn't teach the next start bitrate.
+Other clients, and Norilight with other hosts, reconnect to change settings as before.
+
 Everything else (ports, capture, the encoder choice, displays, audio, input, files) is read
 at startup and still needs a restart. The list is `config::live_kind()`. Checks:
 `tests/unit/test_config_schema.cpp`, `tests/unit/test_adaptive.cpp`, and on the PC

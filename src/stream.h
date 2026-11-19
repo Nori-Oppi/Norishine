@@ -5,6 +5,8 @@
 #pragma once
 
 // standard includes
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -87,7 +89,37 @@ namespace stream {
      * @return False when the stream isn't adapted (adaptive_bitrate is off).
      */
     bool report(session_t &session, const adaptive::client_report_t &report);
+
+    /**
+     * @brief What a client asks to change in its own running stream (N9). Every field is
+     *        optional.
+     */
+    struct live_change_t {
+      std::optional<int> bitrate_kbps;  ///< The bitrate asked for, as at launch: before error correction, audio and overhead.
+      std::optional<int> fec_percent;  ///< Error correction to return to and use now.
+      std::optional<config::tuning_e> tuning;  ///< Tuning goal: the encoder preset.
+    };
+
+    /**
+     * @brief Parse a live change from JSON (POST /api/v1/session/settings).
+     * @return An error message, or empty on success.
+     */
+    std::string parse_change(const nlohmann::json &body, live_change_t &out);
+
+    /**
+     * @brief Apply a client's change to its running stream (N9). Bitrate and the encoder
+     *        preset rebuild the encoder behind one key frame; error correction changes at once.
+     * @param status Set to the HTTP status to answer.
+     * @return An error message, or empty on success.
+     */
+    std::string change(session_t &session, const live_change_t &change, int &status);
   }  // namespace session
+
+  /**
+   * @brief The video encoder's bitrate for a bitrate a client asks for: what is left after
+   *        error correction, audio and packet overhead, as at launch.
+   */
+  int encoder_kbps(std::int64_t requested_kbps, int fec_percent, bool high_quality_audio, int audio_channels);
 
   /**
    * @brief Settings changed without a restart (config::apply_live, N9): running streams
