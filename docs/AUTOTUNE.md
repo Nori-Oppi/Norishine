@@ -187,7 +187,13 @@ recommendation or the encoder test. Running streams take them over without recon
 
 **From the client.** Norilight's stream settings menu (Ctrl+Alt+Shift+O during a stream)
 changes the running stream's bitrate, error correction and encoder preset through
-`POST /api/v1/session/settings` (feature `session.settings`, [api.md](api.md)). A new bitrate
+`POST /api/v1/session/settings` (feature `session.settings`, [api.md](api.md)), and its
+resolution, frame rate and codec too (feature `session.video`): the host rebuilds the
+encoder (and restarts capture for a new frame rate), tells Norilight the new format over the
+control stream before its first frame, and Norilight rebuilds its decoder behind the key frame.
+On the PC (AMD AMF, `scripts/e2e/live_settings_check.py`) the picture paused 125 to 440 ms
+for each change; a new frame rate or codec takes longest. A new resolution scales the captured
+display: a virtual display keeps the size it was created with. A new bitrate
 or preset rebuilds the encoder behind one key frame; the bitrate also becomes the controller's
 new ceiling. A stream whose bitrate was picked by hand doesn't teach the next start bitrate.
 Other clients, and Norilight with other hosts, reconnect to change settings as before.

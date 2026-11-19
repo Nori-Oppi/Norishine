@@ -60,6 +60,7 @@ extern "C" {
 #define IDX_SET_CLIPBOARD 16
 #define IDX_FILE_TRANSFER_NONCE_REQUEST 17
 #define IDX_SET_ADAPTIVE_TRIGGERS 18
+#define IDX_VIDEO_FORMAT 19
 
 static const short packetTypes[] = {
   0x0305,  // Start A
@@ -81,6 +82,7 @@ static const short packetTypes[] = {
   0x3001,  // Set Clipboard (Apollo protocol extension)
   0x3002,  // File transfer nonce request (Apollo protocol extension)
   0x5503,  // Set Adaptive triggers (Sunshine protocol extension)
+  0x3100,  // Video format changes (Norishine protocol extension, N9)
 };
 
 namespace asio = boost::asio;
@@ -200,6 +202,20 @@ namespace stream {
     std::uint8_t r;
     std::uint8_t g;
     std::uint8_t b;
+  };
+
+  /**
+   * @brief Norishine (N9): the video format changes from first_frame on. Sent only to
+   *        clients that asked for the change (POST /api/v1/session/settings). Little endian.
+   */
+  struct control_video_format_t {
+    control_header_v2 header;
+
+    std::uint32_t first_frame;
+    std::uint32_t video_format;  ///< VIDEO_FORMAT_* as in moonlight-common-c
+    std::uint16_t width;
+    std::uint16_t height;
+    std::uint16_t fps;
   };
 
   struct control_adaptive_triggers_t {
@@ -385,6 +401,7 @@ namespace stream {
       safe::mail_raw_t::event_t<video::change_t> change_events;
       std::mutex change_mutex;
       video::change_t desired;  ///< Every change asked for so far: each event carries all of it.
+      safe::mail_raw_t::event_t<video::format_note_t> format_events;
 
       std::atomic_int fec_percentage;  ///< Error correction for this stream, adapted while it runs.
 
@@ -967,6 +984,48 @@ namespace stream {
   }
 
   /**
+   * @brief The VIDEO_FORMAT_* value moonlight-common-c uses for a codec and its options.
+   */
+  std::uint32_t common_c_video_format(int codec, int dynamic_range, int chroma_sampling) {
+    bool ten_bit = dynamic_range != 0;
+    bool yuv444 = chroma_sampling != 0;
+    switch (codec) {
+      case 1:
+        return ten_bit ? (yuv444 ? VIDEO_FORMAT_H265_REXT10_444 : VIDEO_FORMAT_H265_MAIN10) : (yuv444 ? VIDEO_FORMAT_H265_REXT8_444 : VIDEO_FORMAT_H265);
+      case 2:
+        return ten_bit ? (yuv444 ? VIDEO_FORMAT_AV1_HIGH10_444 : VIDEO_FORMAT_AV1_MAIN10) : (yuv444 ? VIDEO_FORMAT_AV1_HIGH8_444 : VIDEO_FORMAT_AV1_MAIN8);
+      default:
+        return yuv444 ? VIDEO_FORMAT_H264_HIGH8_444 : VIDEO_FORMAT_H264;
+    }
+  }
+
+  /**
+   * @brief Tell the client the video format changes (N9), before the first frame in it.
+   */
+  int send_video_format(session_t *session, const video::format_note_t &note) {
+    control_video_format_t plaintext {};
+    plaintext.header.type = packetTypes[IDX_VIDEO_FORMAT];
+    plaintext.header.payloadLength = sizeof(control_video_format_t) - sizeof(control_header_v2);
+    plaintext.first_frame = util::endian::little<std::uint32_t>((std::uint32_t) note.first_frame);
+    plaintext.video_format = util::endian::little<std::uint32_t>(common_c_video_format(note.video_format, note.dynamic_range, note.chroma_sampling));
+    plaintext.width = util::endian::little<std::uint16_t>((std::uint16_t) note.width);
+    plaintext.height = util::endian::little<std::uint16_t>((std::uint16_t) note.height);
+    plaintext.fps = util::endian::little<std::uint16_t>((std::uint16_t) note.fps);
+
+    std::array<std::uint8_t, sizeof(control_encrypted_t) + crypto::cipher::round_to_pkcs7_padded(sizeof(plaintext)) + crypto::cipher::tag_size>
+      encrypted_payload;
+
+    auto payload = encode_control(session, util::view(plaintext), encrypted_payload);
+    if (session->broadcast_ref->control_server.send(payload, session->control.peer)) {
+      BOOST_LOG(warning) << "Couldn't send the new video format to ["sv << session->device_name << ']';
+      return -1;
+    }
+    BOOST_LOG(info) << "Video format for ["sv << session->device_name << "] from frame "sv << note.first_frame << ": codec "sv
+                    << note.video_format << ", "sv << note.width << 'x' << note.height << ", "sv << note.fps << " fps"sv;
+    return 0;
+  }
+
+  /**
    * @brief Run the stream's controller (adaptive.h) and pass on what it decided.
    */
   void adapt(session_t &session, std::chrono::steady_clock::time_point now) {
@@ -1280,6 +1339,17 @@ namespace stream {
               auto hdr_info = hdr_queue->pop();
 
               send_hdr_mode(session, std::move(hdr_info));
+            }
+
+            // N9: a new video format, before its first frame
+            auto &format_events = session->video.format_events;
+            while (session->control.peer && format_events->peek()) {
+              if (auto note = format_events->pop(0ms)) {
+                send_video_format(session, *note);
+                if (note->sent) {
+                  *note->sent = true;
+                }
+              }
             }
 
             if (session->adaptive && session->state.load(std::memory_order_relaxed) == session::state_e::RUNNING) {
@@ -2205,6 +2275,36 @@ namespace stream {
       if (auto error = integer("fec_percent", 1, 255, out.fec_percent); !error.empty()) {
         return error;
       }
+      if (auto error = integer("width", 256, 8192, out.width); !error.empty()) {
+        return error;
+      }
+      if (auto error = integer("height", 256, 8192, out.height); !error.empty()) {
+        return error;
+      }
+      if (out.width.has_value() != out.height.has_value()) {
+        return "width and height go together";
+      }
+      if ((out.width && *out.width % 2) || (out.height && *out.height % 2)) {
+        return "width and height must be even";
+      }
+      if (auto error = integer("fps", 10, 480, out.fps); !error.empty()) {
+        return error;
+      }
+      if (body.contains("codec") && !body["codec"].is_null()) {
+        auto value = body["codec"].is_string() ? body["codec"].get<std::string>() : std::string {};
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+          return (char) std::tolower(c);
+        });
+        if (value == "h.264" || value == "h264") {
+          out.codec = 0;
+        } else if (value == "hevc" || value == "h.265" || value == "h265") {
+          out.codec = 1;
+        } else if (value == "av1") {
+          out.codec = 2;
+        } else {
+          return "codec must be H.264, HEVC or AV1";
+        }
+      }
       if (body.contains("tuning") && !body["tuning"].is_null()) {
         auto value = body["tuning"].is_string() ? body["tuning"].get<std::string>() : std::string {};
         auto tuning = config::tuning_from_view(value);
@@ -2213,8 +2313,8 @@ namespace stream {
         }
         out.tuning = tuning;
       }
-      if (!out.bitrate_kbps && !out.fec_percent && !out.tuning) {
-        return "Nothing to change: give bitrate_kbps, fec_percent or tuning";
+      if (!out.bitrate_kbps && !out.fec_percent && !out.tuning && !out.width && !out.fps && !out.codec) {
+        return "Nothing to change: give bitrate_kbps, fec_percent, tuning, width and height, fps or codec";
       }
       return {};
     }
@@ -2229,6 +2329,18 @@ namespace stream {
       }
       if (change.tuning && !config::video.client_tuning) {
         return "Tuning goals are off on this host (client_tuning)";
+      }
+      const bool video_format = change.width || change.fps || change.codec;
+      if (video_format && !video::live_bitrate_supported()) {
+        return "This host's encoder can't change during a stream";
+      }
+      if (change.codec) {
+        if ((*change.codec == 1 && video::active_hevc_mode == 1) || (*change.codec == 2 && video::active_av1_mode == 1)) {
+          return "This host doesn't stream that codec";
+        }
+        if (*change.codec == 0 && session.config.monitor.dynamicRange) {
+          return "H.264 can't stream HDR";
+        }
       }
 
       auto now = std::chrono::steady_clock::now();
@@ -2256,12 +2368,34 @@ namespace stream {
           session.video.bitrate_events->raise(kbps);
         }
       }
-      if (change.tuning) {
+      if (change.tuning || video_format) {
         std::lock_guard lock {session.video.change_mutex};
-        session.video.desired.tuning = *change.tuning;
-        session.config.monitor.tuning = *change.tuning;
-        session.video.change_events->raise(session.video.desired);
-        BOOST_LOG(info) << "Stream for ["sv << session.device_name << "]: tuning "sv << config::to_string(*change.tuning) << " (asked by the client)"sv;
+        auto &desired = session.video.desired;
+        auto &monitor = session.config.monitor;
+        if (change.tuning) {
+          desired.tuning = *change.tuning;
+          monitor.tuning = *change.tuning;
+          BOOST_LOG(info) << "Stream for ["sv << session.device_name << "]: tuning "sv << config::to_string(*change.tuning) << " (asked by the client)"sv;
+        }
+        if (change.width) {
+          desired.width = monitor.width = *change.width;
+          desired.height = monitor.height = *change.height;
+        }
+        if (change.fps) {
+          desired.framerate = monitor.framerate = *change.fps;
+          monitor.encodingFramerate = *change.fps * 1000;
+          if (session.adaptive) {
+            session.adaptive->set_target_fps(*change.fps);
+          }
+        }
+        if (change.codec) {
+          desired.video_format = monitor.videoFormat = *change.codec;
+        }
+        if (video_format) {
+          BOOST_LOG(info) << "Stream for ["sv << session.device_name << "]: "sv << monitor.width << 'x' << monitor.height << ", "sv
+                          << monitor.framerate << " fps, codec "sv << monitor.videoFormat << " (asked by the client)"sv;
+        }
+        session.video.change_events->raise(desired);
       }
       status = 200;
       return {};
@@ -2535,6 +2669,7 @@ namespace stream {
       session->video.invalidate_ref_frames_events = mail->event<std::pair<int64_t, int64_t>>(mail::invalidate_ref_frames);
       session->video.bitrate_events = mail->event<int>(mail::bitrate);
       session->video.change_events = mail->event<video::change_t>(mail::video_change);
+      session->video.format_events = mail->event<video::format_note_t>(mail::video_format);
       session->video.fec_percentage = config::stream.fec_percentage;
       if (config::stream.adaptive_bitrate && !config.monitor.input_only) {
         auto settings = adaptive_settings();

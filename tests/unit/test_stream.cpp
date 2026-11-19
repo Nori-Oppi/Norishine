@@ -130,3 +130,32 @@ TEST(LiveChangeTests, EncoderBitrateLeavesRoomForErrorCorrectionAndAudio) {
   // Small bitrates lose at most 20 % for audio and 10 % for overhead
   EXPECT_EQ(stream::encoder_kbps(1000, 0, true, 8), 720);
 }
+
+TEST(LiveChangeTests, ParsesPictureSizeFrameRateAndCodec) {
+  stream::session::live_change_t change;
+  EXPECT_EQ(stream::session::parse_change({{"width", 1280}, {"height", 720}, {"fps", 120}, {"codec", "av1"}}, change), "");
+  EXPECT_EQ(change.width, 1280);
+  EXPECT_EQ(change.height, 720);
+  EXPECT_EQ(change.fps, 120);
+  EXPECT_EQ(change.codec, 2);
+
+  auto codec = [](const char *name) {
+    stream::session::live_change_t c;
+    stream::session::parse_change({{"codec", name}}, c);
+    return c.codec.value_or(-1);
+  };
+  EXPECT_EQ(codec("H.264"), 0);
+  EXPECT_EQ(codec("hevc"), 1);
+  EXPECT_EQ(codec("AV1"), 2);
+  EXPECT_EQ(codec("vp9"), -1);
+
+  auto error = [](const nlohmann::json &body) {
+    stream::session::live_change_t c;
+    return stream::session::parse_change(body, c);
+  };
+  EXPECT_NE(error({{"width", 1280}}), "");  // without height
+  EXPECT_NE(error({{"width", 1281}, {"height", 720}}), "");  // odd
+  EXPECT_NE(error({{"width", 100}, {"height", 100}}), "");
+  EXPECT_NE(error({{"fps", 5}}), "");
+  EXPECT_NE(error({{"codec", 1}}), "");
+}

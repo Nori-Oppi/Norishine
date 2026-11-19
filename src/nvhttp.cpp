@@ -1257,7 +1257,7 @@ namespace nvhttp {
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
     auto optimise_app = proc::proc.optimise_test_app();
-    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + (optimise_app ? "optimise,"s : ""s) + "status,stats,session,session.settings,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + (optimise_app ? "optimise,"s : ""s) + "status,stats,session,session.settings,session.video,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
     if (optimise_app) {
       // Norishine (N6): the hidden app that test streams launch (by this id, or by OPTIMISE_TEST_UUID)
       tree.put("root.Norishine.OptimiseAppId", optimise_app->id);

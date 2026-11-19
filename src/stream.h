@@ -98,6 +98,10 @@ namespace stream {
       std::optional<int> bitrate_kbps;  ///< The bitrate asked for, as at launch: before error correction, audio and overhead.
       std::optional<int> fec_percent;  ///< Error correction to return to and use now.
       std::optional<config::tuning_e> tuning;  ///< Tuning goal: the encoder preset.
+      std::optional<int> width;  ///< Picture size (with height).
+      std::optional<int> height;
+      std::optional<int> fps;
+      std::optional<int> codec;  ///< 0 H.264, 1 HEVC, 2 AV1
     };
 
     /**
@@ -109,6 +113,8 @@ namespace stream {
     /**
      * @brief Apply a client's change to its running stream (N9). Bitrate and the encoder
      *        preset rebuild the encoder behind one key frame; error correction changes at once.
+     *        Picture size, frame rate and codec also rebuild the client's decoder: the control
+     *        stream tells it the new format (message 0x3100) before the first frame in it.
      * @param status Set to the HTTP status to answer.
      * @return An error message, or empty on success.
      */

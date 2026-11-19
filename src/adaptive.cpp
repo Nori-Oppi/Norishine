@@ -279,6 +279,13 @@ namespace adaptive {
     return decision;
   }
 
+  void controller_t::set_target_fps(double fps) {
+    std::lock_guard lg {mutex};
+    if (fps > 0) {
+      target_fps = fps;
+    }
+  }
+
   void controller_t::change_bitrate(int kbps, reason_e reason, clock::time_point now, decision_t &decision) {
     kbps = std::clamp(kbps, min_kbps, max_kbps);
     if (kbps == bitrate_kbps) {
