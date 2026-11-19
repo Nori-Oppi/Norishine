@@ -42,6 +42,7 @@
 #include "rtsp.h"
 #include "state_store.h"
 #include "stream.h"
+#include "stream_start.h"
 #include "system_tray.h"
 #include "updater.h"
 #include "utility.h"
@@ -1846,6 +1847,7 @@ namespace nvhttp {
   }
 
   void launch(bool &host_audio, resp_https_t response, req_https_t request) {
+    stream_start::begin("launch");
     print_req<SunshineHTTPS>(request);
 
     pt::ptree tree;
@@ -1985,7 +1987,10 @@ namespace nvhttp {
 
         if (no_active_sessions && !proc::proc.virtual_display) {
           display_device::configure_display(config::video, *launch_session);
-          if (video::probe_encoders()) {
+          stream_start::mark("display configured");
+          auto probe_failed = video::probe_encoders();
+          stream_start::mark("encoders probed");
+          if (probe_failed) {
             tree.put("root.resume", 0);
             tree.put("root.<xmlattr>.status_code", 503);
             tree.put("root.<xmlattr>.status_message", "Failed to initialize video capture/encoding. Is a display connected and turned on?");
@@ -2043,10 +2048,12 @@ namespace nvhttp {
     );
     tree.put("root.gamesession", 1);
 
+    stream_start::mark("answered");
     rtsp_stream::launch_session_raise(launch_session);
   }
 
   void resume(bool &host_audio, resp_https_t response, req_https_t request) {
+    stream_start::begin("resume");
     print_req<SunshineHTTPS>(request);
 
     pt::ptree tree;
@@ -2117,12 +2124,15 @@ namespace nvhttp {
       // and the current session isn't virtual display at the moment.
       // This should be done before probing encoders as it could change the active displays.
       display_device::configure_display(config::video, *launch_session);
+      stream_start::mark("display configured");
 
       // Probe encoders again before streaming to ensure our chosen
       // encoder matches the active GPU (which could have changed
       // due to hotplugging, driver crash, primary monitor change,
       // or any number of other factors).
-      if (video::probe_encoders()) {
+      auto probe_failed = video::probe_encoders();
+      stream_start::mark("encoders probed");
+      if (probe_failed) {
         tree.put("root.resume", 0);
         tree.put("root.<xmlattr>.status_code", 503);
         tree.put("root.<xmlattr>.status_message", "Failed to initialize video capture/encoding. Is a display connected and turned on?");
@@ -2154,6 +2164,7 @@ namespace nvhttp {
     );
     tree.put("root.resume", 1);
 
+    stream_start::mark("answered");
     rtsp_stream::launch_session_raise(launch_session);
 
 #if defined SUNSHINE_TRAY && SUNSHINE_TRAY >= 1

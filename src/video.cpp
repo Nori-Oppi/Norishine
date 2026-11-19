@@ -29,6 +29,7 @@ extern "C" {
 #include "nvenc/nvenc_base.h"
 #include "platform/common.h"
 #include "sync.h"
+#include "stream_start.h"
 #include "video.h"
 
 #ifdef _WIN32
@@ -1194,6 +1195,7 @@ namespace video {
     }
 
     display_wp = disp;
+    stream_start::mark("capture opened");
 
     constexpr auto capture_buffer_size = 12;
     std::list<std::shared_ptr<platf::img_t>> imgs(capture_buffer_size);
@@ -1936,6 +1938,7 @@ namespace video {
     if (!session) {
       return;
     }
+    stream_start::mark("encoder created");
 
     // As a workaround for NVENC hangs and to generally speed up encoder reinit,
     // we will complete the encoder teardown in a separate thread if supported.
@@ -2447,6 +2450,7 @@ namespace video {
         }
       }
 
+      stream_start::mark("capture ready");
       auto encode_device = make_encode_device(*display, encoder, config);
       if (!encode_device) {
         return;
@@ -2952,6 +2956,11 @@ namespace video {
     if (active_av1_mode == 0) {
       active_av1_mode = encoder.av1[encoder_t::PASSED] ? (encoder.av1[encoder_t::DYNAMIC_RANGE] ? 3 : 2) : 1;
     }
+
+    // Norishine (N5): remember the GPUs this probe saw, so the next stream only probes
+    // again when they change. Without this the startup probe never counts and the first
+    // stream after the host starts probes every encoder again (about a second).
+    platf::needs_encoder_reenumeration();
 
     return 0;
   }
