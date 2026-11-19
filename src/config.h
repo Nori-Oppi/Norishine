@@ -330,6 +330,14 @@ namespace config {
   std::vector<std::pair<std::string, std::string>> tuned_options(std::string_view encoder, int video_format, tuning_e tuning);
 
   /**
+   * @brief Sets one encoder preset in the running config, the way the config file would
+   *        (N6: the encoder test tries each). Keys: nvenc_preset, amd_quality, qsv_preset,
+   *        sw_preset.
+   * @return False for an unknown key or value.
+   */
+  bool set_encoder_preset(std::string_view key, const std::string &value);
+
+  /**
    * @brief NVENC settings for a tuning goal, starting from the host's.
    */
   nvenc::nvenc_config tuned_nvenc(const nvenc::nvenc_config &host, tuning_e tuning);

@@ -734,6 +734,19 @@
     "reason_loss": "Frequent frame loss",
     "help": "How recommendations work"
   },
+  "optimise": {
+    "section": "Optimise",
+    "title": "Encoder test",
+    "start": "Test encoder",
+    "running": "Testing… {progress} %",
+    "preset": "Preset",
+    "p95": "Time per frame (95 %)",
+    "apply": "Apply",
+    "applied": "Applied.",
+    "already": "Already set",
+    "failed": "Test failed: {error}",
+    "help": "How the encoder test works"
+  },
   "account": {
     "title": "Sign in to Norishine",
     "sign_in": "Sign in",

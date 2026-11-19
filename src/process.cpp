@@ -416,6 +416,13 @@ namespace proc {
       }
     }
 
+    if (_app.uuid == OPTIMISE_TEST_UUID) {
+      auto output = display_device::map_output_name(config::video.output_name);
+      if (!output.empty()) {
+        _app.cmd += " --display \"" + output + "\"";
+      }
+    }
+
     std::string fps_str;
     char fps_buf[8];
     snprintf(fps_buf, sizeof(fps_buf), "%.3f", (float)launch_session->fps / 1000.0f);
@@ -622,6 +629,42 @@ namespace proc {
 #endif
 
     return 0;
+  }
+
+  std::optional<ctx_t> proc_t::optimise_test_app() const {
+#ifdef _WIN32
+    WCHAR exe[MAX_PATH];
+    GetModuleFileNameW(nullptr, exe, _countof(exe));
+    auto pattern = boost::filesystem::path {exe}.parent_path() / "tools" / "norishine-testpattern.exe";
+    boost::system::error_code ec;
+    if (!boost::filesystem::exists(pattern, ec)) {
+      return std::nullopt;
+    }
+
+    ctx_t ctx {};
+    ctx.uuid = OPTIMISE_TEST_UUID;
+    ctx.name = "Optimise test";
+    // Never 0: an app id of 0 means that no app runs
+    ctx.id = std::get<0>(calculate_app_id(ctx.name, "", 0));
+    // Runs at most two minutes; the client ends the test stream before that
+    ctx.cmd = "\"" + pattern.string() + "\" --seconds 120";
+    ctx.working_dir = pattern.parent_path().string();
+    ctx.output = "null";
+    ctx.elevated = false;
+    ctx.auto_detach = false;
+    ctx.wait_all = false;
+    ctx.virtual_display = false;
+    ctx.virtual_display_primary = false;
+    ctx.use_app_identity = false;
+    ctx.per_client_app_identity = false;
+    ctx.allow_client_commands = false;
+    ctx.terminate_on_pause = true;
+    ctx.scale_factor = 100;
+    ctx.exit_timeout = 5s;
+    return ctx;
+#else
+    return std::nullopt;
+#endif
   }
 
   int proc_t::running() {

@@ -4,6 +4,10 @@
  */
 #pragma once
 
+#include <chrono>
+#include <string>
+#include <vector>
+
 // local includes
 #include "config.h"
 #include "input.h"
@@ -366,6 +370,25 @@ namespace video {
    * @warning This is only safe to call when there is no client actively streaming.
    */
   int probe_encoders();
+
+  /**
+   * @brief How long the chosen encoder takes per frame of what the display shows (N6).
+   */
+  struct encode_timing_t {
+    int width = 0;
+    int height = 0;
+    std::vector<double> frame_ms;  ///< Time to convert and encode each frame.
+    std::string error;  ///< Empty when it worked.
+  };
+
+  /**
+   * @brief Captures the stream's display and encodes up to `frames` frames with the chosen
+   *        encoder and the running config, timing each. Only while no stream runs: it uses
+   *        the encoder and the video packet queue the streams use.
+   * @param video_format 0 H.264, 1 HEVC, 2 AV1.
+   * @param timeout Gives up when the display shows no new frame for this long.
+   */
+  encode_timing_t time_encoder(int video_format, int frames, std::chrono::milliseconds timeout);
 
   /**
    * @brief Name of the encoder the last probe chose ("nvenc", "quicksync", "amdvce", "vaapi",

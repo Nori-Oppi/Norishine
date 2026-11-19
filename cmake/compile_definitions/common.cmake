@@ -134,6 +134,8 @@ set(SUNSHINE_TARGET_FILES
         "${CMAKE_SOURCE_DIR}/src/stream_metrics.cpp"
         "${CMAKE_SOURCE_DIR}/src/stream_start.h"
         "${CMAKE_SOURCE_DIR}/src/stream_start.cpp"
+        "${CMAKE_SOURCE_DIR}/src/optimise.h"
+        "${CMAKE_SOURCE_DIR}/src/optimise.cpp"
         "${CMAKE_SOURCE_DIR}/src/recommend.h"
         "${CMAKE_SOURCE_DIR}/src/recommend.cpp"
         "${CMAKE_SOURCE_DIR}/src/updater.h"

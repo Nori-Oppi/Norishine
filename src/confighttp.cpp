@@ -38,6 +38,7 @@
 #include "logging.h"
 #include "manage_api.h"
 #include "network.h"
+#include "optimise.h"
 #include "nvhttp.h"
 #include "platform/common.h"
 #include "process.h"
@@ -1261,6 +1262,39 @@ namespace confighttp {
   }
 
   /**
+   * @brief GET /api/v1/optimise: the encoder test's state and result (N6).
+   */
+  void getOptimiseV1(resp_https_t response, req_https_t request) {
+    if (!authenticate(response, request)) {
+      return;
+    }
+    send_response(response, optimise::describe());
+  }
+
+  /**
+   * @brief POST /api/v1/optimise: start the encoder test; /apply: write its pick (N6).
+   */
+  void changeOptimiseV1(resp_https_t response, req_https_t request, bool apply) {
+    if (!validateContentType(response, request, "application/json") || !authenticate(response, request)) {
+      return;
+    }
+    print_req(request);
+
+    if (apply) {
+      auto [code, body] = optimise::apply(config::sunshine.config_file);
+      send_json(response, code == 200 ? SimpleWeb::StatusCode::success_ok : code == 409 ? SimpleWeb::StatusCode::client_error_conflict : code == 400 ? SimpleWeb::StatusCode::client_error_bad_request : SimpleWeb::StatusCode::server_error_internal_server_error, body);
+      return;
+    }
+    std::string error;
+    auto code = optimise::start(error);
+    if (code == 202) {
+      send_json(response, SimpleWeb::StatusCode::success_accepted, optimise::describe());
+    } else {
+      send_json(response, code == 409 ? SimpleWeb::StatusCode::client_error_conflict : SimpleWeb::StatusCode::server_error_service_unavailable, {{"status", false}, {"error", error}});
+    }
+  }
+
+  /**
    * @brief Update state: this version, the newest one available, and a running update.
    * @param response The HTTP response object.
    * @param request The HTTP request object.
@@ -2200,6 +2234,13 @@ namespace confighttp {
     };
     server.resource["^/api/v1/recommendations/rollback$"]["POST"] = [](auto resp, auto req) {
       changeRecommendationsV1(resp, req, false);
+    };
+    server.resource["^/api/v1/optimise$"]["GET"] = getOptimiseV1;
+    server.resource["^/api/v1/optimise$"]["POST"] = [](auto resp, auto req) {
+      changeOptimiseV1(resp, req, false);
+    };
+    server.resource["^/api/v1/optimise/apply$"]["POST"] = [](auto resp, auto req) {
+      changeOptimiseV1(resp, req, true);
     };
     server.resource["^/api/v1/update$"]["GET"] = getUpdateV1;
     server.resource["^/api/v1/update$"]["POST"] = managed(true, [](auto &, auto &body) { return updater::start(body); });

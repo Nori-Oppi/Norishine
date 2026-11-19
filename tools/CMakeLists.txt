@@ -28,3 +28,14 @@ target_link_libraries(sunshinesvc
         wtsapi32
         ${PLATFORM_LIBRARIES})
 target_compile_options(sunshinesvc PRIVATE ${SUNSHINE_COMPILE_OPTIONS})
+
+# Moving test picture for the optimisation test streams (N6)
+add_executable(norishine-testpattern WIN32 testpattern.cpp)
+set_target_properties(norishine-testpattern PROPERTIES CXX_STANDARD 23)
+target_compile_definitions(norishine-testpattern PRIVATE UNICODE _UNICODE)
+target_link_options(norishine-testpattern PRIVATE -municode)
+target_link_libraries(norishine-testpattern
+        dwmapi
+        shell32
+        ${PLATFORM_LIBRARIES})
+target_compile_options(norishine-testpattern PRIVATE ${SUNSHINE_COMPILE_OPTIONS})

@@ -123,6 +123,15 @@ namespace recommend {
   /// The preset setting of an encoder ("nvenc" -> "nvenc_preset"); empty if it has none.
   std::string_view preset_key(std::string_view encoder);
 
+  /// A preset scale: its values, fastest first, and the highest step headroom may recommend.
+  struct preset_scale_t {
+    std::vector<nlohmann::json> steps;
+    std::size_t quality_ceiling = 0;
+  };
+
+  /// The scale of a preset setting ("amd_quality", ...); nothing for other keys.
+  std::optional<preset_scale_t> preset_scale(std::string_view key);
+
   /// One step faster or slower (higher quality) on a preset scale; nothing at the end of it.
   std::optional<nlohmann::json> faster(std::string_view key, const nlohmann::json &value);
   std::optional<nlohmann::json> higher_quality(std::string_view key, const nlohmann::json &value);
@@ -162,6 +171,10 @@ namespace recommend {
 
     /// POST /api/v1/recommendations/apply: {"keys": [...]} (optional; all when missing).
     reply_t apply(const nlohmann::json &body, const std::string &encoder, const std::string &config_file);
+
+    /// Writes the given values ({key: value}) and keeps the ones from before for rollback()
+    /// (the optimiser's apply, N6).
+    reply_t apply_values(const nlohmann::json &set, const std::string &config_file, std::string_view what);
 
     /// POST /api/v1/recommendations/rollback: restore the values from before the last apply.
     reply_t rollback(const std::string &config_file);

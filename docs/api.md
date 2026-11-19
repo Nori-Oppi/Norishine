@@ -109,7 +109,7 @@ by default, only per device from the web UI (paired devices, "Manage"):
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,status,stats,session,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,optimise,status,stats,session,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -203,6 +203,41 @@ apply, 400 for a malformed body.
 Puts back the values from before the last apply: settings that weren't in the config file
 are removed again. A setting changed since the apply is left as it is and listed in
 `skipped`. Answers as apply; 409 when there is nothing to undo.
+
+## GET /api/v1/optimise
+
+Feature `optimise` (the host has its test picture, `tools/norishine-testpattern.exe`). On
+both ports (`manage_read` on the HTTPS port). The host's encoder test (roadmap N6): the
+moving test picture is encoded with each step of the encoder's preset, fastest first, up
+to the step the recommendations stop at, 120 frames each at the display's size and 60 fps.
+The pick is the highest-quality step whose 95th percentile time per frame stays within 40 %
+of a frame (6.7 ms), else the fastest one.
+
+| Field | Meaning |
+| --- | --- |
+| `state` | `idle`, `running`, `done` or `failed` (`error` says why) |
+| `progress` | 0 to 100 |
+| `encoder`, `codec`, `width`, `height`, `fps` | What was tested |
+| `setting` | The preset setting (`nvenc_preset`, `amd_quality`, `qsv_preset` or `sw_preset`) |
+| `current` | Its value in the config file (null when unset) |
+| `results` | One entry per step: `value`, `frames`, `avg_ms`, `p95_ms`, `error` |
+| `pick` | The step to use, or null |
+
+## POST /api/v1/optimise
+
+Starts the test; needs `manage_write` on the HTTPS port (and the CSRF header on the web UI
+port). 202 with the state above; 409 while a stream or a test runs, or when the encoder has
+no preset to choose; 503 without a working encoder. Streams can't start while it runs (503).
+
+## POST /api/v1/optimise/apply
+
+Writes the pick to the config the way `POST /api/v1/recommendations/apply` does, and is
+undone the same way (`POST /api/v1/recommendations/rollback`). 409 when there is no pick.
+
+**Test streams.** On hosts with the feature, `serverinfo` also carries
+`<OptimiseAppId>` inside `<Norishine>`: a hidden app that shows the test picture on the
+stream's display. Launching it by that id (or by the UUID `6F7E21C4-5B0A-4D2E-9C3B-0E5A9D4B7C11`)
+gives a test stream; the app ends when the stream does. Norilight's Optimise uses it.
 
 ## GET /api/v1/session
 

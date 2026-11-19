@@ -2589,6 +2589,116 @@ namespace video {
     return flag;
   }
 
+  encode_timing_t time_encoder(int video_format, int frames, std::chrono::milliseconds timeout) {
+    encode_timing_t out;
+    if (!chosen_encoder) {
+      out.error = "No encoder";
+      return out;
+    }
+    auto &encoder = *chosen_encoder;
+
+    // 8-bit 4:2:0 SDR at 60 fps and 20 Mbps, like a default stream, on the display a stream
+    // would use; the size is the display's
+    config_t config {1920, 1080, 60, 20000, 1, 0, 1, video_format, 0, 0};
+    std::vector<std::string> display_names;
+    int display_p = -1;
+    refresh_displays(encoder.platform_formats->dev_type, display_names, display_p);
+    std::shared_ptr<platf::display_t> disp;
+    if (display_p >= 0) {
+      disp = platf::display(encoder.platform_formats->dev_type, display_names[display_p], config);
+    }
+    if (!disp) {
+      out.error = "Can't capture the display";
+      return out;
+    }
+    config.width = disp->width;
+    config.height = disp->height;
+    out.width = disp->width;
+    out.height = disp->height;
+
+    // Capture a few frames first, as a stream does: an encoder made before the first frame
+    // was captured left the capture without frames (AMD, desktop duplication).
+    {
+      std::vector<std::shared_ptr<platf::img_t>> warm_up {disp->alloc_img(), disp->alloc_img()};
+      int captured = 0;
+      auto until = std::chrono::steady_clock::now() + timeout;
+      bool warm_up_cursor = false;
+      disp->capture(
+        [&](std::shared_ptr<platf::img_t> &&, bool frame_captured) {
+          captured += frame_captured ? 1 : 0;
+          return captured < 5 && std::chrono::steady_clock::now() < until;
+        },
+        [&](std::shared_ptr<platf::img_t> &img_out) {
+          for (auto &img : warm_up) {
+            if (img.use_count() == 1) {
+              img_out = img;
+              return true;
+            }
+          }
+          return false;
+        },
+        &warm_up_cursor
+      );
+    }
+
+    auto encode_device = make_encode_device(*disp, encoder, config);
+    if (!encode_device) {
+      out.error = "Can't create the encoder";
+      return out;
+    }
+    auto session = make_encode_session(disp.get(), encoder, config, disp->width, disp->height, std::move(encode_device));
+    if (!session) {
+      out.error = "Can't create the encoder";
+      return out;
+    }
+
+    auto packets = mail::man->queue<packet_t>(mail::video_packets);
+    std::vector<std::shared_ptr<platf::img_t>> pool {disp->alloc_img(), disp->alloc_img(), disp->alloc_img()};
+    auto last_frame = std::chrono::steady_clock::now();
+    int64_t frame_nr = 1;
+    bool failed = false;
+    session->request_idr_frame();
+
+    auto pull = [&](std::shared_ptr<platf::img_t> &img_out) -> bool {
+      for (auto &img : pool) {
+        if (img && img.use_count() == 1) {
+          img_out = img;
+          return true;
+        }
+      }
+      return false;
+    };
+    auto push = [&](std::shared_ptr<platf::img_t> &&img, bool frame_captured) -> bool {
+      auto now = std::chrono::steady_clock::now();
+      if (frame_captured && img) {
+        last_frame = now;
+        auto start = std::chrono::steady_clock::now();
+        if (session->convert(*img) || encode(frame_nr++, *session, packets, nullptr, start)) {
+          failed = true;
+          return false;
+        }
+        auto end = std::chrono::steady_clock::now();
+        while (packets->peek()) {
+          packets->pop();
+        }
+        out.frame_ms.push_back(std::chrono::duration<double, std::milli>(end - start).count());
+      }
+      return !failed && static_cast<int>(out.frame_ms.size()) < frames && now - last_frame < timeout;
+    };
+
+    bool cursor = false;
+    auto status = disp->capture(push, pull, &cursor);
+    while (packets->peek()) {
+      packets->pop();
+    }
+    if (failed) {
+      out.error = "Encoding failed";
+    } else if (out.frame_ms.empty()) {
+      out.error = status == platf::capture_e::error ? "Capture failed" : "The display showed no new frames";
+    }
+    return out;
+  }
+
   bool validate_encoder(encoder_t &encoder, bool expect_failure) {
     const auto output_name {display_device::map_output_name(config::video.output_name)};
     std::shared_ptr<platf::display_t> disp;

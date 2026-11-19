@@ -420,6 +420,48 @@ namespace config {
     return {};
   }
 
+  bool set_encoder_preset(std::string_view key, const std::string &value) {
+    if (key == "nvenc_preset"sv) {
+      int preset = 0;
+      try {
+        preset = std::stoi(value);
+      } catch (...) {
+        return false;
+      }
+      if (preset < 1 || preset > 7) {
+        return false;
+      }
+      video.nv.quality_preset = preset;
+#if !defined(__ANDROID__) && !defined(__APPLE__)
+      video.nv_legacy.preset = preset + 11;
+#endif
+      return true;
+    }
+    if (key == "amd_quality"sv) {
+      if (value != "speed"sv && value != "balanced"sv && value != "quality"sv) {
+        return false;
+      }
+      video.amd.amd_quality_h264 = amd::quality_from_view<amd::quality_h264_e>(value, video.amd.amd_quality_h264);
+      video.amd.amd_quality_hevc = amd::quality_from_view<amd::quality_hevc_e>(value, video.amd.amd_quality_hevc);
+      video.amd.amd_quality_av1 = amd::quality_from_view<amd::quality_av1_e>(value, video.amd.amd_quality_av1);
+      return true;
+    }
+    if (key == "qsv_preset"sv) {
+      auto preset = qsv::preset_from_view(value);
+      if (!preset) {
+        return false;
+      }
+      video.qsv.qsv_preset = preset;
+      return true;
+    }
+    if (key == "sw_preset"sv) {
+      video.sw.sw_preset = value;
+      video.sw.svtav1_preset = sw::svtav1_preset_from_view(value);
+      return true;
+    }
+    return false;
+  }
+
   nvenc::nvenc_config tuned_nvenc(const nvenc::nvenc_config &host, tuning_e tuning) {
     auto config = host;
     if (tuning == tuning_e::performance) {
