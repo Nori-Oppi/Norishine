@@ -239,7 +239,10 @@ drops, like the ones the overflow already discards. Three runs each, back to bac
 | Time to first frame | 5259 ms | 5210 ms |
 | Stutters per minute | 8 | 1 |
 
-Creating the decoder before the stream starts (N5) would stop the backlog from building at all.
+The backlog only builds up when the client is slow to start: on 19 November the same builds
+showed their first frame after about 1.8 s instead of 5 s, no stream had a backlog, and
+both builds dropped 0.05 %. Creating the decoder before the stream starts (N5) would stop the
+backlog from building at all.
 
 #### Warm start
 
