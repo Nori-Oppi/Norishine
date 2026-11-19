@@ -1,6 +1,6 @@
 # Norishine architecture decisions and roadmap
 
-Status key: **done**, **in progress**, **planned**. Updated 2026-11-18: phases 2–5 are done, and the next
+Status key: **done**, **in progress**, **planned**. Updated 2026-11-19: phases 2–5 are done, and the next
 items are ranked under [Next](#next). Evidence for the
 decisions is in [PHASE1-RESEARCH.md](PHASE1-RESEARCH.md).
 
@@ -87,7 +87,7 @@ in, with confirmation) or the command line, never from a paired client.
 
 ## Done
 
-Phases 2 to 5 are finished, and so are N1 to N4. Details are in the linked docs and the git history.
+Phases 2 to 5 are finished, and so are N1 to N4 and N14. Details are in the linked docs and the git history.
 
 | Milestone | What it gave | More |
 | --- | --- | --- |
@@ -102,6 +102,7 @@ Phases 2 to 5 are finished, and so are N1 to N4. Details are in the linked docs 
 | N1 Reset button (Norilight) | Settings › Reset Norilight: settings moved to a dated backup (D9), restart into the first-start wizard; `Norilight --reset` | [Norilight Guide](https://github.com/Nori-Oppi/norilight-docs/wiki/Norilight-Guide#resetting-norilight) |
 | N3 Help links (Norilight) | Norilight's help buttons open the new [norilight-docs wiki](https://github.com/Nori-Oppi/norilight-docs/wiki) (setup, troubleshooting, hardware decoding, gamepad mapping) instead of moonlight-docs; the wiki also holds both apps' guides | [wiki](https://github.com/Nori-Oppi/norilight-docs/wiki) |
 | N4 Setup wizard and reset | First start in the web UI: sign-in, import from Apollo or Vibepollo, host name, display, encoder check, first device and its permissions; Troubleshooting › Reset Norishine and `norishine --reset` move everything to a dated backup (D9) and open the wizard again | [Norishine Guide](https://github.com/Nori-Oppi/norilight-docs/wiki/Norishine-Guide#first-start) |
+| N14 Fewer pacer drops (Norilight) | The full-queue drops all came from the first second of a stream: the decoder starts after the stream, so it began with a backlog of stale frames. A new decoder now shows its first frame and skips that backlog for a fresh key frame. Dropped frames 0.08 → 0.03 % in the benchmark check | [BENCHMARK.md](BENCHMARK.md#dropped-frames-norilight-counted-drops-moonlight-620-doesnt) |
 | N2 Benchmark check | `scripts/benchmark/compare.py`: Norishine with Norilight against stored Apollo, Vibepollo and Sunshine results with Moonlight, per metric better, same or worse; run after every streaming change | [BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine) |
 
 ## In progress: M10 measured improvements
@@ -145,7 +146,6 @@ whenever there's room, between the items above:
 
 | # | Item | Project | Effort | Importance |
 | --- | --- | --- | --- | --- |
-| N14 | Fewer full-queue frame drops in the pacer | Norilight | S–M | Medium |
 | N15 | Benchmark streams that show no picture | Norishine (check script) | S | Low |
 
 ### N5. Near-instant stream start — L
@@ -203,14 +203,6 @@ profiles matched to the built-in screen, and a battery-aware tuning goal.
 Last: another separate codebase (Moonlight iOS or Qt for iOS), and unsigned nightlies can't
 be installed on iOS without a developer account or sideloading. Done after Android, reusing
 its decisions.
-
-### N14. Fewer full-queue frame drops in the pacer (Norilight) — S–M
-The client's frame pacer throws away frames that arrive while its queue is already full:
-about 0.15–0.3 % of frames, a few a minute. Moonlight 6.2.0 drops the same frames, so this
-isn't a regression, but fewer drops would put Norilight ahead of Moonlight. Find why the queue
-is full when a frame arrives (decode or present timing, V-sync off with the Performance goal,
-queue depth) and reduce it; prove it with the benchmark check (no other metric worse). See
-[BENCHMARK.md](BENCHMARK.md), the section on the extra frame drops.
 
 ### N15. Benchmark streams that show no picture (check script) — S
 About one stream in eleven in the benchmark check shows no picture: the client recreates its

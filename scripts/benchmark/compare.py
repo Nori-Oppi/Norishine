@@ -440,7 +440,16 @@ class Stream:
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
         self.watcher.stop()
+        self.save_log()
         time.sleep(0.5)
+
+    def save_log(self):
+        """Keeps the client's log of each stream in build/benchmark/logs."""
+        folder = os.path.join(WORK, 'logs')
+        os.makedirs(folder, exist_ok=True)
+        name = '%s-%s-%s.txt' % (self.host.name, self.client.name, datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+        with open(os.path.join(folder, name), 'w', encoding='utf-8') as f:
+            f.write('\n'.join(l for _, l in self.lines if 'nal_unit' not in l))
 
     def stats_block(self):
         """The client's last end-of-stream statistics, without the decoder's debug lines
