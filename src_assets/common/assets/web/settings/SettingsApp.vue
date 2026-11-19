@@ -4,6 +4,7 @@ import AppShell from '../ui/AppShell.vue'
 import { api, restartHost } from '../ui/api'
 import SettingRow from './SettingRow.vue'
 import Recommendations from './Recommendations.vue'
+import EncoderTest from '../ui/EncoderTest.vue'
 import HelpLink from '../ui/HelpLink.vue'
 import {
   RESET, computeChange, effective, formatValue, isDependencyMet, matches, same, searchWords,
@@ -275,6 +276,17 @@ async function doSave() {
     saving.value = false
   }
   return false
+}
+
+// The encoder test's pick was applied: it can be undone with the recommendations.
+const recommendationsRef = ref(null)
+function formatSetting(key, v) {
+  const s = byKey.value[key]
+  return s ? formatValue(s, v, t) : String(v)
+}
+async function onEncoderTestApplied(restartRequired) {
+  await onRecommendationChange(restartRequired)
+  recommendationsRef.value?.load()
 }
 
 // A recommendation was applied or undone: take the new values as the baseline.
@@ -590,7 +602,16 @@ const rowProps = (s, inSearch) => ({
         </div>
 
         <template v-else-if="schema">
-          <Recommendations v-if="!searching" :by-key="byKey" @changed="onRecommendationChange" />
+          <Recommendations v-if="!searching" ref="recommendationsRef" :by-key="byKey" @changed="onRecommendationChange" />
+          <section v-if="!searching" class="section">
+            <h2 class="card-title">
+              {{ $t('optimise.section') }}
+              <HelpLink page="Norishine-Guide#encoder-test" :label="$t('optimise.help')" />
+            </h2>
+            <div class="card">
+              <EncoderTest :format="formatSetting" @changed="onEncoderTestApplied" />
+            </div>
+          </section>
 
           <!-- Search results, across all categories -->
           <template v-if="searching">

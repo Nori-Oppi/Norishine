@@ -38,6 +38,9 @@
 #define FALLBACK_DESKTOP_UUID "EAAC6159-089A-46A9-9E24-6436885F6610"
 #define REMOTE_INPUT_UUID "8CB5C136-DA67-4F99-B4A1-F9CD35005CF4"
 #define TERMINATE_APP_UUID "E16CBE1B-295D-4632-9A76-EC4180C857D3"
+// Norishine (N6): the optimisation test stream. Not in the app list; Norilight launches it
+// by this UUID and the host shows its moving test picture on the stream's display.
+#define OPTIMISE_TEST_UUID "6F7E21C4-5B0A-4D2E-9C3B-0E5A9D4B7C11"
 
 namespace proc {
   using file_t = util::safe_ptr_v2<FILE, int, fclose>;
@@ -131,6 +134,12 @@ namespace proc {
     ~proc_t();
 
     const std::vector<ctx_t> &get_apps() const;
+
+    /**
+     * @brief The optimisation test stream's app (N6), or nothing when the test picture
+     *        isn't installed or the platform has none.
+     */
+    std::optional<ctx_t> optimise_test_app() const;
     std::vector<ctx_t> &get_apps();
     std::string get_app_image(int app_id);
     std::string get_last_run_app_name();

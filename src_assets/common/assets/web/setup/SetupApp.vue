@@ -1,5 +1,6 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import EncoderTest from '../ui/EncoderTest.vue'
 import { api, restartHost } from '../ui/api'
 import HelpLink from '../ui/HelpLink.vue'
 import { P, PRESETS, presetOf, setLevel } from '../clients/permissions'
@@ -269,6 +270,7 @@ onMounted(async () => {
                 <i class="fas" :class="c.ok ? 'fa-check' : 'fa-xmark'" aria-hidden="true"></i> {{ $t('setup.codec_' + c.key) }}
               </span>
             </div>
+            <EncoderTest v-if="encoder.status" />
           </template>
           <div class="buttons">
             <button type="button" class="btn" :disabled="busy" @click="back">{{ $t('setup.back') }}</button>

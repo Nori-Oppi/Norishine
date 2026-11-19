@@ -37,6 +37,7 @@
 #include "manage_api.h"
 #include "network.h"
 #include "nvhttp.h"
+#include "optimise.h"
 #include "platform/common.h"
 #include "process.h"
 #include "rtsp.h"
@@ -1255,7 +1256,12 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
-    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + "status,stats,session,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    auto optimise_app = proc::proc.optimise_test_app();
+    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + (optimise_app ? "optimise,"s : ""s) + "status,stats,session,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    if (optimise_app) {
+      // Norishine (N6): the hidden app that test streams launch (by this id, or by OPTIMISE_TEST_UUID)
+      tree.put("root.Norishine.OptimiseAppId", optimise_app->id);
+    }
 
     std::ostringstream data;
 
@@ -1363,6 +1369,43 @@ namespace nvhttp {
         BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] "sv << (apply ? "applied"sv : "undid"sv) << " recommended settings"sv;
       }
       send_json(response, recommend_status(reply.code), reply.body);
+    }
+
+    /**
+     * @brief GET /api/v1/optimise: the host's encoder test (N6).
+     */
+    void optimise_get(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, read_perm, "read host settings")) {
+        return;
+      }
+      send_json(response, SimpleWeb::StatusCode::success_ok, optimise::describe());
+    }
+
+    /**
+     * @brief POST /api/v1/optimise (start) and /api/v1/optimise/apply, like changing host settings.
+     */
+    void optimise_change(resp_https_t response, req_https_t request, bool apply) {
+      print_req<SunshineHTTPS>(request);
+      if (!allowed(response, request, PERM::manage_write, "change host settings")) {
+        return;
+      }
+      if (apply) {
+        auto [code, body] = optimise::apply(config::sunshine.config_file);
+        if (code == 200) {
+          BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] applied the encoder test's preset"sv;
+        }
+        send_json(response, recommend_status(code), body);
+        return;
+      }
+      std::string error;
+      auto code = optimise::start(error);
+      if (code == 202) {
+        BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] started the encoder test"sv;
+        send_json(response, SimpleWeb::StatusCode::success_accepted, optimise::describe());
+      } else {
+        send_json(response, code == 409 ? SimpleWeb::StatusCode::client_error_conflict : SimpleWeb::StatusCode::server_error_service_unavailable, {{"status", false}, {"error", error}});
+      }
     }
 
     void config_schema(resp_https_t response, req_https_t request) {
@@ -1896,6 +1939,12 @@ namespace nvhttp {
 
       return;
     }
+    if (optimise::running()) {
+      tree.put("root.resume", 0);
+      tree.put("root.<xmlattr>.status_code", 503);
+      tree.put("root.<xmlattr>.status_message", "The host is testing its encoder. Try again in a moment.");
+      return;
+    }
     if (
       args.find("rikey"s) == std::end(args) ||
       args.find("rikeyid"s) == std::end(args) ||
@@ -2004,7 +2053,20 @@ namespace nvhttp {
           return _app.id == appid_str || _app.uuid == appuuid_str;
         });
 
-        if (app_iter == apps.end()) {
+        // Norishine (N6): the optimisation test stream shows the host's test picture. Clients
+        // launch it by its UUID or by the id in serverinfo (root.Norishine.OptimiseAppId).
+        std::optional<proc::ctx_t> test_app;
+        if (appuuid_str == OPTIMISE_TEST_UUID || app_iter == apps.end()) {
+          test_app = proc::proc.optimise_test_app();
+          if (test_app && appuuid_str != OPTIMISE_TEST_UUID && test_app->id != appid_str) {
+            test_app.reset();
+          } else if (!test_app && appuuid_str == OPTIMISE_TEST_UUID) {
+            BOOST_LOG(warning) << "Optimise test stream asked for, but norishine-testpattern.exe is missing"sv;
+          }
+        }
+        const proc::ctx_t *app_p = test_app ? &*test_app : app_iter != apps.end() ? &*app_iter : nullptr;
+
+        if (app_p == nullptr) {
           BOOST_LOG(error) << "Couldn't find app with ID ["sv << appid_str << "] or UUID ["sv << appuuid_str << ']';
           tree.put("root.<xmlattr>.status_code", 404);
           tree.put("root.<xmlattr>.status_message", "Cannot find requested application");
@@ -2012,12 +2074,12 @@ namespace nvhttp {
           return;
         }
 
-        if (!app_iter->allow_client_commands) {
+        if (!app_p->allow_client_commands) {
           launch_session->client_do_cmds.clear();
           launch_session->client_undo_cmds.clear();
         }
 
-        auto err = proc::proc.execute(*app_iter, launch_session);
+        auto err = proc::proc.execute(*app_p, launch_session);
         if (err) {
           tree.put("root.<xmlattr>.status_code", err);
           tree.put(
@@ -2086,6 +2148,12 @@ namespace nvhttp {
       tree.put("root.<xmlattr>.status_code", 503);
       tree.put("root.<xmlattr>.status_message", "No running app to resume");
 
+      return;
+    }
+    if (optimise::running()) {
+      tree.put("root.resume", 0);
+      tree.put("root.<xmlattr>.status_code", 503);
+      tree.put("root.<xmlattr>.status_message", "The host is testing its encoder. Try again in a moment.");
       return;
     }
 
@@ -2450,6 +2518,13 @@ namespace nvhttp {
     https_server.resource["^/api/v1/session/report$"]["POST"] = api::session_report;
     https_server.resource["^/api/v1/update$"]["GET"] = api::update_status;
     https_server.resource["^/api/v1/update$"]["POST"] = api::update_start;
+    https_server.resource["^/api/v1/optimise$"]["GET"] = api::optimise_get;
+    https_server.resource["^/api/v1/optimise$"]["POST"] = [](auto resp, auto req) {
+      api::optimise_change(resp, req, false);
+    };
+    https_server.resource["^/api/v1/optimise/apply$"]["POST"] = [](auto resp, auto req) {
+      api::optimise_change(resp, req, true);
+    };
     https_server.resource["^/api/v1/recommendations$"]["GET"] = api::recommendations_get;
     https_server.resource["^/api/v1/recommendations/apply$"]["POST"] = [](auto resp, auto req) {
       api::recommendations_change(resp, req, true);

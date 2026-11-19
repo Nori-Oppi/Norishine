@@ -230,6 +230,14 @@ namespace recommend {
     return {};
   }
 
+  std::optional<preset_scale_t> preset_scale(std::string_view key) {
+    const auto *scale = scale_for(key);
+    if (!scale) {
+      return std::nullopt;
+    }
+    return preset_scale_t {scale->steps, scale->quality_ceiling};
+  }
+
   std::optional<nlohmann::json> faster(std::string_view key, const nlohmann::json &value) {
     const auto *scale = scale_for(key);
     if (!scale) {
@@ -464,33 +472,40 @@ namespace recommend {
       return {400, {{"status", false}, {"error", "The body must be a JSON object"}}};
     }
 
-    auto file_values = config::schema::read_config_file(config_file)["values"];
-    auto current = tracked_values(file_values);
-
-    std::lock_guard lock {mutex};
-    auto it = streams.find(encoder);
-    auto recs = it == streams.end() ? std::vector<recommendation_t> {} : derive(encoder, it->second, current);
-
     nlohmann::json set = nlohmann::json::object();
-    if (keys) {
-      for (const auto &key : *keys) {
-        auto rec = std::find_if(recs.begin(), recs.end(), [&](const auto &r) {
-          return r.key == key;
-        });
-        if (rec == recs.end()) {
-          return {409, {{"status", false}, {"error", "No recommendation for " + key}}};
+    {
+      auto current = tracked_values(config::schema::read_config_file(config_file)["values"]);
+
+      std::lock_guard lock {mutex};
+      auto it = streams.find(encoder);
+      auto recs = it == streams.end() ? std::vector<recommendation_t> {} : derive(encoder, it->second, current);
+
+      if (keys) {
+        for (const auto &key : *keys) {
+          auto rec = std::find_if(recs.begin(), recs.end(), [&](const auto &r) {
+            return r.key == key;
+          });
+          if (rec == recs.end()) {
+            return {409, {{"status", false}, {"error", "No recommendation for " + key}}};
+          }
+          set[key] = rec->recommended;
         }
-        set[key] = rec->recommended;
-      }
-    } else {
-      for (const auto &r : recs) {
-        set[r.key] = r.recommended;
+      } else {
+        for (const auto &r : recs) {
+          set[r.key] = r.recommended;
+        }
       }
     }
     if (set.empty()) {
       return {409, {{"status", false}, {"error", "Nothing to apply"}}};
     }
+    return apply_values(set, config_file, "Recommendations");
+  }
 
+  reply_t store_t::apply_values(const nlohmann::json &set, const std::string &config_file, std::string_view what) {
+    auto file_values = config::schema::read_config_file(config_file)["values"];
+
+    std::lock_guard lock {mutex};
     auto change = config::schema::validate_change({{"set", set}});
     if (!change.errors.empty()) {
       return {400, {{"status", false}, {"errors", change.errors}}};
@@ -513,7 +528,7 @@ namespace recommend {
     applied["at"] = unix_now();
     save();
 
-    BOOST_LOG(info) << "Recommendations: applied "sv << set.dump();
+    BOOST_LOG(info) << what << ": applied "sv << set.dump();
     return {200, {{"status", true}, {"changed", result.changed}, {"restart_required", result.restart_required}}};
   }
 
