@@ -50,6 +50,8 @@
 #include "uuid.h"
 #include "video.h"
 #include "web_auth.h"
+#include "rtsp.h"
+#include "stream.h"
 #include "version.h"
 
 #ifdef _WIN32
@@ -1941,6 +1943,8 @@ namespace confighttp {
 
     print_req(request);
 
+    // Streaming clients hear it first, so Norilight reconnects by itself (N10)
+    std::this_thread::sleep_for(stream::announce_restart("restart"));
     proc::proc.terminate();
 
     // We may not return from this call

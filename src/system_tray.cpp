@@ -51,6 +51,8 @@
   #include "confighttp.h"
   #include "display_device.h"
   #include "logging.h"
+  #include "rtsp.h"
+  #include "stream.h"
   #include "platform/common.h"
   #include "process.h"
   #include "network.h"
@@ -87,6 +89,8 @@ namespace system_tray {
   void tray_restart_cb([[maybe_unused]] struct tray_menu *item) {
     BOOST_LOG(info) << "Restarting from system tray"sv;
 
+    // Streaming clients hear it first, so Norilight reconnects by itself (N10)
+    std::this_thread::sleep_for(stream::announce_restart("restart"));
     proc::proc.terminate();
     platf::restart();
   }

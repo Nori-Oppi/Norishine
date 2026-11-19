@@ -5,6 +5,7 @@
 #pragma once
 
 // standard includes
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -133,4 +134,19 @@ namespace stream {
    *        frame; error correction, the adaptation bounds and max_bitrate change at once.
    */
   void settings_changed(const std::vector<std::string> &keys);
+
+  /**
+   * @brief The host is about to restart (N10): an update, or a restart for its settings.
+   *        Clients that ask about their own stream (GET /api/v1/session, the reports)
+   *        hear why in `host_restarting`, so Norilight waits and starts the app again.
+   * @param reason "update" or "restart".
+   * @return How long to wait before restarting so streaming clients hear it (Norilight
+   *         reports once a second); zero without streams.
+   */
+  std::chrono::milliseconds announce_restart(std::string_view reason);
+
+  /**
+   * @brief Why the host is about to restart, or empty.
+   */
+  std::string restart_reason();
 }  // namespace stream
