@@ -361,6 +361,32 @@ met. What's left on the client: two decoder checks (about 330 ms), launching and
 Not measured here: virtual displays and display changes, which the benchmark turns off on
 every host. They add their own time on PCs that use them.
 
+## Reconnect after a host restart (N10)
+
+Measured with `scripts/e2e/live_settings_check.py` (the last part): a Norilight stream of the
+test picture, then `POST /api/restart` (what the web UI's Save and restart sends). The dev host
+doesn't start itself again, so the script starts it as the service would.
+
+| Step | Time |
+| --- | --- |
+| The host says it restarts (Norilight hears it in its next report) and waits | 1.5 s |
+| The host stops, and starts again until it answers | 2.2 s |
+| Norilight sees the new run (`RunId`), launches the app again and shows a picture | 0.5 s |
+| **Picture gone** | **4.2 s** |
+
+Norilight's own part is half a second: the reconnect is as quick as a launch (N5). The rest
+is the host being away. For an update, that's the installer: the guide says about a minute,
+and the reconnect adds the same half second at the end (not measured on a real update here:
+development builds can't update themselves, and the installed host wasn't updated for a test).
+
+**A real handover** (the new process taking over the running stream) would only remove the
+host's own downtime. It would need the installer to replace files the running host holds
+open, the new process to take over the old one's sockets, encoder and capture, and the
+stream's encryption state, with the service manager's stop and start in between. For a
+restart that's under 4 s once in a while, and for an update about a minute that the user asked
+for; the reconnect makes both hands-off. So it isn't planned; shortening the installer's
+silent run would help updates more.
+
 ## Host benchmark (stream_bench.py)
 
 A fixed stream, run the same way each time, so changes to the host (encoder settings,

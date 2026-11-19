@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <random>
 #include <format>
 #include <mutex>
 #include <string>
@@ -1256,8 +1257,16 @@ namespace nvhttp {
     // Norishine management API (roadmap D4): one optional element that Moonlight and
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
+    // N10: differs on every start, so a client knows a restarted host from the one it streamed from
+    static const std::string run_id = [] {
+      std::random_device rd;
+      std::ostringstream id;
+      id << std::hex << rd() << rd();
+      return id.str();
+    }();
+    tree.put("root.Norishine.RunId", run_id);
     auto optimise_app = proc::proc.optimise_test_app();
-    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + (optimise_app ? "optimise,"s : ""s) + "status,stats,session,session.settings,session.video,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + (optimise_app ? "optimise,"s : ""s) + "status,stats,session,session.settings,session.video,reconnect,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
     if (optimise_app) {
       // Norishine (N6): the hidden app that test streams launch (by this id, or by OPTIMISE_TEST_UUID)
       tree.put("root.Norishine.OptimiseAppId", optimise_app->id);
@@ -1473,9 +1482,9 @@ namespace nvhttp {
       BOOST_LOG(info) << "Management API: ["sv << get_verified_cert(request)->name << "] restarts the host"sv;
       send_json(response, SimpleWeb::StatusCode::success_ok, {{"status", true}});
 
-      // Answer first: platf::restart() may not return.
+      // Answer first: platf::restart() may not return. Streaming clients hear it first (N10).
       std::thread([]() {
-        std::this_thread::sleep_for(500ms);
+        std::this_thread::sleep_for(std::max<std::chrono::milliseconds>(500ms, stream::announce_restart("restart")));
         proc::proc.terminate();
         platf::restart();
       }).detach();
@@ -1537,7 +1546,8 @@ namespace nvhttp {
       entry["hdr"] = info.hdr;
       entry["tuning"] = std::string {config::to_string(info.tuning)};
       entry["adaptive"] = info.adaptive ? adaptive::to_json(*info.adaptive) : nlohmann::json(nullptr);
-      return {{"status", true}, {"stream", entry}};
+      auto restarting = stream::restart_reason();
+      return {{"status", true}, {"stream", entry}, {"host_restarting", restarting.empty() ? nlohmann::json(nullptr) : nlohmann::json(restarting)}};
     }
 
     /**

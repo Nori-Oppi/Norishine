@@ -111,7 +111,7 @@ by default, only per device from the web UI (paired devices, "Manage"):
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,optimise,status,stats,session,session.settings,session.video,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,optimise,status,stats,session,session.settings,session.video,reconnect,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -249,6 +249,14 @@ permission is needed, since a device only sees its own. 404 when it has no strea
 `stream`: the per-stream fields of `/api/v1/stats` (including `adaptive`), plus `width`,
 `height`, `target_fps`, `start_bitrate_kbps`, `codec`, `hdr` and `tuning` (the goal the
 encoder was set up for, or empty).
+
+Optional, added later (feature `reconnect`, roadmap N10): `host_restarting` is `update` or
+`restart` once the host is about to restart (an update is being installed, or a restart was
+asked for from the web UI, the tray or `POST /api/v1/restart`), otherwise null. With streams
+running, a restart waits 1.5 s after saying so, and an update about 3 s (apply-update.ps1),
+so a client reporting once a second hears it. Norilight then waits for the host and starts
+the app again. To know the restarted host from the old one, serverinfo's `<Norishine>`
+element carries `<RunId>`, which differs every time the host starts.
 
 ## Launch parameter norishineTuning
 

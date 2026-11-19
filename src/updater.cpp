@@ -28,6 +28,8 @@
 #include "state_store.h"
 #include "updater.h"
 #include "version.h"
+#include "rtsp.h"
+#include "stream.h"
 
 #ifdef _WIN32
   #include "platform/windows/misc.h"
@@ -345,6 +347,9 @@ namespace updater {
       }
       BOOST_LOG(info) << "Update: installing "sv << release.version << "; the host restarts when it's done"sv;
       shared.state = state_e::installing;
+      // Streaming clients hear it (apply-update.ps1 waits 3 s before the installer stops the
+      // host), so Norilight reconnects by itself once the new host runs (N10).
+      stream::announce_restart("update");
     }
 
     /// Refreshes the release list if needed. The caller holds shared.mutex.

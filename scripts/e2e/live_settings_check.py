@@ -13,7 +13,10 @@ relay), streams the test picture, and while the stream runs:
    Norilight's stream settings menu (Ctrl+Alt+Shift+O, keys sent to the stream window);
 3. changes resolution, frame rate and codec the same way, and checks that Norilight rebuilds
    its decoder for the host's new format without reconnecting. It prints how long the picture
-   paused for each change.
+   paused for each change;
+4. (N10) restarts the host during the stream (POST /api/restart, as Save and restart in the
+   web UI) and starts it again, as the service would; Norilight must wait for it and start
+   the app again by itself. It prints how long the picture was gone.
 
 Every check prints PASS or FAIL; the exit code is the number of failures. Leave the PC alone
 while it runs: windows open and close by themselves.
@@ -300,11 +303,44 @@ def video_format(host, client, stream, log):
         check('%s: no reconnect' % label, handshakes == 1 and stream.proc.poll() is None, handshakes)
 
 
+def reconnect(host, client, stream, log):
+    """N10: Norilight reconnects by itself after the host restarts."""
+    t = time.perf_counter()
+    st, body = host.web.call('POST', '/api/restart', {})
+    # The answer may not arrive: the host exits
+    try:
+        host.proc.wait(30)
+    except Exception:
+        pass
+    exited = host.proc.poll() is not None
+    check('restart: the host exits', exited)
+    down = time.perf_counter()
+    check('restart: Norilight heard it first', wait_for(lambda: client_log(stream, 'host is about to restart', t), timeout=5),
+          [l for _, l in stream.lines[-5:]])
+    # A dev host doesn't start itself again: do what the service does
+    host.start()
+    up = time.perf_counter()
+    back = wait_for(lambda: client_log(stream, 'Waited', t), timeout=120)
+    check('restart: Norilight waited for the host', back and 'back' in back[0], back)
+    handshakes = wait_for(lambda: sum(1 for _, l in stream.lines if 'Starting RTSP handshake' in l) >= 2 or None, timeout=60)
+    check('restart: Norilight started the app again', handshakes)
+    shown = wait_for(lambda: [c for c in stream.watcher.changes if c > up + 0.5], timeout=60)
+    if shown:
+        print('      picture gone %.1f s: host down %.1f s, then %.1f s until a new picture' %
+              (shown[0] - t, up - t, shown[0] - up), flush=True)
+    check('restart: the stream shows new frames again', shown)
+    time.sleep(6)
+    sent = (session(host) or {}).get('fps') or 0
+    check('restart: the new stream keeps going (host sends %.1f fps)' % sent, sent >= 54, sent)
+    errors = client_log(stream, 'Connection terminated', up)
+    check('restart: Norilight stays open, no error after it', stream.proc.poll() is None and not errors, errors)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--norishine', default=os.path.join(compare.ROOT, 'build', 'sunshine.exe'))
     p.add_argument('--norilight', default=os.path.join(os.path.dirname(compare.ROOT), 'Norilight', 'build', 'Norilight-x64-release'))
-    p.add_argument('--step', type=int, default=3, help='check N9 steps up to this one (default 3)')
+    p.add_argument('--step', type=int, default=4, help='check N9 steps up to this one, 4 for N10 (default 4)')
     args = p.parse_args()
 
     setup = compare.load_setup()
@@ -329,6 +365,8 @@ def main():
                 stream_settings(host, client, stream, log)
             if args.step >= 3:
                 video_format(host, client, stream, log)
+            if args.step >= 4:
+                reconnect(host, client, stream, log)
         finally:
             stream.stop()
     finally:

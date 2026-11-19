@@ -2197,6 +2197,26 @@ namespace stream {
     return settings;
   }
 
+  namespace {
+    std::mutex restart_mutex;
+    std::string restart_why;
+  }
+
+  std::chrono::milliseconds announce_restart(std::string_view reason) {
+    {
+      std::lock_guard lock {restart_mutex};
+      restart_why = reason;
+    }
+    auto streams = rtsp_stream::session_count();
+    BOOST_LOG(info) << "Host restarts ("sv << reason << "); streams running: "sv << streams;
+    return streams > 0 ? std::chrono::milliseconds(1500) : std::chrono::milliseconds(0);
+  }
+
+  std::string restart_reason() {
+    std::lock_guard lock {restart_mutex};
+    return restart_why;
+  }
+
   void settings_changed(const std::vector<std::string> &keys) {
     bool encoder = false;
     bool network = false;
