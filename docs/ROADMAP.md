@@ -87,7 +87,7 @@ in, with confirmation) or the command line, never from a paired client.
 
 ## Done
 
-Phases 2 to 5 are finished, and so are N1 to N4 and N14. Details are in the linked docs and the git history.
+Phases 2 to 5 are finished, and so are N1 to N5 and N14. Details are in the linked docs and the git history.
 
 | Milestone | What it gave | More |
 | --- | --- | --- |
@@ -102,6 +102,7 @@ Phases 2 to 5 are finished, and so are N1 to N4 and N14. Details are in the link
 | N1 Reset button (Norilight) | Settings › Reset Norilight: settings moved to a dated backup (D9), restart into the first-start wizard; `Norilight --reset` | [Norilight Guide](https://github.com/Nori-Oppi/norilight-docs/wiki/Norilight-Guide#resetting-norilight) |
 | N3 Help links (Norilight) | Norilight's help buttons open the new [norilight-docs wiki](https://github.com/Nori-Oppi/norilight-docs/wiki) (setup, troubleshooting, hardware decoding, gamepad mapping) instead of moonlight-docs; the wiki also holds both apps' guides | [wiki](https://github.com/Nori-Oppi/norilight-docs/wiki) |
 | N4 Setup wizard and reset | First start in the web UI: sign-in, import from Apollo or Vibepollo, host name, display, encoder check, first device and its permissions; Troubleshooting › Reset Norishine and `norishine --reset` move everything to a dated backup (D9) and open the wizard again | [Norishine Guide](https://github.com/Nori-Oppi/norilight-docs/wiki/Norishine-Guide#first-start) |
+| N5 Near-instant stream start | Host and Norilight log every step from choosing the app to the first frame; the host no longer probes every encoder again on the first stream after it starts, and Norilight opens the audio device once, in the background, and checks each decoder once. Launch 1060 → 895 ms, resume 975 → 824 ms, first launch 2228 → 1080 ms; `scripts/benchmark/start_time.py` measures it | [BENCHMARK.md](BENCHMARK.md#stream-start-start_timepy) |
 | N14 Fewer pacer drops (Norilight) | The full-queue drops all came from the first second of a stream: the decoder starts after the stream, so it began with a backlog of stale frames. A new decoder now shows its first frame and skips that backlog for a fresh key frame. Dropped frames 0.08 → 0.03 % in the benchmark check | [BENCHMARK.md](BENCHMARK.md#dropped-frames-norilight-counted-drops-moonlight-620-doesnt) |
 | N2 Benchmark check | `scripts/benchmark/compare.py`: Norishine with Norilight against stored Apollo, Vibepollo and Sunshine results with Moonlight, per metric better, same or worse; run after every streaming change | [BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine) |
 
@@ -131,12 +132,11 @@ they're listed here so there's one order for both.
 
 | # | Item | Project | Effort | Importance | Needs |
 | --- | --- | --- | --- | --- | --- |
-| N5 | Near-instant stream start | Both | L | Very high | — |
 | N6 | Auto-optimisation wizard | Both | M | High | — |
 | N7 | Linux build | Norilight | M | Medium | — |
 | N8 | Separate command-line builds | Both | M | Medium | — |
-| N9 | Change settings during a stream | Both | L | High | N5 |
-| N10 | Update the host without losing the stream | Both | L | Medium | N5, N9 |
+| N9 | Change settings during a stream | Both | L | High | — |
+| N10 | Update the host without losing the stream | Both | L | Medium | N9 |
 | N11 | Linux build | Norishine | XL | Medium | — |
 | N12 | Android build, for handhelds | Norilight | XL | Medium–high | — |
 | N13 | iOS build | Norilight | XL | Low | N12 |
@@ -147,14 +147,6 @@ whenever there's room, between the items above:
 | # | Item | Project | Effort | Importance |
 | --- | --- | --- | --- | --- |
 | N15 | Benchmark streams that show no picture | Norishine (check script) | S | Low |
-
-### N5. Near-instant stream start — L
-Measure each step from choosing an app to the first frame (launch request, display change
-or virtual display, encoder setup, RTSP handshake, first key frame, decoder start), then
-cut the slow ones. Likely candidates: reuse the previous stream's encoder probe instead of
-probing again, skip display changes that are already in place, keep the last session's
-virtual display for a while, and run independent steps at the same time. The target is set
-after measuring; resuming a running app should take well under a second.
 
 ### N6. Auto-optimisation wizard — M
 One button in Norilight (and the web UI): short test streams per candidate setting (codec,
