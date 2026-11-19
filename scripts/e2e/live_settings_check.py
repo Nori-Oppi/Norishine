@@ -10,7 +10,10 @@ relay), streams the test picture, and while the stream runs:
    PATCH /api/v1/config, and checks that the stream takes them over without reconnecting;
 2. changes the stream's bitrate, error correction and encoder preset as Norilight does
    (POST /api/v1/session/settings with Norilight's own certificate), and once through
-   Norilight's stream settings menu (Ctrl+Alt+Shift+O, keys sent to the stream window).
+   Norilight's stream settings menu (Ctrl+Alt+Shift+O, keys sent to the stream window);
+3. changes resolution, frame rate and codec the same way, and checks that Norilight rebuilds
+   its decoder for the host's new format without reconnecting. It prints how long the picture
+   paused for each change.
 
 Every check prints PASS or FAIL; the exit code is the number of failures. Leave the PC alone
 while it runs: windows open and close by themselves.
@@ -172,15 +175,25 @@ def press(*keys):
 
 
 def focus(stream):
-    user32 = ctypes.windll.user32
+    """Gives the stream window the keyboard focus: attaching to the foreground window's input
+    queue lets a background process hand it over."""
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    me = kernel32.GetCurrentThreadId()
     for _ in range(5):
-        user32.keybd_event(VK['alt'], 0, 0, 0)  # lets SetForegroundWindow work from a background process
-        user32.SetForegroundWindow(stream.hwnd)
-        user32.keybd_event(VK['alt'], 0, KEYEVENTF_KEYUP, 0)
-        time.sleep(0.3)
-        if user32.GetForegroundWindow() == stream.hwnd:
+        fg = user32.GetForegroundWindow()
+        if fg == stream.hwnd:
             return True
-    return False
+        other = user32.GetWindowThreadProcessId(fg, None)
+        target = user32.GetWindowThreadProcessId(stream.hwnd, None)
+        user32.AttachThreadInput(me, other, True)
+        user32.AttachThreadInput(me, target, True)
+        user32.BringWindowToTop(stream.hwnd)
+        user32.SetForegroundWindow(stream.hwnd)
+        user32.SetFocus(stream.hwnd)
+        user32.AttachThreadInput(me, target, False)
+        user32.AttachThreadInput(me, other, False)
+        time.sleep(0.4)
+    return user32.GetForegroundWindow() == stream.hwnd
 
 
 def client_log(stream, needle, since=0):
@@ -215,7 +228,7 @@ def stream_settings(host, client, stream, log):
     t = time.perf_counter()
     # Keys reach the window only once Windows and SDL agree it has the focus: try a few times
     opened = False
-    for _ in range(4):
+    for _ in range(6):
         focus(stream)
         time.sleep(1)
         press('ctrl', 'alt', 'shift', 'o')
@@ -239,6 +252,52 @@ def stream_settings(host, client, stream, log):
     text = log.new()
     check('menu: the host took it', '30000 kbps asked' in text, text[-300:])
     check_still_streaming(stream, 'menu')
+
+
+def longest_gap(stream, since, until):
+    """Longest time without a new picture in the watched strip, in ms."""
+    times = [since] + [c for c in stream.watcher.changes if since <= c <= until] + [until]
+    return round(max(b - a for a, b in zip(times, times[1:])) * 1000)
+
+
+def status_session(host):
+    st, body = host.web.call('GET', '/api/v1/status')
+    return (body.get('sessions') or [{}])[0] if isinstance(body, dict) else {}
+
+
+def video_format(host, client, stream, log):
+    """Step 3: resolution, frame rate and codec change during the stream."""
+    cases = [
+        ('resolution 1280x720', {'width': 1280, 'height': 720}, lambda s: s.get('width') == 1280 and s.get('height') == 720),
+        ('frame rate 30', {'fps': 30}, lambda s: s.get('fps') in (30, 30000)),
+        ('codec H.264', {'codec': 'H.264'}, lambda s: s.get('codec') == 'H.264'),
+        ('back: 1920x1080, 60 fps, HEVC', {'width': 1920, 'height': 1080, 'fps': 60, 'codec': 'HEVC'},
+         lambda s: s.get('width') == 1920 and s.get('codec') == 'HEVC'),
+    ]
+    fps = 60
+    for label, body, done in cases:
+        log.new()
+        t = time.perf_counter()
+        st, answer = client_api(client, host, 'POST', '/api/v1/session/settings', body)
+        check('%s: taken' % label, st == 200, answer)
+        changed = wait_for(lambda: client_log(stream, 'Video format changed by the host', t), timeout=10)
+        if 'fps' in body:
+            text = log.new()
+            check('%s: the capture started again at %d fps' % (label, body['fps']), 'Capture: frame rate %d' % body['fps'] in text, text[-300:])
+        check('%s: Norilight rebuilt its decoder' % label, changed, [l for _, l in stream.lines[-4:]])
+        check('%s: the host reports it' % label, wait_for(lambda: done(status_session(host)), timeout=5), status_session(host))
+        time.sleep(4)
+        gap = longest_gap(stream, t, time.perf_counter())
+        print('      picture paused %d ms' % gap, flush=True)
+        check('%s: the picture came back within a second' % label, gap < 1000, gap)
+        # The host's own count: the watched strip undercounts after the client rebuilds its
+        # window (as in N15), while the client itself shows every frame
+        fps = body.get('fps', fps)
+        time.sleep(3)
+        sent = (session(host) or {}).get('fps') or 0
+        check('%s: the host sends %d fps (%.1f)' % (label, fps, sent), sent >= fps * 0.9, sent)
+        handshakes = sum(1 for _, l in stream.lines if 'Starting RTSP handshake' in l)
+        check('%s: no reconnect' % label, handshakes == 1 and stream.proc.poll() is None, handshakes)
 
 
 def main():
@@ -268,6 +327,8 @@ def main():
             host_settings(host, stream, log)
             if args.step >= 2:
                 stream_settings(host, client, stream, log)
+            if args.step >= 3:
+                video_format(host, client, stream, log)
         finally:
             stream.stop()
     finally:

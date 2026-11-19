@@ -1147,6 +1147,14 @@ namespace video {
     refresh_displays(dev_type, display_names, current_display_index, empty_str);
   }
 
+  namespace {
+    std::atomic_int capture_fps_request {0};  ///< N9: capture again at this frame rate.
+  }
+
+  void request_capture_fps(int fps) {
+    capture_fps_request = fps;
+  }
+
   void captureThread(
     std::shared_ptr<safe::queue_t<capture_ctx_t>> capture_ctx_queue,
     sync_util::sync_t<std::weak_ptr<platf::display_t>> &display_wp,
@@ -1324,6 +1332,17 @@ namespace video {
         }
 
         if (switch_display_event->peek()) {
+          artificial_reinit = true;
+          return false;
+        }
+
+        // A stream changed its frame rate (N9): capture again at the new one.
+        if (auto fps = capture_fps_request.exchange(0); fps > 0) {
+          for (auto &ctx : capture_ctxs) {
+            ctx.config.framerate = fps;
+            ctx.config.encodingFramerate = fps * 1000;
+          }
+          BOOST_LOG(info) << "Capture: frame rate "sv << fps;
           artificial_reinit = true;
           return false;
         }
@@ -2394,6 +2413,8 @@ namespace video {
     while (encode_run_sync(synced_session_ctxs, ctx, display_names, display_p) == encode_e::reinit) {}
   }
 
+  config_t resolve_dynamic_range(const encoder_t &encoder, config_t config);
+
   void capture_async(
     safe::mail_t mail,
     config_t &config,
@@ -2424,6 +2445,8 @@ namespace video {
     auto hdr_event = mail->event<hdr_info_t>(mail::hdr);
     auto bitrate_events = mail->event<int>(mail::bitrate);
     auto change_events = mail->event<change_t>(mail::video_change);
+    auto format_events = mail->event<format_note_t>(mail::video_format);
+    bool announce = false;  ///< The client must hear of a new format before its first frame.
 
     // Encoding takes place on this thread
     platf::adjust_thread_priority(platf::thread_priority_e::high);
@@ -2466,6 +2489,50 @@ namespace video {
             BOOST_LOG(info) << "Video encoder: tuning "sv << config::to_string(config.tuning) << " -> "sv << config::to_string(*change->tuning);
             config.tuning = *change->tuning;
           }
+          if (change->width && change->height && (*change->width != config.width || *change->height != config.height)) {
+            BOOST_LOG(info) << "Video encoder: "sv << config.width << 'x' << config.height << " -> "sv << *change->width << 'x' << *change->height;
+            config.width = *change->width;
+            config.height = *change->height;
+            announce = true;
+          }
+          if (change->video_format && *change->video_format != config.videoFormat) {
+            BOOST_LOG(info) << "Video encoder: codec "sv << config.videoFormat << " -> "sv << *change->video_format;
+            config.videoFormat = *change->video_format;
+            config = resolve_dynamic_range(encoder, config);
+            announce = true;
+          }
+          if (change->framerate && *change->framerate != config.framerate) {
+            BOOST_LOG(info) << "Video encoder: "sv << config.framerate << " -> "sv << *change->framerate << " fps"sv;
+            config.framerate = *change->framerate;
+            config.encodingFramerate = *change->framerate * 1000;
+            announce = true;
+
+            // The capture starts again at the new rate; the encoder is built after that.
+            request_capture_fps(config.framerate);
+            for (int i = 0; i < 50 && !ref->reinit_event.peek(); ++i) {
+              std::this_thread::sleep_for(10ms);
+            }
+            continue;
+          }
+        }
+      }
+
+      if (announce) {
+        // Frames from frame_nr on use the new format; the client hears of it first.
+        announce = false;
+        format_note_t note;
+        note.first_frame = frame_nr;
+        note.video_format = config.videoFormat;
+        note.dynamic_range = config.dynamicRange;
+        note.chroma_sampling = config.chromaSamplingType;
+        note.width = config.width;
+        note.height = config.height;
+        note.fps = config.framerate;
+        note.sent = std::make_shared<std::atomic_bool>(false);
+        auto sent = note.sent;
+        format_events->raise(std::move(note));
+        for (int i = 0; i < 30 && !sent->load(); ++i) {
+          std::this_thread::sleep_for(10ms);
         }
       }
 

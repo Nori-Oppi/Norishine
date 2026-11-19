@@ -63,7 +63,32 @@ namespace video {
   struct change_t {
     bool rebuild = false;  ///< Rebuild with the host's current encoder settings.
     std::optional<config::tuning_e> tuning;  ///< The client's new tuning goal (encoder preset).
+    std::optional<int> width;  ///< New size of the encoded picture (with height).
+    std::optional<int> height;
+    std::optional<int> framerate;  ///< New frame rate, fps.
+    std::optional<int> video_format;  ///< New codec: 0 H.264, 1 HEVC, 2 AV1.
   };
+
+  /**
+   * @brief The format of the frames from first_frame on (mail::video_format, N9). The
+   *        control stream tells the client before the encoder sends them, then sets `sent`.
+   */
+  struct format_note_t {
+    std::int64_t first_frame = 0;
+    int video_format = 0;  ///< 0 H.264, 1 HEVC, 2 AV1
+    int dynamic_range = 0;
+    int chroma_sampling = 0;
+    int width = 0;
+    int height = 0;
+    int fps = 0;
+    std::shared_ptr<std::atomic_bool> sent;
+  };
+
+  /**
+   * @brief Ask the capture to start again at this frame rate (N9): the display paces
+   *        capture at the stream's frame rate.
+   */
+  void request_capture_fps(int fps);
 
   platf::mem_type_e map_base_dev_type(AVHWDeviceType type);
   platf::pix_fmt_e map_pix_fmt(AVPixelFormat fmt);

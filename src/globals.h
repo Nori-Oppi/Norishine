@@ -57,6 +57,7 @@ namespace mail {
   MAIL(hdr);
   MAIL(bitrate);  ///< New video bitrate in kbps; the encoder is rebuilt with it.
   MAIL(video_change);  ///< video::change_t: the encoder is rebuilt with it (N9).
+  MAIL(video_format);  ///< video::format_note_t: tell the client before frames in a new format (N9).
 #undef MAIL
 
 }  // namespace mail

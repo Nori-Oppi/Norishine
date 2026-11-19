@@ -159,6 +159,9 @@ namespace adaptive {
      */
     decision_t set_client_fec(int percent, clock::time_point now = clock::now());
 
+    /// The client changed the stream's frame rate (N9).
+    void set_target_fps(double fps);
+
     /// Seconds between ticks.
     static constexpr auto tick_interval = std::chrono::seconds(1);
     /// Reports older than this are ignored.
@@ -180,7 +183,7 @@ namespace adaptive {
     settings_t settings;
     int max_kbps;
     int min_kbps;
-    const double target_fps;
+    double target_fps;
     const bool live_bitrate;
     const clock::time_point start;
 

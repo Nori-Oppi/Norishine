@@ -111,7 +111,7 @@ by default, only per device from the web UI (paired devices, "Manage"):
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,optimise,status,stats,session,session.settings,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,optimise,status,stats,session,session.settings,session.video,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -276,9 +276,18 @@ field optional, at least one needed):
 | `bitrate_kbps` | The bitrate to stream at, 500 to 1000000, counted as at launch (before error correction, audio and packet overhead; capped by `max_bitrate`). It becomes the stream's new ceiling for the adaptive controller too |
 | `fec_percent` | Error correction, 1 to 255 %: used at once, and the level the controller returns to |
 | `tuning` | `performance`, `balanced` or `quality`: the encoder preset, as `norishineTuning` at launch. Needs the `tuning` feature |
+| `width`, `height` | Size of the streamed picture, together, even, 256 to 8192. Feature `session.video` |
+| `fps` | Frame rate, 10 to 480; the host's capture starts again at it. Feature `session.video` |
+| `codec` | `H.264`, `HEVC` or `AV1` (any case); 409 when the host doesn't stream it, or H.264 for an HDR stream. Feature `session.video` |
 
 A new bitrate or preset rebuilds the encoder: the client gets one key frame, as after a
-bitrate change by the controller. Answers as `GET /api/v1/session`. 400 for a malformed
+bitrate change by the controller. A new size, frame rate or codec also needs a new decoder on
+the client: before the first frame in the new format, the control stream sends message
+`0x3100` (Norishine extension; only to a client that asked for the change), little endian:
+first frame number (32 bits), the `VIDEO_FORMAT_*` value of moonlight-common-c (32), width,
+height and frame rate (16 each). Frames from that number on are in the new format and start
+with a key frame. Norilight's moonlight-common-c switches its depacketizer there and asks the
+client to rebuild its decoder. Answers as `GET /api/v1/session`. 400 for a malformed
 body or a value out of range, 404 without a stream, 409 when the stream can't change (not
 running yet, an encoder that can't be rebuilt during a stream, or `tuning` while
 `client_tuning` is off).
