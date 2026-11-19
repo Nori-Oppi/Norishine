@@ -85,10 +85,29 @@ namespace video {
   };
 
   /**
-   * @brief Ask the capture to start again at this frame rate (N9): the display paces
-   *        capture at the stream's frame rate.
+   * @brief A stream asks the capture for a new frame rate (N9). Only that stream's
+   *        capture changes; the display captures at the highest rate any stream needs.
    */
-  void request_capture_fps(int fps);
+  struct capture_fps_request_t {
+    const void *stream;  ///< The stream's image queue (capture_ctx_t::images).
+    int fps;
+    std::shared_ptr<std::atomic_int> result;  ///< 0 pending, 1 applied, 2 applied and the display restarts.
+  };
+
+  void request_capture_fps(capture_fps_request_t request);
+
+  /**
+   * @brief The frame rate a display shared by several streams captures at: the highest
+   *        one any of them asked for.
+   */
+  int shared_capture_fps(const std::vector<int> &stream_fps);
+
+  /**
+   * @brief Whether the chosen encoder can stream a codec (0 H.264, 1 HEVC, 2 AV1) at
+   *        this size, and H.264 not for HDR (N9).
+   * @return An error message, or empty when it can.
+   */
+  std::string live_format_error(int codec, int width, int height, bool hdr);
 
   platf::mem_type_e map_base_dev_type(AVHWDeviceType type);
   platf::pix_fmt_e map_pix_fmt(AVPixelFormat fmt);

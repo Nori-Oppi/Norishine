@@ -143,10 +143,15 @@ namespace stream {
    * @return How long to wait before restarting so streaming clients hear it (Norilight
    *         reports once a second); zero without streams.
    */
-  std::chrono::milliseconds announce_restart(std::string_view reason);
+  std::chrono::milliseconds announce_restart(std::string_view reason, std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
+
+  /// A restart announced longer ago than this didn't happen (for example a failed update):
+  /// the host stops saying it restarts, so clients don't wait for it.
+  constexpr auto restart_announcement_lifetime = std::chrono::minutes(2);
 
   /**
-   * @brief Why the host is about to restart, or empty.
+   * @brief Why the host is about to restart, or empty. Empty again once the announcement
+   *        is older than restart_announcement_lifetime.
    */
-  std::string restart_reason();
+  std::string restart_reason(std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now());
 }  // namespace stream

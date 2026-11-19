@@ -1061,6 +1061,25 @@ namespace video {
   bool live_bitrate_supported() {
     return chosen_encoder && (chosen_encoder->flags & PARALLEL_ENCODING);
   }
+
+  std::string live_format_error(int codec, int width, int height, bool hdr) {
+    // active_*_mode: 1 off, 2 8-bit only, 3 10-bit (HDR) too
+    if (codec == 1 && active_hevc_mode == 1) {
+      return "This host doesn't stream HEVC";
+    }
+    if (codec == 2 && active_av1_mode == 1) {
+      return "This host doesn't stream AV1";
+    }
+    // HEVC or AV1 without 10-bit falls back to SDR, as at launch (resolve_dynamic_range)
+    if (hdr && codec == 0) {
+      return "H.264 can't stream HDR";
+    }
+    // Hardware H.264 encoders stop at 4096 pixels a side
+    if (codec == 0 && (width > 4096 || height > 4096)) {
+      return "H.264 streams up to 4096 pixels wide and high";
+    }
+    return {};
+  }
   int active_hevc_mode;
   int active_av1_mode;
   bool last_encoder_probe_supported_ref_frames_invalidation = false;
@@ -1148,11 +1167,43 @@ namespace video {
   }
 
   namespace {
-    std::atomic_int capture_fps_request {0};  ///< N9: capture again at this frame rate.
+    std::mutex capture_fps_mutex;
+    std::vector<capture_fps_request_t> capture_fps_requests;  ///< N9: streams waiting for a new capture rate.
+
+    std::vector<capture_fps_request_t> take_capture_fps_requests() {
+      std::lock_guard lock {capture_fps_mutex};
+      return std::exchange(capture_fps_requests, {});
+    }
+  }  // namespace
+
+  void request_capture_fps(capture_fps_request_t request) {
+    std::lock_guard lock {capture_fps_mutex};
+    capture_fps_requests.emplace_back(std::move(request));
   }
 
-  void request_capture_fps(int fps) {
-    capture_fps_request = fps;
+  int shared_capture_fps(const std::vector<int> &stream_fps) {
+    int fps = 0;
+    for (auto value : stream_fps) {
+      fps = std::max(fps, value);
+    }
+    return fps;
+  }
+
+  /**
+   * @brief The config a display shared by these streams is created with: the first
+   *        stream's, at the highest frame rate any of them asked for.
+   */
+  config_t display_config(const std::vector<capture_ctx_t> &capture_ctxs) {
+    auto config = capture_ctxs.front().config;
+    std::vector<int> rates;
+    for (const auto &ctx : capture_ctxs) {
+      rates.push_back(ctx.config.framerate);
+    }
+    if (auto fps = shared_capture_fps(rates); fps != config.framerate) {
+      config.framerate = fps;
+      config.encodingFramerate = fps * 1000;
+    }
+    return config;
   }
 
   void captureThread(
@@ -1188,13 +1239,13 @@ namespace video {
     int display_p = -1;
     std::shared_ptr<platf::display_t> disp;
     if (!proc::proc.display_name.empty()) {
-      disp = platf::display(encoder.platform_formats->dev_type, proc::proc.display_name, capture_ctxs.front().config);
+      disp = platf::display(encoder.platform_formats->dev_type, proc::proc.display_name, display_config(capture_ctxs));
     }
     if (!disp) {
       // Get all the monitor names now, rather than at boot, to
       // get the most up-to-date list available monitors
       refresh_displays(encoder.platform_formats->dev_type, display_names, display_p);
-      disp = platf::display(encoder.platform_formats->dev_type, display_names[display_p], capture_ctxs.front().config);
+      disp = platf::display(encoder.platform_formats->dev_type, display_names[display_p], display_config(capture_ctxs));
       if (disp) {
         proc::proc.display_name = display_names[display_p];
       } else {
@@ -1336,15 +1387,27 @@ namespace video {
           return false;
         }
 
-        // A stream changed its frame rate (N9): capture again at the new one.
-        if (auto fps = capture_fps_request.exchange(0); fps > 0) {
-          for (auto &ctx : capture_ctxs) {
-            ctx.config.framerate = fps;
-            ctx.config.encodingFramerate = fps * 1000;
+        // A stream changed its frame rate (N9): only that stream's capture changes, and the
+        // display starts again only when the rate it captures at changes.
+        if (auto requests = take_capture_fps_requests(); !requests.empty()) {
+          auto before = display_config(capture_ctxs).framerate;
+          for (auto &request : requests) {
+            for (auto &ctx : capture_ctxs) {
+              if (ctx.images.get() == request.stream) {
+                ctx.config.framerate = request.fps;
+                ctx.config.encodingFramerate = request.fps * 1000;
+              }
+            }
           }
-          BOOST_LOG(info) << "Capture: frame rate "sv << fps;
-          artificial_reinit = true;
-          return false;
+          auto after = display_config(capture_ctxs).framerate;
+          for (auto &request : requests) {
+            request.result->store(after != before ? 2 : 1);
+          }
+          if (after != before) {
+            BOOST_LOG(info) << "Capture: frame rate "sv << before << " -> "sv << after;
+            artificial_reinit = true;
+            return false;
+          }
         }
 
         return true;
@@ -1406,7 +1469,7 @@ namespace video {
               }
 
               // reset_display() will sleep between retries
-              reset_display(disp, encoder.platform_formats->dev_type, display_names[display_p], capture_ctxs.front().config);
+              reset_display(disp, encoder.platform_formats->dev_type, display_names[display_p], display_config(capture_ctxs));
               if (disp) {
                 proc::proc.display_name = display_names[display_p];
                 break;
@@ -1944,7 +2007,7 @@ namespace video {
     return nullptr;
   }
 
-  void encode_run(
+  bool encode_run(
     int &frame_nr,  // Store progress of the frame number
     safe::mail_t mail,
     img_event_t images,
@@ -1957,7 +2020,7 @@ namespace video {
   ) {
     auto session = make_encode_session(disp.get(), encoder, config, disp->width, disp->height, std::move(encode_device));
     if (!session) {
-      return;
+      return false;
     }
     stream_start::mark("encoder created");
 
@@ -2001,7 +2064,7 @@ namespace video {
       // in a separate scope.
       auto dummy_img = disp->alloc_img();
       if (!dummy_img || disp->dummy_img(dummy_img.get()) || session->convert(*dummy_img)) {
-        return;
+        return false;
       }
     }
 
@@ -2011,12 +2074,12 @@ namespace video {
       // Encode the dummy img only once
       if (encode(frame_nr++, *session, packets, channel_data, std::chrono::steady_clock::now())) {
         BOOST_LOG(error) << "Could not encode dummy video packet"sv;
-        return;
+        return false;
       }
 
       while (true) {
         if (shutdown_event->peek() || !images->running() || (reinit_event.peek())) {
-          return;
+          return true;
         } else {
           std::this_thread::sleep_for(300ms);
         }
@@ -2024,6 +2087,7 @@ namespace video {
     }
 
     std::chrono::steady_clock::time_point encode_frame_timestamp;
+    bool encoded = false;  ///< A frame was encoded with this session.
     bool missing_frame_timestamp_warning_logged = false;
 
     while (true) {
@@ -2100,8 +2164,12 @@ namespace video {
 
       if (encode(frame_nr++, *session, packets, channel_data, frame_timestamp)) {
         BOOST_LOG(error) << "Could not encode video packet"sv;
+        if (!encoded) {
+          return false;  // N9: capture_async() goes back to the format that worked
+        }
         break;
       }
+      encoded = true;
 
       session->request_normal_frame();
 
@@ -2109,6 +2177,7 @@ namespace video {
       // This is useful for KVM switch scenarios where mouse may disappear during streaming
       platf::enable_mouse_keys();
     }
+    return true;
   }
 
   input::touch_port_t make_port(platf::display_t *display, const config_t &config) {
@@ -2447,6 +2516,27 @@ namespace video {
     auto change_events = mail->event<change_t>(mail::video_change);
     auto format_events = mail->event<format_note_t>(mail::video_format);
     bool announce = false;  ///< The client must hear of a new format before its first frame.
+    // N9: the format the encoder last worked with, to go back to when a change can't be encoded
+    std::optional<config_t> last_good;
+    bool changed = false;  ///< The format changed since the encoder last worked.
+
+    // N9: the encoder couldn't take a changed format; go back to the one that worked, and
+    // tell the client again before the next frame.
+    auto fall_back = [&]() {
+      if (!changed || !last_good) {
+        return false;
+      }
+      BOOST_LOG(warning) << "Video encoder: "sv << config.width << 'x' << config.height << ", "sv << config.framerate << " fps, codec "sv
+                         << config.videoFormat << " can't be encoded; back to "sv << last_good->width << 'x' << last_good->height << ", "sv
+                         << last_good->framerate << " fps, codec "sv << last_good->videoFormat;
+      if (last_good->framerate != config.framerate) {
+        request_capture_fps({images.get(), last_good->framerate, std::make_shared<std::atomic_int>(0)});
+      }
+      config = *last_good;
+      changed = false;
+      announce = true;
+      return true;
+    };
 
     // Encoding takes place on this thread
     platf::adjust_thread_priority(platf::thread_priority_e::high);
@@ -2493,26 +2583,33 @@ namespace video {
             BOOST_LOG(info) << "Video encoder: "sv << config.width << 'x' << config.height << " -> "sv << *change->width << 'x' << *change->height;
             config.width = *change->width;
             config.height = *change->height;
-            announce = true;
+            announce = changed = true;
           }
           if (change->video_format && *change->video_format != config.videoFormat) {
             BOOST_LOG(info) << "Video encoder: codec "sv << config.videoFormat << " -> "sv << *change->video_format;
             config.videoFormat = *change->video_format;
             config = resolve_dynamic_range(encoder, config);
-            announce = true;
+            announce = changed = true;
           }
           if (change->framerate && *change->framerate != config.framerate) {
             BOOST_LOG(info) << "Video encoder: "sv << config.framerate << " -> "sv << *change->framerate << " fps"sv;
             config.framerate = *change->framerate;
             config.encodingFramerate = *change->framerate * 1000;
-            announce = true;
+            announce = changed = true;
 
-            // The capture starts again at the new rate; the encoder is built after that.
-            request_capture_fps(config.framerate);
-            for (int i = 0; i < 50 && !ref->reinit_event.peek(); ++i) {
+            // This stream's capture changes rate; when the display starts again for it, the
+            // encoder is built after that.
+            auto result = std::make_shared<std::atomic_int>(0);
+            request_capture_fps({images.get(), config.framerate, result});
+            for (int i = 0; i < 50 && result->load() == 0; ++i) {
               std::this_thread::sleep_for(10ms);
             }
-            continue;
+            if (result->load() == 2) {
+              for (int i = 0; i < 50 && !ref->reinit_event.peek(); ++i) {
+                std::this_thread::sleep_for(10ms);
+              }
+              continue;
+            }
           }
         }
       }
@@ -2539,6 +2636,9 @@ namespace video {
       stream_start::mark("capture ready");
       auto encode_device = make_encode_device(*display, encoder, config);
       if (!encode_device) {
+        if (fall_back()) {
+          continue;
+        }
         return;
       }
 
@@ -2556,17 +2656,24 @@ namespace video {
       }
       hdr_event->raise(std::move(hdr_info));
 
-      encode_run(
-        frame_nr,
-        mail,
-        images,
-        config,
-        display,
-        std::move(encode_device),
-        ref->reinit_event,
-        *ref->encoder_p,
-        channel_data
-      );
+      if (encode_run(
+            frame_nr,
+            mail,
+            images,
+            config,
+            display,
+            std::move(encode_device),
+            ref->reinit_event,
+            *ref->encoder_p,
+            channel_data
+          )) {
+        last_good = config;
+        changed = false;
+      } else if (fall_back()) {
+        continue;
+      } else if (!last_good) {
+        return;  // The stream's first encoder failed
+      }
     }
   }
 
