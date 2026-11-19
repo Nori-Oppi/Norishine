@@ -20,6 +20,7 @@
 #include "nvhttp.h"
 #include "platform/common.h"
 #include "rtsp.h"
+#include "stream.h"
 
 namespace config::schema {
   using namespace std::literals;
@@ -382,7 +383,14 @@ namespace config::schema {
   }  // namespace
 
   const std::vector<setting_t> &settings() {
-    static const std::vector<setting_t> table = make_settings();
+    static const std::vector<setting_t> table = [] {
+      auto table = make_settings();
+      // Settings the running host can take over without a restart (N9).
+      for (auto &setting : table) {
+        setting.restart_required = config::live_kind(setting.key) == config::live_e::restart;
+      }
+      return table;
+    }();
     return table;
   }
 
@@ -766,6 +774,33 @@ namespace config::schema {
     }
     result.written = file_handler::write_file(config_file.c_str(), updated) == 0;
     result.restart_required = result.written && restart;
+
+    // Settings that need no restart take effect now, on the running host only: other
+    // files (tests, imports) don't change it.
+    if (result.written && config_file == config::sunshine.config_file) {
+      auto vars = config::parse_config(updated);
+      std::vector<std::string> keys;
+      for (const auto &key : result.changed) {
+        auto name = key.get<std::string>();
+        const auto *setting = find(name);
+        if (!setting || setting->restart_required) {
+          continue;
+        }
+        if (!vars.contains(name)) {
+          // Reset: back to the default.
+          auto text = to_config_text(*setting, setting->default_value).text;
+          if (text.empty()) {
+            continue;
+          }
+          vars[name] = text;
+        }
+        keys.push_back(name);
+      }
+      result.live = config::apply_live(vars, keys);
+      if (!result.live.empty()) {
+        stream::settings_changed(result.live);
+      }
+    }
     return result;
   }
 

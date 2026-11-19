@@ -75,6 +75,7 @@ namespace adaptive {
     loss,  ///< Loss without rising delay: more error correction, then bitrate down.
     probe,  ///< Clean for a while: bitrate up.
     fec_relax,  ///< Clean for a while: error correction back towards the setting.
+    settings,  ///< The host's settings changed during the stream (N9).
   };
 
   std::string_view to_string(reason_e reason);
@@ -135,6 +136,15 @@ namespace adaptive {
     /// Error correction to use now.
     int fec_percent() const;
 
+    /**
+     * @brief The host's settings changed during the stream (N9): new error correction and
+     *        bounds apply at once. `enabled` stays as the stream started.
+     * @param cap_kbps When above 0, the stream's bitrate never goes above it from now on
+     *        (max_bitrate lowered).
+     * @return The bitrate to change to, if it had to drop, and the error correction now.
+     */
+    decision_t update_settings(const settings_t &settings, int cap_kbps = 0, clock::time_point now = clock::now());
+
     /// Seconds between ticks.
     static constexpr auto tick_interval = std::chrono::seconds(1);
     /// Reports older than this are ignored.
@@ -153,9 +163,9 @@ namespace adaptive {
     bool fresh_report(clock::time_point now) const;
 
     mutable std::mutex mutex;
-    const settings_t settings;
-    const int max_kbps;
-    const int min_kbps;
+    settings_t settings;
+    int max_kbps;
+    int min_kbps;
     const double target_fps;
     const bool live_bitrate;
     const clock::time_point start;

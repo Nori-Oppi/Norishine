@@ -421,6 +421,7 @@ namespace config {
   }
 
   bool set_encoder_preset(std::string_view key, const std::string &value) {
+    std::lock_guard lock {live_mutex()};
     if (key == "nvenc_preset"sv) {
       int preset = 0;
       try {
@@ -1754,6 +1755,137 @@ namespace config {
     }
   }  // namespace
 #endif
+
+  live_e live_kind(std::string_view key) {
+    // Encoder settings are read each time an encoder is built.
+    static const std::set<std::string_view> encoder_keys {
+      "nvenc_preset"sv, "nvenc_twopass"sv, "nvenc_spatial_aq"sv, "nvenc_vbv_increase"sv, "nvenc_h264_cavlc"sv,
+      "qsv_preset"sv, "qsv_coder"sv, "qsv_slow_hevc"sv,
+      "amd_usage"sv, "amd_rc"sv, "amd_enforce_hrd"sv, "amd_quality"sv, "amd_preanalysis"sv, "amd_vbaq"sv, "amd_coder"sv,
+      "vt_coder"sv, "vt_realtime"sv,
+      "vaapi_strict_rc_buffer"sv,
+      "min_threads"sv, "sw_preset"sv, "sw_tune"sv,
+      "qp"sv, "minimum_fps_target"sv,
+    };
+    static const std::set<std::string_view> network_keys {
+      "fec_percentage"sv, "adaptive_min_bitrate"sv, "adaptive_max_fec"sv, "max_bitrate"sv,
+    };
+    static const std::set<std::string_view> next_stream_keys {
+      "adaptive_bitrate"sv, "client_tuning"sv, "ping_timeout"sv,
+    };
+    if (encoder_keys.contains(key)) {
+      return live_e::encoder;
+    }
+    if (network_keys.contains(key)) {
+      return live_e::stream_network;
+    }
+    if (next_stream_keys.contains(key)) {
+      return live_e::next_stream;
+    }
+    return live_e::restart;
+  }
+
+  std::mutex &live_mutex() {
+    static std::mutex mutex;
+    return mutex;
+  }
+
+  std::vector<std::string> apply_live(const std::unordered_map<std::string, std::string> &all_vars, const std::vector<std::string> &keys) {
+    std::unordered_map<std::string, std::string> vars;
+    std::vector<std::string> applied;
+    for (const auto &key : keys) {
+      if (live_kind(key) == live_e::restart) {
+        continue;
+      }
+      if (auto it = all_vars.find(key); it != all_vars.end()) {
+        vars[key] = it->second;
+        applied.push_back(key);
+      }
+    }
+    if (applied.empty()) {
+      return applied;
+    }
+
+    std::lock_guard lock {live_mutex()};
+    for (const auto &[name, val] : vars) {
+      BOOST_LOG(info) << "config (live): ["sv << name << "] -- ["sv << val << ']';
+      modified_config_settings[name] = val;
+    }
+
+    int_f(vars, "qp", video.qp);
+    int_f(vars, "min_threads", video.min_threads);
+    double_between_f(vars, "minimum_fps_target", video.minimum_fps_target, {0.0, 1000.0});
+
+    string_f(vars, "sw_preset", video.sw.sw_preset);
+    if (!video.sw.sw_preset.empty()) {
+      video.sw.svtav1_preset = sw::svtav1_preset_from_view(video.sw.sw_preset);
+    }
+    string_f(vars, "sw_tune", video.sw.sw_tune);
+
+    int_between_f(vars, "nvenc_preset", video.nv.quality_preset, {1, 7});
+    int_between_f(vars, "nvenc_vbv_increase", video.nv.vbv_percentage_increase, {0, 400});
+    bool_f(vars, "nvenc_spatial_aq", video.nv.adaptive_quantization);
+    generic_f(vars, "nvenc_twopass", video.nv.two_pass, nv::twopass_from_view);
+    bool_f(vars, "nvenc_h264_cavlc", video.nv.h264_cavlc);
+#if !defined(__ANDROID__) && !defined(__APPLE__)
+    video.nv_legacy.preset = video.nv.quality_preset + 11;
+    video.nv_legacy.multipass = video.nv.two_pass == nvenc::nvenc_two_pass::quarter_resolution ? NV_ENC_TWO_PASS_QUARTER_RESOLUTION :
+                                video.nv.two_pass == nvenc::nvenc_two_pass::full_resolution    ? NV_ENC_TWO_PASS_FULL_RESOLUTION :
+                                                                                                 NV_ENC_MULTI_PASS_DISABLED;
+    video.nv_legacy.h264_coder = video.nv.h264_cavlc ? NV_ENC_H264_ENTROPY_CODING_MODE_CAVLC : NV_ENC_H264_ENTROPY_CODING_MODE_CABAC;
+    video.nv_legacy.aq = video.nv.adaptive_quantization;
+    video.nv_legacy.vbv_percentage_increase = video.nv.vbv_percentage_increase;
+#endif
+
+    int_f(vars, "qsv_preset", video.qsv.qsv_preset, qsv::preset_from_view);
+    int_f(vars, "qsv_coder", video.qsv.qsv_cavlc, qsv::coder_from_view);
+    bool_f(vars, "qsv_slow_hevc", video.qsv.qsv_slow_hevc);
+
+    std::string quality;
+    string_f(vars, "amd_quality", quality);
+    if (!quality.empty()) {
+      video.amd.amd_quality_h264 = amd::quality_from_view<amd::quality_h264_e>(quality, video.amd.amd_quality_h264);
+      video.amd.amd_quality_hevc = amd::quality_from_view<amd::quality_hevc_e>(quality, video.amd.amd_quality_hevc);
+      video.amd.amd_quality_av1 = amd::quality_from_view<amd::quality_av1_e>(quality, video.amd.amd_quality_av1);
+    }
+    std::string rc;
+    string_f(vars, "amd_rc", rc);
+    if (!rc.empty()) {
+      video.amd.amd_rc_h264 = amd::rc_from_view<amd::rc_h264_e>(rc, video.amd.amd_rc_h264);
+      video.amd.amd_rc_hevc = amd::rc_from_view<amd::rc_hevc_e>(rc, video.amd.amd_rc_hevc);
+      video.amd.amd_rc_av1 = amd::rc_from_view<amd::rc_av1_e>(rc, video.amd.amd_rc_av1);
+    }
+    int_f(vars, "amd_coder", video.amd.amd_coder, amd::coder_from_view);
+    std::string usage;
+    string_f(vars, "amd_usage", usage);
+    if (!usage.empty()) {
+      video.amd.amd_usage_h264 = amd::usage_from_view<amd::usage_h264_e>(usage, video.amd.amd_usage_h264);
+      video.amd.amd_usage_hevc = amd::usage_from_view<amd::usage_hevc_e>(usage, video.amd.amd_usage_hevc);
+      video.amd.amd_usage_av1 = amd::usage_from_view<amd::usage_av1_e>(usage, video.amd.amd_usage_av1);
+    }
+    bool_f(vars, "amd_preanalysis", (bool &) video.amd.amd_preanalysis);
+    bool_f(vars, "amd_vbaq", (bool &) video.amd.amd_vbaq);
+    bool_f(vars, "amd_enforce_hrd", (bool &) video.amd.amd_enforce_hrd);
+
+    int_f(vars, "vt_coder", video.vt.vt_coder, vt::coder_from_view);
+    int_f(vars, "vt_realtime", video.vt.vt_realtime, vt::rt_from_view);
+    bool_f(vars, "vaapi_strict_rc_buffer", video.vaapi.strict_rc_buffer);
+
+    int_f(vars, "max_bitrate", video.max_bitrate);
+    bool_f(vars, "client_tuning", video.client_tuning);
+
+    int to = -1;
+    int_between_f(vars, "ping_timeout", to, {-1, std::numeric_limits<int>::max()});
+    if (to != -1) {
+      stream.ping_timeout = std::chrono::milliseconds(to);
+    }
+    int_between_f(vars, "fec_percentage", stream.fec_percentage, {1, 255});
+    bool_f(vars, "adaptive_bitrate", stream.adaptive_bitrate);
+    int_between_f(vars, "adaptive_min_bitrate", stream.adaptive_min_bitrate, {500, 500000});
+    int_between_f(vars, "adaptive_max_fec", stream.adaptive_max_fec, {1, 255});
+
+    return applied;
+  }
 
   int parse(int argc, char *argv[]) {
     std::unordered_map<std::string, std::string> cmd_vars;

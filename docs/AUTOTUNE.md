@@ -168,8 +168,27 @@ setting; only error correction is recommended for them.
 
 **Apply and undo.** Apply writes the values through the same path as `PATCH /api/v1/config`
 and keeps the values from before; Undo puts those back (a setting changed by hand since is
-left alone). Encoder settings take effect after the host restarts. See [api.md](api.md),
+left alone). Encoder presets and error correction take effect at once, also in running
+streams (see "Settings during a stream" below). See [api.md](api.md),
 `/api/v1/recommendations`. Checks: `tests/unit/test_recommend.cpp`.
+
+## Settings during a stream (N9)
+
+**Host settings.** Settings that don't need a restart (`restart_required` false in the
+schema) take effect as soon as they're saved, from the web UI, Norilight's Host Settings, a
+recommendation or the encoder test. Running streams take them over without reconnecting:
+
+| Settings | In a running stream |
+| --- | --- |
+| Encoder settings (NVENC, AMF, Quick Sync, VideoToolbox, VA-API and software options, `qp`, `minimum_fps_target`) | The encoder is rebuilt with them, as for a bitrate change: one key frame |
+| `fec_percentage`, `adaptive_max_fec`, `adaptive_min_bitrate` | Error correction and the controller's bounds change at once; error correction the controller raised stays within the new bounds |
+| `max_bitrate` | Lowered below a stream's bitrate: the stream drops to it and never goes above it again |
+| `adaptive_bitrate`, `client_tuning`, `ping_timeout` | Next stream |
+
+Everything else (ports, capture, the encoder choice, displays, audio, input, files) is read
+at startup and still needs a restart. The list is `config::live_kind()`. Checks:
+`tests/unit/test_config_schema.cpp`, `tests/unit/test_adaptive.cpp`, and on the PC
+`scripts/e2e/live_settings_check.py`.
 
 ## Platforms
 

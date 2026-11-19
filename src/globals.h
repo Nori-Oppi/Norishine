@@ -56,6 +56,7 @@ namespace mail {
   MAIL(gamepad_feedback);
   MAIL(hdr);
   MAIL(bitrate);  ///< New video bitrate in kbps; the encoder is rebuilt with it.
+  MAIL(video_change);  ///< video::change_t: the encoder is rebuilt with it (N9).
 #undef MAIL
 
 }  // namespace mail

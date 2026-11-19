@@ -5,7 +5,9 @@
 #pragma once
 
 // standard includes
+#include <string>
 #include <utility>
+#include <vector>
 
 // lib includes
 #include <boost/asio.hpp>
@@ -86,4 +88,11 @@ namespace stream {
      */
     bool report(session_t &session, const adaptive::client_report_t &report);
   }  // namespace session
+
+  /**
+   * @brief Settings changed without a restart (config::apply_live, N9): running streams
+   *        take them over. Encoder settings rebuild each stream's encoder behind a key
+   *        frame; error correction, the adaptation bounds and max_bitrate change at once.
+   */
+  void settings_changed(const std::vector<std::string> &keys);
 }  // namespace stream

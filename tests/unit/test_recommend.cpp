@@ -290,7 +290,7 @@ TEST(RecommendTests, ApplyAndRollback) {
   described = store.describe("nvenc", config.file);
   ASSERT_EQ(described["recommendations"].size(), 2);
   EXPECT_EQ(described["streams"], 2);
-  EXPECT_EQ(described["recommendations"][0]["restart_required"], true);
+  EXPECT_EQ(described["recommendations"][0]["restart_required"], false);  // Encoder presets apply at once (N9).
 
   // Bad bodies, unknown keys.
   EXPECT_EQ(store.apply({{"keys", "nvenc_preset"}}, "nvenc", config.file).code, 400);
@@ -299,7 +299,7 @@ TEST(RecommendTests, ApplyAndRollback) {
   // Apply one, then the other.
   auto reply = store.apply({{"keys", {"nvenc_preset"}}}, "nvenc", config.file);
   EXPECT_EQ(reply.code, 200) << reply.body.dump();
-  EXPECT_EQ(reply.body["restart_required"], true);
+  EXPECT_EQ(reply.body["restart_required"], false);
   EXPECT_NE(config.read().find("nvenc_preset = 3"), std::string::npos);
   reply = store.apply(nlohmann::json(nullptr), "nvenc", config.file);
   EXPECT_EQ(reply.code, 200) << reply.body.dump();

@@ -77,7 +77,7 @@ namespace config::schema {
     std::optional<double> min {};
     std::optional<double> max {};
     std::vector<choice_t> choices {};  ///< For choice settings; "" means automatic.
-    bool restart_required = true;  ///< Settings are read at startup, so all need a restart for now.
+    bool restart_required = true;  ///< False for settings the running host takes over at once (config::live_kind).
     std::string_view depends_on {};  ///< Only has an effect when this other setting...
     std::vector<nlohmann::json> depends_on_values {};  ///< ...has one of these values.
   };
@@ -180,6 +180,7 @@ namespace config::schema {
     bool written = true;  ///< False when the file could not be written.
     nlohmann::json changed = nlohmann::json::array();  ///< Keys set or reset.
     bool restart_required = false;  ///< True when the file changed and a changed setting needs a restart.
+    std::vector<std::string> live;  ///< Settings the running host took over at once (no restart needed).
   };
 
   /**
