@@ -2458,8 +2458,14 @@ namespace video {
 
       // Host settings or the client changed something else (N9): rebuild with it.
       if (change_events->peek()) {
-        if (auto change = change_events->pop(0ms); change && change->rebuild) {
-          BOOST_LOG(info) << "Video encoder: rebuilt with the host's new settings"sv;
+        if (auto change = change_events->pop(0ms)) {
+          if (change->rebuild) {
+            BOOST_LOG(info) << "Video encoder: rebuilt with the host's new settings"sv;
+          }
+          if (change->tuning && *change->tuning != config.tuning) {
+            BOOST_LOG(info) << "Video encoder: tuning "sv << config::to_string(config.tuning) << " -> "sv << config::to_string(*change->tuning);
+            config.tuning = *change->tuning;
+          }
         }
       }
 

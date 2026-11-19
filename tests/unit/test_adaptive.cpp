@@ -383,3 +383,32 @@ TEST(AdaptiveTests, HostSettingsChangeDuringTheStream) {
   d = s.c.update_settings(settings, 0, s.t);
   EXPECT_EQ(d.fec_percent, 15);
 }
+
+TEST(AdaptiveTests, ClientSetsBitrateAndErrorCorrection) {
+  sim_t s(20000);
+  s.clean(5);
+
+  // A higher bitrate becomes the new ceiling and is used at once
+  auto d = s.c.set_client_bitrate(30000, s.t);
+  ASSERT_TRUE(d.bitrate_kbps);
+  EXPECT_EQ(*d.bitrate_kbps, 30000);
+  EXPECT_EQ(s.state().max_kbps, 30000);
+  EXPECT_EQ(s.state().last_reason, reason_e::client);
+  EXPECT_FALSE(s.c.set_client_bitrate(30000, s.t).bitrate_kbps);
+
+  // Congestion still lowers it (after the 2 s in which loss after a change is ignored), and
+  // probing climbs back to the new ceiling only
+  s.clean(3);
+  s.second(5, rtt(80, 10));
+  EXPECT_LT(s.state().bitrate_kbps, 30000);
+  for (int i = 0; i < 300; ++i) {
+    s.second();
+  }
+  EXPECT_EQ(s.state().bitrate_kbps, 30000);
+
+  // Error correction becomes the level the controller returns to
+  d = s.c.set_client_fec(35, s.t);
+  EXPECT_EQ(d.fec_percent, 35);
+  s.clean(60);
+  EXPECT_EQ(s.state().fec_percent, 35);
+}

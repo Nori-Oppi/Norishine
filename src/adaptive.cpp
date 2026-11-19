@@ -104,6 +104,8 @@ namespace adaptive {
         return "fec_relax";
       case reason_e::settings:
         return "settings";
+      case reason_e::client:
+        return "client";
       case reason_e::none:
         break;
     }
@@ -240,6 +242,39 @@ namespace adaptive {
       recent_recovery.clear();
       decision.bitrate_kbps = bitrate_kbps;
     }
+    decision.fec_percent = fec;
+    return decision;
+  }
+
+  decision_t controller_t::set_client_bitrate(int kbps, clock::time_point now) {
+    std::lock_guard lg {mutex};
+    decision_t decision;
+    kbps = std::max(kbps, 1);
+    max_kbps = kbps;
+    min_kbps = std::clamp(settings.min_kbps, 1, max_kbps);
+    // Trouble at the old bitrate says little about the new one.
+    knee_kbps.reset();
+    if (kbps != bitrate_kbps) {
+      bitrate_kbps = kbps;
+      last_change = now;
+      last_reason = reason_e::client;
+      recent_recovery.clear();
+      clean_since = now;
+      decision.bitrate_kbps = kbps;
+    }
+    decision.fec_percent = fec;
+    return decision;
+  }
+
+  decision_t controller_t::set_client_fec(int percent, clock::time_point now) {
+    std::lock_guard lg {mutex};
+    decision_t decision;
+    settings.base_fec = std::max(percent, 1);
+    settings.max_fec = std::max(settings.max_fec, settings.base_fec);
+    fec = settings.base_fec;
+    last_fec_change = now;
+    last_change = now;
+    last_reason = reason_e::client;
     decision.fec_percent = fec;
     return decision;
   }

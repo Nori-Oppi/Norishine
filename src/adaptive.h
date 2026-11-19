@@ -76,6 +76,7 @@ namespace adaptive {
     probe,  ///< Clean for a while: bitrate up.
     fec_relax,  ///< Clean for a while: error correction back towards the setting.
     settings,  ///< The host's settings changed during the stream (N9).
+    client,  ///< The client asked for a bitrate or error correction during the stream (N9).
   };
 
   std::string_view to_string(reason_e reason);
@@ -144,6 +145,19 @@ namespace adaptive {
      * @return The bitrate to change to, if it had to drop, and the error correction now.
      */
     decision_t update_settings(const settings_t &settings, int cap_kbps = 0, clock::time_point now = clock::now());
+
+    /**
+     * @brief The client asked for a new bitrate during the stream (N9): it becomes the
+     *        stream's bitrate and its new ceiling, as if the stream had started with it.
+     * @return The bitrate to change to (empty when it is the current one).
+     */
+    decision_t set_client_bitrate(int kbps, clock::time_point now = clock::now());
+
+    /**
+     * @brief The client asked for an error correction during the stream (N9): it becomes
+     *        the level the controller returns to, and is used at once.
+     */
+    decision_t set_client_fec(int percent, clock::time_point now = clock::now());
 
     /// Seconds between ticks.
     static constexpr auto tick_interval = std::chrono::seconds(1);

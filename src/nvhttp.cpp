@@ -1257,7 +1257,7 @@ namespace nvhttp {
     // Artemis ignore. What a device may do is in root.Permission (manage_read, manage_write).
     tree.put("root.Norishine.ApiVersion", API_VERSION);
     auto optimise_app = proc::proc.optimise_test_app();
-    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + (optimise_app ? "optimise,"s : ""s) + "status,stats,session,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
+    tree.put("root.Norishine.Features", std::string {config::video.client_tuning ? "tuning,"sv : ""sv} + (optimise_app ? "optimise,"s : ""s) + "status,stats,session,session.settings,adaptive,recommendations,update,config.schema,config.read,config.write,restart,"s + std::string {manage_api::features});
     if (optimise_app) {
       // Norishine (N6): the hidden app that test streams launch (by this id, or by OPTIMISE_TEST_UUID)
       tree.put("root.Norishine.OptimiseAppId", optimise_app->id);
@@ -1580,6 +1580,31 @@ namespace nvhttp {
       }
       if (auto session = own_stream(response, request)) {
         stream::session::report(*session, report);
+        send_json(response, SimpleWeb::StatusCode::success_ok, own_session(*session));
+      }
+    }
+
+    /**
+     * @brief POST /api/v1/session/settings: the client changes its own running stream
+     *        (N9): bitrate, error correction, tuning goal. Answers as GET /api/v1/session.
+     */
+    void session_settings(resp_https_t response, req_https_t request) {
+      print_req<SunshineHTTPS>(request);
+      nlohmann::json body;
+      if (!json_body(response, request, body)) {
+        return;
+      }
+      stream::session::live_change_t change;
+      if (auto error = stream::session::parse_change(body, change); !error.empty()) {
+        send_json(response, SimpleWeb::StatusCode::client_error_bad_request, {{"status", false}, {"error", error}});
+        return;
+      }
+      if (auto session = own_stream(response, request)) {
+        int status = 200;
+        if (auto error = stream::session::change(*session, change, status); !error.empty()) {
+          send_json(response, SimpleWeb::StatusCode::client_error_conflict, {{"status", false}, {"error", error}});
+          return;
+        }
         send_json(response, SimpleWeb::StatusCode::success_ok, own_session(*session));
       }
     }
@@ -2516,6 +2541,7 @@ namespace nvhttp {
     https_server.resource["^/api/v1/stats$"]["GET"] = api::stats;
     https_server.resource["^/api/v1/session$"]["GET"] = api::session_get;
     https_server.resource["^/api/v1/session/report$"]["POST"] = api::session_report;
+    https_server.resource["^/api/v1/session/settings$"]["POST"] = api::session_settings;
     https_server.resource["^/api/v1/update$"]["GET"] = api::update_status;
     https_server.resource["^/api/v1/update$"]["POST"] = api::update_start;
     https_server.resource["^/api/v1/optimise$"]["GET"] = api::optimise_get;

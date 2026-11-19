@@ -383,6 +383,8 @@ namespace stream {
       safe::mail_raw_t::event_t<std::pair<int64_t, int64_t>> invalidate_ref_frames_events;
       safe::mail_raw_t::event_t<int> bitrate_events;
       safe::mail_raw_t::event_t<video::change_t> change_events;
+      std::mutex change_mutex;
+      video::change_t desired;  ///< Every change asked for so far: each event carries all of it.
 
       std::atomic_int fec_percentage;  ///< Error correction for this stream, adapted while it runs.
 
@@ -2153,7 +2155,8 @@ namespace stream {
         }
       }
       if (encoder) {
-        video::change_t change;
+        std::lock_guard lock {session->video.change_mutex};
+        auto change = session->video.desired;
         change.rebuild = true;
         session->video.change_events->raise(change);
       }
@@ -2161,8 +2164,108 @@ namespace stream {
     }
   }
 
+  int encoder_kbps(std::int64_t kbps, int fec_percent, bool high_quality_audio, int audio_channels) {
+    // If the FEC percentage isn't too high, adjust the configured bitrate to ensure video
+    // traffic doesn't exceed the user's selected bitrate when the FEC shards are included.
+    if (fec_percent <= 80) {
+      kbps /= 100.f / (100 - fec_percent);
+    }
+
+    // Adjust the bitrate to account for audio traffic bandwidth usage (capped at 20% reduction).
+    // The bitrate per channel is 256 Kbps for high quality mode and 96 Kbps for normal quality.
+    auto audio_kbps = (high_quality_audio ? 256 : 96) * audio_channels;
+    kbps -= std::min((std::int64_t) audio_kbps, kbps / 5);
+
+    // Reduce it by another 500Kbps to account for A/V packet overhead and control data
+    // traffic (capped at 10% reduction).
+    kbps -= std::min((std::int64_t) 500, kbps / 10);
+    return (int) std::max<std::int64_t>(kbps, 1);
+  }
+
   namespace session {
     std::atomic_uint running_sessions;
+
+    std::string parse_change(const nlohmann::json &body, live_change_t &out) {
+      if (!body.is_object()) {
+        return "The body must be a JSON object";
+      }
+      auto integer = [&](const char *key, int min, int max, std::optional<int> &field) -> std::string {
+        if (!body.contains(key) || body[key].is_null()) {
+          return {};
+        }
+        if (!body[key].is_number_integer() || body[key].get<std::int64_t>() < min || body[key].get<std::int64_t>() > max) {
+          return std::string {key} + " must be a whole number from " + std::to_string(min) + " to " + std::to_string(max);
+        }
+        field = body[key].get<int>();
+        return {};
+      };
+      if (auto error = integer("bitrate_kbps", 500, 1000000, out.bitrate_kbps); !error.empty()) {
+        return error;
+      }
+      if (auto error = integer("fec_percent", 1, 255, out.fec_percent); !error.empty()) {
+        return error;
+      }
+      if (body.contains("tuning") && !body["tuning"].is_null()) {
+        auto value = body["tuning"].is_string() ? body["tuning"].get<std::string>() : std::string {};
+        auto tuning = config::tuning_from_view(value);
+        if (tuning == config::tuning_e::host) {
+          return "tuning must be performance, balanced or quality";
+        }
+        out.tuning = tuning;
+      }
+      if (!out.bitrate_kbps && !out.fec_percent && !out.tuning) {
+        return "Nothing to change: give bitrate_kbps, fec_percent or tuning";
+      }
+      return {};
+    }
+
+    std::string change(session_t &session, const live_change_t &change, int &status) {
+      status = 409;
+      if (state(session) != state_e::RUNNING || session.config.monitor.input_only) {
+        return "The stream isn't running";
+      }
+      if ((change.bitrate_kbps || change.tuning) && !video::live_bitrate_supported()) {
+        return "This host's encoder can't change during a stream";
+      }
+      if (change.tuning && !config::video.client_tuning) {
+        return "Tuning goals are off on this host (client_tuning)";
+      }
+
+      auto now = std::chrono::steady_clock::now();
+      if (change.fec_percent) {
+        if (session.adaptive) {
+          session.video.fec_percentage = session.adaptive->set_client_fec(*change.fec_percent, now).fec_percent;
+        } else {
+          session.video.fec_percentage = *change.fec_percent;
+        }
+        BOOST_LOG(info) << "Stream for ["sv << session.device_name << "]: error correction "sv << *change.fec_percent << "% (asked by the client)"sv;
+      }
+      if (change.bitrate_kbps) {
+        std::int64_t requested = *change.bitrate_kbps;
+        if (config::video.max_bitrate > 0) {
+          requested = std::min<std::int64_t>(requested, config::video.max_bitrate);
+        }
+        auto &audio = session.config.audio;
+        auto kbps = encoder_kbps(requested, session.video.fec_percentage.load(), audio.flags[audio::config_t::HIGH_QUALITY], audio.channels);
+        BOOST_LOG(info) << "Stream for ["sv << session.device_name << "]: bitrate "sv << requested << " kbps asked, encoder "sv << kbps << " kbps"sv;
+        if (session.adaptive) {
+          if (auto decision = session.adaptive->set_client_bitrate(kbps, now); decision.bitrate_kbps) {
+            session.video.bitrate_events->raise(*decision.bitrate_kbps);
+          }
+        } else {
+          session.video.bitrate_events->raise(kbps);
+        }
+      }
+      if (change.tuning) {
+        std::lock_guard lock {session.video.change_mutex};
+        session.video.desired.tuning = *change.tuning;
+        session.config.monitor.tuning = *change.tuning;
+        session.video.change_events->raise(session.video.desired);
+        BOOST_LOG(info) << "Stream for ["sv << session.device_name << "]: tuning "sv << config::to_string(*change.tuning) << " (asked by the client)"sv;
+      }
+      status = 200;
+      return {};
+    }
 
     state_e state(session_t &session) {
       return session.state.load(std::memory_order_relaxed);

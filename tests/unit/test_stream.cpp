@@ -18,6 +18,8 @@
 
 // local includes
 #include <src/network.h>
+#include <src/rtsp.h>
+#include <src/stream.h>
 
 namespace stream {
   std::vector<uint8_t> concat_and_insert(uint64_t insert_size, uint64_t slice_size, const std::string_view &data1, const std::string_view &data2);
@@ -98,4 +100,33 @@ TEST(ControlPacketTests, AcceptsTypeAndPayload) {
   ASSERT_TRUE(message);
   EXPECT_EQ(message->first, 0x0206);
   EXPECT_EQ(message->second, "abc");
+}
+
+TEST(LiveChangeTests, ParsesWhatAClientAsksFor) {
+  stream::session::live_change_t change;
+  EXPECT_EQ(stream::session::parse_change({{"bitrate_kbps", 30000}, {"fec_percent", 25}, {"tuning", "quality"}}, change), "");
+  EXPECT_EQ(change.bitrate_kbps, 30000);
+  EXPECT_EQ(change.fec_percent, 25);
+  EXPECT_EQ(change.tuning, config::tuning_e::quality);
+
+  auto error = [](const nlohmann::json &body) {
+    stream::session::live_change_t c;
+    return stream::session::parse_change(body, c);
+  };
+  EXPECT_NE(error(nlohmann::json::object()), "");
+  EXPECT_NE(error(nlohmann::json::array()), "");
+  EXPECT_NE(error({{"bitrate_kbps", 100}}), "");
+  EXPECT_NE(error({{"bitrate_kbps", "20000"}}), "");
+  EXPECT_NE(error({{"fec_percent", 0}}), "");
+  EXPECT_NE(error({{"tuning", "fast"}}), "");
+  EXPECT_EQ(error({{"fec_percent", 255}, {"bitrate_kbps", nullptr}}), "");
+}
+
+TEST(LiveChangeTests, EncoderBitrateLeavesRoomForErrorCorrectionAndAudio) {
+  // 20 Mbps, 20 % error correction, stereo at normal quality: as at launch
+  EXPECT_EQ(stream::encoder_kbps(20000, 20, false, 2), 15308);
+  // Error correction above 80 % isn't taken off
+  EXPECT_EQ(stream::encoder_kbps(20000, 90, false, 2), 19308);
+  // Small bitrates lose at most 20 % for audio and 10 % for overhead
+  EXPECT_EQ(stream::encoder_kbps(1000, 0, true, 8), 720);
 }

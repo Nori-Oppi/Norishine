@@ -111,7 +111,7 @@ by default, only per device from the web UI (paired devices, "Manage"):
 programs on it. Grant it only to devices you trust as much as the host's own account.
 
 Without the permission the answer is 403 with a JSON error. `serverinfo` (HTTP and HTTPS)
-carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,optimise,status,stats,session,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
+carries `<Norishine><ApiVersion>1</ApiVersion><Features>tuning,optimise,status,stats,session,session.settings,adaptive,recommendations,update,config.schema,config.read,config.write,restart,apps,apps.write,devices,devices.write,sessions.write,displays</Features></Norishine>`
 (check for a feature before using it; older hosts list fewer),
 and `Permission` shows what the requesting device may do. `GET /api/v1/status` returns the
 host name, version, platform, unique ID, running app, number of active sessions, and the
@@ -170,7 +170,7 @@ performance counters. `encoder` is as in `/api/v1/status`.
 | `bitrate_kbps` | Bitrate the encoder is set to now |
 | `max_kbps`, `min_kbps` | Bounds: the stream's start bitrate, and `adaptive_min_bitrate` |
 | `fec_percent` | Error correction now |
-| `last_reason`, `last_change_s` | Why and when (seconds into the stream) it last changed something: `congestion`, `delay`, `loss`, `probe`, `fec_relax`, `settings` (the host's settings changed) or `none` |
+| `last_reason`, `last_change_s` | Why and when (seconds into the stream) it last changed something: `congestion`, `delay`, `loss`, `probe`, `fec_relax`, `settings` (the host's settings changed), `client` (the client asked, `POST /api/v1/session/settings`) or `none` |
 | `decreases`, `increases` | Bitrate changes so far |
 | `client_reports` | The client sent a report in the last 3 seconds |
 | `host_limited`, `client_limited` | The host can't encode, or the client can't decode, as fast as asked; the bitrate isn't raised meanwhile |
@@ -264,6 +264,24 @@ for its stream's controller, about once a second (JSON, every field optional): `
 (video frames lost after FEC, percent), `rtt_ms`, `rtt_variance_ms`, `decode_ms`, `fps`,
 `display_hz`. Answers as `GET /api/v1/session`; 400 for a value of the wrong type or out of
 range, 404 without a stream.
+
+## POST /api/v1/session/settings
+
+Feature `session.settings` (roadmap N9). HTTPS port only, no management permission: a device
+changes only its own stream. Changes the running stream without reconnecting (JSON, every
+field optional, at least one needed):
+
+| Field | Meaning |
+| --- | --- |
+| `bitrate_kbps` | The bitrate to stream at, 500 to 1000000, counted as at launch (before error correction, audio and packet overhead; capped by `max_bitrate`). It becomes the stream's new ceiling for the adaptive controller too |
+| `fec_percent` | Error correction, 1 to 255 %: used at once, and the level the controller returns to |
+| `tuning` | `performance`, `balanced` or `quality`: the encoder preset, as `norishineTuning` at launch. Needs the `tuning` feature |
+
+A new bitrate or preset rebuilds the encoder: the client gets one key frame, as after a
+bitrate change by the controller. Answers as `GET /api/v1/session`. 400 for a malformed
+body or a value out of range, 404 without a stream, 409 when the stream can't change (not
+running yet, an encoder that can't be rebuilt during a stream, or `tuning` while
+`client_tuning` is off).
 
 ## GET /api/v1/update
 @copydoc confighttp::getUpdateV1()
