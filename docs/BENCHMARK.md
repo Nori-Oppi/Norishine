@@ -84,7 +84,7 @@ and none is n/a.
 | Metric | How it's measured | Better | Same within |
 | --- | --- | --- | --- |
 | Time to first frame | From starting the client to the first frame of the test picture in its window. Most of it is the client starting up (about 1.5 s since 19 November, 5 s before) | lower | 150 ms or 10 % |
-| Capture to send (host processing) | The host processing latency each host writes into every frame, averaged by the client (its end-of-stream statistics) | lower | 0.5 ms or 15 % |
+| Capture to send (host processing) | The host processing latency each host writes into every frame, averaged by the client (its end-of-stream statistics). Vibepollo starts it when its host takes the frame, the others at capture ([N18](#capture-to-send-against-vibepollo-n18)) | lower | 0.5 ms or 15 % |
 | Decode time | The client's average decoding time | lower | 0.3 ms or 20 % |
 | Dropped frames | Frames the client dropped for network loss or jitter, in the clean stream, counted as Moonlight 6.2.0 counts them (see [Dropped frames](#dropped-frames-norilight-counted-drops-moonlight-620-doesnt)) | lower | 0.5 points |
 | Frames shown per second | New pictures seen in the stream window per second. Watched every 4 ms; the screen refreshes at 60 Hz | higher | 2 fps or 5 % |
@@ -185,10 +185,10 @@ row; each gave the same verdict, and one also had time to first frame 151 ms beh
 What it shows:
 
 - Capture to send: Norishine 3.9–4.2 ms in all nine runs, Sunshine 3.9–4.0, Apollo 3.7–5.4,
-  Vibepollo 3.2 in every run. Vibepollo captures with Windows.Graphics.Capture through its
-  helper; [CAPTURE-HELPER.md](CAPTURE-HELPER.md) measured that 0.6 ms lower than Desktop
-  Duplication. Norishine's earlier 2.3–2.8 ms was a measuring error, not speed (see
-  [Steadier runs](#steadier-runs-n16)).
+  Vibepollo 3.2 in every run. Vibepollo measures from a later point and its WGC helper's
+  frames reach the encoder where it's fastest; it isn't a Norishine slowdown (see
+  [Capture to send against Vibepollo](#capture-to-send-against-vibepollo-n18)). Norishine's
+  earlier 2.3–2.8 ms was a measuring error, not speed (see [Steadier runs](#steadier-runs-n16)).
 - Time to first frame: Norishine with Norilight receives the first video packet about 120 ms
   later than Apollo or Sunshine with Moonlight (1590 against 1470 ms); from there to the first
   frame every host takes 35–40 ms.
@@ -305,6 +305,53 @@ exactly three refreshes, so those gaps counted or not by chance.
 The one run at 47 frames a second was the client's own presents: with V-sync off they
 sometimes miss the compositor's refresh. The median of three runs keeps it from deciding the
 result.
+
+#### Capture to send against Vibepollo (N18)
+
+The check reports Norishine 4.0–4.1 ms against Vibepollo's 3.2 ms in every run. Measured on
+24 November 2026 with 25-second clean streams of the check's scenario, and the host's new
+per-stage timing (debug log: `Frame capture: frame time to captured`, `Video: capture to
+encoder thread`, `Video: convert`, `Video: encode`, `Frame processing latency`):
+
+| Host, capture | Captured | To encoder thread | Convert | Encode call | Total (host log) | Client reports |
+| --- | --- | --- | --- | --- | --- | --- |
+| Norishine, Desktop Duplication | 0.16–0.17 | 0.18 | 0.11 | 3.79–4.03 | 4.09–4.33 | 4.1–4.3 |
+| Norishine, `capture = wgc` | 0.11 | 0.12 | 0.13 | 3.96–4.02 | 4.21–4.27 | 4.2–4.3 |
+| Vibepollo, its WGC helper (default) | – | – | – | 3.10–3.12 | 3.22–3.25 | 3.2 |
+| Vibepollo, its WGC helper, FFmpeg's AMF encoder | – | – | – | 3.11 | 3.23 | – |
+| Vibepollo, `capture = ddx` | – | – | – | 3.49 | – | 3.6–3.7 |
+
+All in ms. The send itself takes 0.1 ms on every host. The client doesn't matter: Norishine
+with Moonlight 6.2.0 reports 3.9–4.0 ms.
+
+What it shows:
+
+- **Capture isn't where the time goes.** Desktop Duplication hands Norishine the frame
+  0.17 ms after it was shown, and the encoder thread has it 0.18 ms later. Norishine with
+  `capture = wgc` measures the same as Desktop Duplication, so a capture helper
+  ([CAPTURE-HELPER.md](CAPTURE-HELPER.md)) wouldn't lower this figure.
+- **Vibepollo's clock starts later.** It measures from when its host takes the frame
+  (`host_processing_timestamp`: when it starts converting the helper's frame, or when Desktop
+  Duplication returns it), not from when the frame was captured. Norishine measures from the
+  capture time (N16), which puts capture and the hand-off (0.35 ms) in its figure.
+- **The rest is the encoder, and it depends on timing, not settings.** Norishine's encode
+  call has two peaks, about 3.5 and 3.9 ms (0.1 ms histogram of every frame), and the share of
+  slow frames differs per stream (24–86 %). Starting each encode at a chosen point of the
+  refresh showed why: 3.5 ms when it starts 8–12 ms after the vertical blank, 4.0–4.4 ms when
+  it starts between 13 and 2 ms, where it overlaps the next refresh. Where Desktop Duplication
+  delivers frames is set by the compositor, differently in each stream. None of these changed
+  it (each 3.6–4.0 ms): AMF's low-latency mode off, VBAQ off, quality preset, HRD, rate
+  control unset, a one-second VBV instead of one frame, AMF's output wait (query timeout 0,
+  1 or 50 ms), a 1 ms timer instead of 0.5 ms, or extra GPU load. Vibepollo on FFmpeg's
+  encoder, with the same options as Norishine, takes 3.1 ms with its WGC helper and 3.5 ms
+  with Desktop Duplication.
+
+Measured from the same point as Vibepollo's, Norishine's figure is about 3.7 ms against
+Vibepollo's 3.6–3.7 ms with Desktop Duplication: the same. What's left is Vibepollo's WGC
+helper, whose frames reach the encoder where the encode is fastest; Norishine's own WGC
+capture doesn't get that (4.2 ms). So the check's "worse than Vibepollo on capture to send"
+is expected until the encode is moved to a better point of the refresh (roadmap N20); it
+isn't a slowdown in Norishine.
 
 ## Stream start (start_time.py)
 

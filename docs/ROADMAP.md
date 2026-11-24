@@ -1,6 +1,6 @@
 # Norishine architecture decisions and roadmap
 
-Status key: **done**, **in progress**, **planned**. Updated 2026-11-24: phases 2–5 are done, and the next
+Status key: **done**, **in progress**, **planned**. Updated 2026-11-25: phases 2–5 are done, and the next
 items are ranked under [Next](#next). Evidence for the
 decisions is in [PHASE1-RESEARCH.md](PHASE1-RESEARCH.md).
 
@@ -87,7 +87,7 @@ in, with confirmation) or the command line, never from a paired client.
 
 ## Done
 
-Phases 2 to 5 are finished, and so are N1 to N6, N9, N10, N14 and N16. Details are in the linked docs and the git history.
+Phases 2 to 5 are finished, and so are N1 to N6, N9, N10, N14, N16 and N18. Details are in the linked docs and the git history.
 
 | Milestone | What it gave | More |
 | --- | --- | --- |
@@ -108,6 +108,7 @@ Phases 2 to 5 are finished, and so are N1 to N6, N9, N10, N14 and N16. Details a
 | N9 Settings during a stream | Host settings that need no restart apply at once, in running streams too; a client changes its stream's bitrate, error correction, encoder preset, resolution, frame rate and codec without reconnecting (`POST /api/v1/session/settings`, control message `0x3100` for a new format); Norilight's Stream settings menu (Ctrl+Alt+Shift+O). Other clients reconnect as before | [AUTOTUNE.md](AUTOTUNE.md#settings-during-a-stream-n9), [api.md](api.md#post-apiv1sessionsettings) |
 | N10 Through a host update | The host tells streaming clients it restarts (update or settings restart) and names each run (`RunId`); Norilight waits and starts the same app again by itself, 0.5 s after the host answers. A real handover isn't planned: the gap is the host's own downtime | [BENCHMARK.md](BENCHMARK.md#reconnect-after-a-host-restart-n10) |
 | N16 Steadier benchmark runs | Bad runs came from the test picture skipping refreshes (Tk timers) and from capture to send measured from the encoder's frame grid instead of the capture time. The picture now changes on every refresh and the host measures from the real capture time: frames shown 57.8–59.9 instead of 38.6–58.7, capture to send 3.9–4.2 ms instead of 2.0–4.4. That showed two real differences, N18 and N19 | [BENCHMARK.md](BENCHMARK.md#steadier-runs-n16) |
+| N18 Capture to send against Vibepollo | Measured, not a Norishine slowdown (25 November 2026). Capture and the hand-off to the encoder take 0.35 ms; the rest is the encode, 3.5 or 3.9 ms depending on where in the refresh it starts, with every encoder setting tried. Vibepollo starts its clock when its host takes the frame, not at capture, and its WGC helper's frames reach the encoder where it's fastest (3.1 ms); with Desktop Duplication it reports 3.6–3.7 ms. Norishine's own WGC capture measures the same as Desktop Duplication, so the capture helper wouldn't lower it. The host log shows each stage at debug level. Follow-up: N20 | [BENCHMARK.md](BENCHMARK.md#capture-to-send-against-vibepollo-n18) |
 | N2 Benchmark check | `scripts/benchmark/compare.py`: Norishine with Norilight against stored Apollo, Vibepollo and Sunshine results with Moonlight, per metric better, same or worse; run after every streaming change | [BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine) |
 
 ## In progress: M10 measured improvements
@@ -123,9 +124,10 @@ Each one benchmarked before and after ([BENCHMARK.md](BENCHMARK.md)).
 - Frame cap matched to the client (**measured, not built**): the host already encodes no
   more frames than its display shows; a cap would undo the clients' V-sync-off for high
   frame rates ([BENCHMARK.md](BENCHMARK.md#m10-frame-cap-matched-to-the-client)).
-- Capture from a user-session helper (**designed, not built**): WGC measured 0.6 ms lower
-  ([CAPTURE-HELPER.md](CAPTURE-HELPER.md)). Now N18: the steadier check (N16) shows Vibepollo,
-  which captures that way, 0.8 ms ahead.
+- Capture from a user-session helper (**designed, not built**): it wouldn't make streams
+  faster. With the steadier check, `capture = wgc` measures the same as Desktop Duplication
+  (N18, [CAPTURE-HELPER.md](CAPTURE-HELPER.md)); its case is what WGC captures that Desktop
+  Duplication can't.
 
 ## Next
 
@@ -137,7 +139,6 @@ they're listed here so there's one order for both.
 
 | # | Item | Project | Effort | Importance | Needs |
 | --- | --- | --- | --- | --- | --- |
-| N18 | Capture to send as low as Vibepollo's | Norishine | M–L | High | — |
 | N19 | First video packet as early as Apollo's and Sunshine's | Both | S–M | Medium | — |
 | N7 | Linux build | Norilight | M | Medium | — |
 | N8 | Separate command-line builds | Both | M | Medium | — |
@@ -152,6 +153,7 @@ whenever there's room, between the items above:
 | --- | --- | --- | --- | --- |
 | N15 | Benchmark streams that show no picture | Norishine (check script) | S | Low |
 | N17 | Virtual display follows a resolution change during a stream | Norishine | S–M | Low |
+| N20 | Encode at a quicker point of the refresh | Norishine | M | Low |
 
 ### N7. Linux build (Norilight) — M
 Moonlight's Linux build code is kept, so this is mostly CI, an AppImage or Flatpak, and
@@ -190,12 +192,6 @@ and less predictable. Change how the script places the window (for example wait 
 frame, or start the client on the target position) so streams don't need a retry. See
 [BENCHMARK.md](BENCHMARK.md#streams-that-show-no-picture).
 
-### N18. Capture to send as low as Vibepollo's — M–L
-The only metric where the check (N16) shows Norishine worse: capture to send 4.0 ms against
-Vibepollo's 3.2, in every run. Vibepollo captures with Windows.Graphics.Capture from a helper in
-the user's session, which [CAPTURE-HELPER.md](CAPTURE-HELPER.md) measured 0.6 ms lower than
-Desktop Duplication and designed for Norishine. Build it, or find the 0.8 ms elsewhere first.
-
 ### N19. First video packet as early as Apollo's and Sunshine's — S–M
 Norishine with Norilight receives the first video packet about 120 ms later than Apollo or
 Sunshine with Moonlight (1590 against 1470 ms), right at the check's 150 ms tolerance for time to
@@ -207,6 +203,14 @@ which side it is; then the start steps both log (N5) show where.
 A resolution changed during a stream (N9) scales the captured display. A virtual display made
 for the stream keeps the size it was created with; changing its mode too would give a sharp
 picture at the new size.
+
+### N20. Encode at a quicker point of the refresh — M
+The same frame takes the AMD encoder 3.5 ms when the encode starts 8–12 ms after the vertical
+blank and 4.0–4.4 ms when it overlaps the next refresh (N18). Desktop Duplication delivers
+frames wherever the compositor puts them, so each stream lands somewhere else. Find what the
+encoder competes with near the refresh, and whether frames can reach it earlier without waiting.
+Until then the check reports capture to send worse than Vibepollo
+([BENCHMARK.md](BENCHMARK.md#capture-to-send-against-vibepollo-n18)).
 
 ## Not planned
 WebRTC browser streaming, PyroWave, Playnite and Lutris integration, custom gamepad

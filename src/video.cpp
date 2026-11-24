@@ -2059,6 +2059,11 @@ namespace video {
     auto bitrate_events = mail->event<int>(mail::bitrate);
     auto change_events = mail->event<change_t>(mail::video_change);
 
+    // Where capture to send goes, per stage (debug log, N18)
+    logging::min_max_avg_periodic_logger<double> capture_to_encoder_logger(debug, "Video: capture to encoder thread", "ms");
+    logging::time_delta_periodic_logger convert_logger(debug, "Video: convert");
+    logging::time_delta_periodic_logger encode_logger(debug, "Video: encode");
+
     {
       // Load a dummy image into the AVFrame to ensure we have something to encode
       // even if we timeout waiting on the first frame. This is a relatively large
@@ -2126,6 +2131,9 @@ namespace video {
           }
 
           capture_timestamp = frame_timestamp;
+          if (capture_to_encoder_logger.is_enabled()) {
+            capture_to_encoder_logger.collect_and_log(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - *capture_timestamp).count());
+          }
           auto current_timestamp = *frame_timestamp;
           auto time_diff = current_timestamp - encode_frame_timestamp;
 
@@ -2134,10 +2142,12 @@ namespace video {
             continue;
           }
 
+          convert_logger.first_point_now();
           if (session->convert(*img)) {
             BOOST_LOG(error) << "Could not convert image"sv;
             break;
           }
+          convert_logger.second_point_now_and_log();
 
           if (time_diff < frame_variation_threshold) {
             *frame_timestamp = encode_frame_timestamp;
@@ -2166,6 +2176,7 @@ namespace video {
         break;
       }
 
+      encode_logger.first_point_now();
       if (encode(frame_nr++, *session, packets, channel_data, frame_timestamp, capture_timestamp)) {
         BOOST_LOG(error) << "Could not encode video packet"sv;
         if (!encoded) {
@@ -2173,6 +2184,7 @@ namespace video {
         }
         break;
       }
+      encode_logger.second_point_now_and_log();
       encoded = true;
 
       session->request_normal_frame();

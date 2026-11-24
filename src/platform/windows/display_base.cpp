@@ -319,6 +319,10 @@ namespace platf::dxgi {
           }
           break;
         case platf::capture_e::ok:
+          if (img_out && img_out->frame_timestamp) {
+            captured_logger.first_point(*img_out->frame_timestamp);
+            captured_logger.second_point_now_and_log();
+          }
           if (!push_captured_image_cb(std::move(img_out), true)) {
             return capture_e::ok;
           }
