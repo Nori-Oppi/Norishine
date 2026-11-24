@@ -41,6 +41,7 @@ WORK = os.path.join(ROOT, 'build', 'benchmark')
 STATE = os.path.join(WORK, 'state')
 USER, PASS = 'bench', 'bench-compare-1'
 PIN = '4821'
+STUTTER_MS = 42     # a stutter: a gap of 3 refreshes or more at 60 Hz (2.5 refreshes); 50 was exactly 3
 STRIP = 160          # rows at the bottom of the screen where the client's stream window shows
 GOALS = {'off': 0, 'performance': 1, 'balanced': 2, 'quality': 3}
 
@@ -64,8 +65,7 @@ METRICS = {
     'decode_ms': ('Decode time', 'ms', 'lower', 0.3, 0.20),
     'dropped_pct': ('Dropped frames (network + jitter)', '%', 'lower', 0.5, 0),
     'displayed_fps': ('Frames shown per second', 'fps', 'higher', 2, 0.05),
-    'interval_p99_ms': ('Frame interval, 99th percentile', 'ms', 'lower', 5, 0.15),
-    'stutters_per_min': ('Stutters (gaps over 50 ms) per minute', '/min', 'lower', 2, 0.25),
+    'stutters_per_min': ('Stutters (gaps of 3 refreshes or more) per minute', '/min', 'lower', 2, 0.25),
     'loss_fps': ('Frames shown per second at 5 % loss', 'fps', 'higher', 3, 0.08),
     'loss_dropped_pct': ('Dropped frames, loss stream', '%', 'lower', 1.0, 0.25),
     'recovery_ms': ('Recovery after a 300 ms blackout', 'ms', 'lower', 50, 0.25),
@@ -73,7 +73,9 @@ METRICS = {
     'host_cpu_pct': ('Host process CPU', '%', 'lower', 2, 0.25),
     'system_cpu_pct': ('Whole PC CPU', '%', 'lower', 10, 0.30),
 }
-INFO = ['dropped_all_pct', 'first_packet_ms', 'received_fps', 'render_ms', 'decoder_pct', 'client_cpu_pct']
+# Not in the verdict. Frame interval p99: the test picture changes on every refresh, so it's
+# one refresh or two, depending on whether just over or under 1 % of the refreshes repeat (N16)
+INFO = ['interval_p99_ms', 'dropped_all_pct', 'first_packet_ms', 'received_fps', 'render_ms', 'decoder_pct', 'client_cpu_pct']
 
 STATS_RE = {
     'received_fps': r'Incoming frame rate from network: ([\d.]+) FPS',
@@ -518,7 +520,7 @@ def clean_stream(client, host, relay):
         shown, iv = intervals_between(s.watcher.changes, a, b)
         m['displayed_fps'] = round(len(shown) / (b - a), 2)
         m['interval_p99_ms'] = round(percentile(iv, 0.99), 2) if iv else None
-        m['stutters_per_min'] = round(sum(1 for x in iv if x > 50) * 60 / (b - a), 2)
+        m['stutters_per_min'] = round(sum(1 for x in iv if x > STUTTER_MS) * 60 / (b - a), 2)
         m['first_packet_ms'] = s.first_packet_ms()
     finally:
         s.stop()

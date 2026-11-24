@@ -321,6 +321,9 @@ namespace video {
     void *channel_data = nullptr;
     bool after_ref_frame_invalidation = false;
     std::optional<std::chrono::steady_clock::time_point> frame_timestamp;
+    /// When the frame was really captured. frame_timestamp can be moved onto the encoder's
+    /// even frame grid for the RTP timestamp; latency is measured from this one (N16).
+    std::optional<std::chrono::steady_clock::time_point> capture_timestamp;
   };
 
   struct packet_raw_avcodec: packet_raw_t {
