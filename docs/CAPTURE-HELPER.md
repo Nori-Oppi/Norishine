@@ -32,6 +32,9 @@ fair comparison needs latency measured at the client (capture to display). The e
 is the same; the host CPU difference is other programs, which varied between runs.
 
 What the helper would bring is what WGC can do and Desktop Duplication can't, not speed.
+With the steadier benchmark (N16, N18) `capture = wgc` measured the same as Desktop
+Duplication: capture to send 4.2–4.3 ms against 4.1–4.3, and capture itself takes about
+0.2 ms either way ([BENCHMARK.md](BENCHMARK.md#capture-to-send-against-vibepollo-n18)).
 
 ## Design
 
