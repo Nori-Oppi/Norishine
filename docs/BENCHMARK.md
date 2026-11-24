@@ -160,41 +160,65 @@ What the reference hosts do to the PC while they run (the same as they do when i
 
 References recorded on 24 November 2026 with the test picture paced to the refresh (N16). PC:
 AMD Ryzen 7 5700X, AMD Radeon RX 6700 XT (AMF, HEVC), Windows 11, one 1920×1080 60 Hz display
-(Dell U2713HM). Check against `n16-steadier-benchmark` at `f8c3c030` with Norilight at
-`607bb041`, **Performance goal**, three runs:
+(Dell U2713HM). Check on 25 November 2026 against `n18-capture-to-send` at `b25f65af` with
+Norilight at `4d58caee` (N19), **Performance goal**, three runs:
 
 | Metric | Norishine | Apollo 0.4.6 | Vibepollo 2.17.6 | Sunshine 2026.914.233613 |
 | --- | --- | --- | --- | --- |
-| Time to first frame (ms) | 1626 | 1510 same | 1768 same | 1509 same |
-| Capture to send (ms) | 4.1 | 4.2 same | 3.2 **worse** | 4.0 same |
+| Time to first frame (ms) | 1544 | 1510 same | 1768 **better** | 1509 same |
+| Capture to send (ms) | 3.9 | 4.2 same | 3.2 **worse** | 4.0 same |
 | Decode time (ms) | 0.2 | 0.2 same | 0.2 same | 0.2 same |
 | Dropped frames (%) | 0.05 | 0.03 same | 0 same | 0.03 same |
-| Frames shown per second | 59.7 | 50.7 **better** | 60 same | 58.5 same |
-| Stutters per minute | 0 | 1 same | 0 same | 0 same |
-| Frames shown per second at 5 % loss | 58.7 | 58.6 same | 59.2 same | 58.3 same |
-| Dropped frames, loss stream (%) | 5.2 | 5.4 same | 5.1 same | 5.6 same |
-| Recovery after a 300 ms blackout (ms) | 48 | 44 same | 47 same | 41 same |
-| Video encoder load (%) | 18.0 | 16.9 same | 16.6 same | 17.1 same |
-| Host process CPU (%) | 0.57 | 0.57 same | 0.25 same | 0.64 same |
-| Whole PC CPU (%) | 10 | 8 same | 8 same | 8 same |
+| Frames shown per second | 58.7 | 50.7 **better** | 60 same | 58.5 same |
+| Stutters per minute | 2 | 1 same | 0 same | 0 same |
+| Frames shown per second at 5 % loss | 59.2 | 58.6 same | 59.2 same | 58.3 same |
+| Dropped frames, loss stream (%) | 5.4 | 5.4 same | 5.1 same | 5.6 same |
+| Recovery after a 300 ms blackout (ms) | 44 | 44 same | 47 same | 41 same |
+| Video encoder load (%) | 17.1 | 16.9 same | 16.6 same | 17.1 same |
+| Host process CPU (%) | 0.52 | 0.57 same | 0.25 same | 0.64 same |
+| Whole PC CPU (%) | 8 | 8 same | 8 same | 8 same |
 
-**Verdict: worse than Vibepollo on capture to send.** The check was run three times in a
-row; each gave the same verdict, and one also had time to first frame 151 ms behind Sunshine
-(the tolerance is 150 ms).
+**Verdict: worse than Vibepollo on capture to send**, which is explained, not a slowdown
+([N18](#capture-to-send-against-vibepollo-n18)); it stays until N20.
 
 What it shows:
 
-- Capture to send: Norishine 3.9–4.2 ms in all nine runs, Sunshine 3.9–4.0, Apollo 3.7–5.4,
-  Vibepollo 3.2 in every run. Vibepollo measures from a later point and its WGC helper's
-  frames reach the encoder where it's fastest; it isn't a Norishine slowdown (see
+- Capture to send: Norishine 3.9–4.2 ms in every run since N16, Sunshine 3.9–4.0, Apollo
+  3.7–5.4, Vibepollo 3.2 in every run. Vibepollo measures from a later point and its WGC
+  helper's frames reach the encoder where it's fastest (see
   [Capture to send against Vibepollo](#capture-to-send-against-vibepollo-n18)). Norishine's
   earlier 2.3–2.8 ms was a measuring error, not speed (see [Steadier runs](#steadier-runs-n16)).
-- Time to first frame: Norishine with Norilight receives the first video packet about 120 ms
-  later than Apollo or Sunshine with Moonlight (1590 against 1470 ms); from there to the first
-  frame every host takes 35–40 ms.
+- Time to first frame: Norilight now receives the first video packet as early as Moonlight
+  (1511 ms, the check of 24 November 1590 ms); from there to the first frame every host takes
+  35–40 ms. See [First video packet](#first-video-packet-n19).
 - Apollo showed about 50.6 frames a second in two runs of three, the third 59.6; not looked
   into, since Norishine doesn't show it.
 - Vibepollo showed exactly 60 frames a second and dropped none in every run.
+
+#### First video packet (N19)
+
+The check of 24 November showed Norishine with Norilight receiving the first video packet
+about 120 ms later than Apollo or Sunshine with Moonlight (1590 against 1470 ms, from starting
+the client). Found and fixed on 25 November 2026:
+
+- **Which side:** crossing hosts and clients (three 15-second clean streams each), the first
+  video packet came at 1479–1562 ms with Moonlight 6.2.0 (Norishine or Apollo) and at
+  1620–1725 ms with Norilight (Norishine or Apollo). So it's the client.
+- **Where:** with every client log line timed from the process start, both clients take the
+  same time from the launch request to the first packet (about 340 ms). Norilight sent the
+  launch about 100 ms later (1255 against 1158 ms): it made one more decoder check, each of
+  which creates a test decoder. The Tuning goal checked HEVC and AV1 decoding on every launch,
+  but it picks the codec only when the codec is automatic, and only the Quality goal ever
+  prefers AV1.
+- **Fix:** the Tuning goal checks HEVC only when the codec is automatic and AV1 only for
+  Quality (Norilight #42).
+
+| Norishine with Norilight, three streams | Before | After |
+| --- | --- | --- |
+| First video packet (ms) | 1596–1719 | 1464–1500 |
+| First picture in the window (ms) | 1629–1667 | 1496–1533 |
+| Moonlight 6.2.0, for comparison | 1491 (packet), 1524 (picture) | |
+| Check: time to first frame, median | 1626 | 1544 |
 
 #### Dropped frames: Norilight counted drops Moonlight 6.2.0 doesn't
 

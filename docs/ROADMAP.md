@@ -87,7 +87,7 @@ in, with confirmation) or the command line, never from a paired client.
 
 ## Done
 
-Phases 2 to 5 are finished, and so are N1 to N6, N9, N10, N14, N16 and N18. Details are in the linked docs and the git history.
+Phases 2 to 5 are finished, and so are N1 to N6, N9, N10, N14, N16, N18 and N19. Details are in the linked docs and the git history.
 
 | Milestone | What it gave | More |
 | --- | --- | --- |
@@ -109,6 +109,7 @@ Phases 2 to 5 are finished, and so are N1 to N6, N9, N10, N14, N16 and N18. Deta
 | N10 Through a host update | The host tells streaming clients it restarts (update or settings restart) and names each run (`RunId`); Norilight waits and starts the same app again by itself, 0.5 s after the host answers. A real handover isn't planned: the gap is the host's own downtime | [BENCHMARK.md](BENCHMARK.md#reconnect-after-a-host-restart-n10) |
 | N16 Steadier benchmark runs | Bad runs came from the test picture skipping refreshes (Tk timers) and from capture to send measured from the encoder's frame grid instead of the capture time. The picture now changes on every refresh and the host measures from the real capture time: frames shown 57.8–59.9 instead of 38.6–58.7, capture to send 3.9–4.2 ms instead of 2.0–4.4. That showed two real differences, N18 and N19 | [BENCHMARK.md](BENCHMARK.md#steadier-runs-n16) |
 | N18 Capture to send against Vibepollo | Measured, not a Norishine slowdown (25 November 2026). Capture and the hand-off to the encoder take 0.35 ms; the rest is the encode, 3.5 or 3.9 ms depending on where in the refresh it starts, with every encoder setting tried. Vibepollo starts its clock when its host takes the frame, not at capture, and its WGC helper's frames reach the encoder where it's fastest (3.1 ms); with Desktop Duplication it reports 3.6–3.7 ms. Norishine's own WGC capture measures the same as Desktop Duplication, so the capture helper wouldn't lower it. The host log shows each stage at debug level. Follow-up: N20 | [BENCHMARK.md](BENCHMARK.md#capture-to-send-against-vibepollo-n18) |
+| N19 First video packet as early as Moonlight's (Norilight) | Crossing hosts and clients showed the 120 ms followed Norilight. Its Tuning goal checked the HEVC and AV1 decoders before every launch, each with a test decoder, even when the result couldn't change anything; it now checks only what can change its pick. First video packet 1590 → 1511 ms, time to first frame 1626 → 1544 ms in the check | [BENCHMARK.md](BENCHMARK.md#first-video-packet-n19) |
 | N2 Benchmark check | `scripts/benchmark/compare.py`: Norishine with Norilight against stored Apollo, Vibepollo and Sunshine results with Moonlight, per metric better, same or worse; run after every streaming change | [BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine) |
 
 ## In progress: M10 measured improvements
@@ -139,7 +140,6 @@ they're listed here so there's one order for both.
 
 | # | Item | Project | Effort | Importance | Needs |
 | --- | --- | --- | --- | --- | --- |
-| N19 | First video packet as early as Apollo's and Sunshine's | Both | S–M | Medium | — |
 | N7 | Linux build | Norilight | M | Medium | — |
 | N8 | Separate command-line builds | Both | M | Medium | — |
 | N11 | Linux build | Norishine | XL | Medium | — |
@@ -191,13 +191,6 @@ happens with every host and client alike and the retry always works, but it make
 and less predictable. Change how the script places the window (for example wait for the first
 frame, or start the client on the target position) so streams don't need a retry. See
 [BENCHMARK.md](BENCHMARK.md#streams-that-show-no-picture).
-
-### N19. First video packet as early as Apollo's and Sunshine's — S–M
-Norishine with Norilight receives the first video packet about 120 ms later than Apollo or
-Sunshine with Moonlight (1590 against 1470 ms), right at the check's 150 ms tolerance for time to
-first frame. Crossing hosts and clients, as for the dropped frames in
-[BENCHMARK.md](BENCHMARK.md#dropped-frames-norilight-counted-drops-moonlight-620-doesnt), shows
-which side it is; then the start steps both log (N5) show where.
 
 ### N17. Virtual display follows a resolution change — S–M
 A resolution changed during a stream (N9) scales the captured display. A virtual display made
