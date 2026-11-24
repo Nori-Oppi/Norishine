@@ -62,8 +62,11 @@ result.
 ### The test stream
 
 `motion.py` draws seeded moving blocks over the whole screen except a strip at the bottom,
-so every host encodes the same picture. The client's stream window is moved so that only
-the top of its picture shows in that strip. That part shows the moving blocks, so it
+so every host encodes the same picture. It draws one new frame on every screen refresh, 1 ms
+after the refresh, timed from the compositor (`DwmGetCompositionTimingInfo`), and redraws only
+the blocks that change (see [Steadier runs](#steadier-runs-n16)).
+
+The client's stream window is moved so that only the top of its picture shows in that strip. That part shows the moving blocks, so it
 changes with every frame. The strip itself is never part of what it shows, so there is no
 picture-in-picture loop.
 
@@ -80,13 +83,12 @@ and none is n/a.
 
 | Metric | How it's measured | Better | Same within |
 | --- | --- | --- | --- |
-| Time to first frame | From starting the client to the first frame of the test picture in its window. Most of it is the client starting up (about 5 s), and that part is the same for every host | lower | 150 ms or 10 % |
+| Time to first frame | From starting the client to the first frame of the test picture in its window. Most of it is the client starting up (about 1.5 s since 19 November, 5 s before) | lower | 150 ms or 10 % |
 | Capture to send (host processing) | The host processing latency each host writes into every frame, averaged by the client (its end-of-stream statistics) | lower | 0.5 ms or 15 % |
 | Decode time | The client's average decoding time | lower | 0.3 ms or 20 % |
 | Dropped frames | Frames the client dropped for network loss or jitter, in the clean stream, counted as Moonlight 6.2.0 counts them (see [Dropped frames](#dropped-frames-norilight-counted-drops-moonlight-620-doesnt)) | lower | 0.5 points |
 | Frames shown per second | New pictures seen in the stream window per second. Watched every 4 ms; the screen refreshes at 60 Hz | higher | 2 fps or 5 % |
-| Frame interval, 99th percentile | Time between new pictures in the window | lower | 5 ms or 15 % |
-| Stutters per minute | Gaps of more than 50 ms between new pictures | lower | 2 or 25 % |
+| Stutters per minute | Gaps of three refreshes or more between new pictures (over 42 ms) | lower | 2 or 25 % |
 | Frames shown at 5 % loss | Frames shown per second during the random loss | higher | 3 fps or 8 % |
 | Dropped frames, loss stream | The client's dropped frames over the whole loss stream. Mostly the 1.5 s of blackouts, so about 5 % for every host; a host whose error correction recovers less of the random loss comes out higher | lower | 1 point or 25 % |
 | Recovery after a 300 ms blackout | From the end of a blackout to the next new picture (median of five) | lower | 50 ms or 25 % |
@@ -96,8 +98,9 @@ and none is n/a.
 
 "Same within 150 ms or 10 %" means the larger of the two, the percentage taken of the
 reference. The tolerances are about the spread between runs, so noise doesn't count as a
-difference. The result also stores the time to the first video packet, the frame rate
-received, render time, the client's decoder load and its CPU, for information.
+difference. The result also stores the 99th percentile of the frame interval, the time to the
+first video packet, the frame rate received, render time, the client's decoder load and its
+CPU, for information.
 
 Not measured: picture quality (it would need decoded frames compared with the source) and
 latency on the client's screen (no camera or capture card). Capture to send is the latency
@@ -155,41 +158,43 @@ What the reference hosts do to the PC while they run (the same as they do when i
 
 ### Results
 
-References recorded on 18 November 2026 (with the warm-up stream, see below). PC: AMD Ryzen 7
-5700X, AMD Radeon RX 6700 XT (AMF, HEVC), Windows 11, one 1920×1080 60 Hz display. Check
-against `master` at `a947f1c4` with Norilight at `f062d49b` (which logs its full-queue drops),
-**Performance goal**, three runs:
+References recorded on 24 November 2026 with the test picture paced to the refresh (N16). PC:
+AMD Ryzen 7 5700X, AMD Radeon RX 6700 XT (AMF, HEVC), Windows 11, one 1920×1080 60 Hz display
+(Dell U2713HM). Check against `n16-steadier-benchmark` at `f8c3c030` with Norilight at
+`607bb041`, **Performance goal**, three runs:
 
 | Metric | Norishine | Apollo 0.4.6 | Vibepollo 2.17.6 | Sunshine 2026.914.233613 |
 | --- | --- | --- | --- | --- |
-| Time to first frame (ms) | 5079 | 4838 same | 5092 same | 4811 same |
-| Capture to send (ms) | 2.8 | 4.2 **better** | 3.4 **better** | 4.1 **better** |
-| Decode time (ms) | 0.48 | 0.39 same | 0.84 **better** | 0.47 same |
-| Dropped frames (%) | 0.08 | 0.08 same | 0.08 same | 0.08 same |
-| Frames shown per second | 54.2 | 54.5 same | 50.9 **better** | 55.5 same |
-| Frame interval, 99th percentile (ms) | 34.3 | 34.4 same | 35.5 same | 34.0 same |
-| Stutters per minute | 2 | 1 same | 7 **better** | 1 same |
-| Frames shown per second at 5 % loss | 54.4 | 55.2 same | 56.5 same | 52.5 same |
-| Dropped frames, loss stream (%) | 5.3 | 5.5 same | 5.1 same | 5.5 same |
-| Recovery after a 300 ms blackout (ms) | 38 | 49 same | 51 same | 38 same |
-| Video encoder load (%) | 17.1 | 16.8 same | 16.5 same | 17.1 same |
-| Host process CPU (%) | 0.73 | 0.57 same | 0.51 same | 0.62 same |
-| Whole PC CPU (%) | 46 | 43 same | 59 same | 43 same |
+| Time to first frame (ms) | 1626 | 1510 same | 1768 same | 1509 same |
+| Capture to send (ms) | 4.1 | 4.2 same | 3.2 **worse** | 4.0 same |
+| Decode time (ms) | 0.2 | 0.2 same | 0.2 same | 0.2 same |
+| Dropped frames (%) | 0.05 | 0.03 same | 0 same | 0.03 same |
+| Frames shown per second | 59.7 | 50.7 **better** | 60 same | 58.5 same |
+| Stutters per minute | 0 | 1 same | 0 same | 0 same |
+| Frames shown per second at 5 % loss | 58.7 | 58.6 same | 59.2 same | 58.3 same |
+| Dropped frames, loss stream (%) | 5.2 | 5.4 same | 5.1 same | 5.6 same |
+| Recovery after a 300 ms blackout (ms) | 48 | 44 same | 47 same | 41 same |
+| Video encoder load (%) | 18.0 | 16.9 same | 16.6 same | 17.1 same |
+| Host process CPU (%) | 0.57 | 0.57 same | 0.25 same | 0.64 same |
+| Whole PC CPU (%) | 10 | 8 same | 8 same | 8 same |
 
-**Verdict: not worse than any reference on any metric.**
+**Verdict: worse than Vibepollo on capture to send.** The check was run three times in a
+row; each gave the same verdict, and one also had time to first frame 151 ms behind Sunshine
+(the tolerance is 150 ms).
 
 What it shows:
 
-- Capture to send is where the hosts differ most: Norishine 2.4–2.8 ms (the warm-up run
-  5.5), Vibepollo 3.4–3.6, Sunshine 4.0–4.3, Apollo 4.1–5.4. Everything else is within the
-  spread between runs.
-- Recovery after a blackout is 40–50 ms everywhere: once packets flow again, every host
-  sends a key frame within a few frames.
-- Time to first frame is about 5 seconds for every host, and nearly all of it is the client
-  starting up. Roadmap N5 measured the steps and cut it; see
-  [Stream start](#stream-start-start_timepy).
-- Apollo had one run with 28 stutters a minute and Vibepollo one with 8; their other runs
-  were normal. The medians keep one bad run from deciding the result.
+- Capture to send: Norishine 3.9–4.2 ms in all nine runs, Sunshine 3.9–4.0, Apollo 3.7–5.4,
+  Vibepollo 3.2 in every run. Vibepollo captures with Windows.Graphics.Capture through its
+  helper; [CAPTURE-HELPER.md](CAPTURE-HELPER.md) measured that 0.6 ms lower than Desktop
+  Duplication. Norishine's earlier 2.3–2.8 ms was a measuring error, not speed (see
+  [Steadier runs](#steadier-runs-n16)).
+- Time to first frame: Norishine with Norilight receives the first video packet about 120 ms
+  later than Apollo or Sunshine with Moonlight (1590 against 1470 ms); from there to the first
+  frame every host takes 35–40 ms.
+- Apollo showed about 50.6 frames a second in two runs of three, the third 59.6; not looked
+  into, since Norishine doesn't show it.
+- Vibepollo showed exactly 60 frames a second and dropped none in every run.
 
 #### Dropped frames: Norilight counted drops Moonlight 6.2.0 doesn't
 
@@ -262,6 +267,44 @@ its first frame, but its window stays one flat colour after it recreates its ren
 the check moves the window. It happens with every host and client alike, so it's the test's
 window handling, not streaming. The stream is tried again (each one worked the second time);
 the screenshot and log are in `build/benchmark/failures/`.
+
+#### Steadier runs (N16)
+
+Until 24 November single runs, unchanged `master` included, sometimes showed 100–200 stutters
+a minute or about 40 frames a second, and capture to send switched between about 2.3 and
+4.1 ms from run to run, so one run could make the verdict "worse". Two causes, neither of them
+streaming:
+
+- **The test picture skipped refreshes.** In every bad run the client received, decoded and
+  rendered 60 frames a second, but the window showed 38–48. `motion.py` timed its frames with Tk
+  timers, which fire every 15.6 ms on Windows and drift against the refresh, and redrawing its
+  full-screen canvas took 11–12 ms; with no stream at all it showed 48–56 new pictures a
+  second, a different number each run. It now waits for the refresh from the compositor's
+  timing and draws only the blocks that change, with GDI: 59.9 every time. (`DwmFlush` paces
+  to 30 a second while the check's watcher reads the screen, and
+  `D3DKMTWaitForVerticalBlankEvent` fails on AMD's driver, so neither is used.)
+- **Capture to send was measured from a moved timestamp.** The encoder moves each frame's
+  timestamp onto an even 1/60 s grid when it's within a quarter frame of it (from Apollo,
+  `6c955482`), which keeps the RTP timestamps even. The latency in each frame header was
+  measured from that moved time too, so each stream was off by up to 4 ms, fixed for the whole
+  stream, and only ever lower. Norishine now measures from the real capture time (also in
+  `/api/v1/stats`); the RTP timestamps are unchanged. The real figure is 3.9–4.2 ms.
+
+With a picture that changes on every refresh the frame interval is one refresh or two, so its
+99th percentile was either 17 or 33 ms depending on whether just over or under 1 % of the
+refreshes repeat. It's kept in the result for information, but no longer in the verdict.
+Stutters are now gaps of three refreshes or more (over 42 ms): the old limit of 50 ms was
+exactly three refreshes, so those gaps counted or not by chance.
+
+| Norishine with Norilight, per run | Before (checks of 19 November) | After (three checks, 24 November) |
+| --- | --- | --- |
+| Frames shown per second | 38.6–58.7 | 57.8–59.9 (one run 47.2) |
+| Stutters per minute | 0–212 | 0–2 |
+| Capture to send (ms) | 2.0–4.4 | 3.9–4.2 |
+
+The one run at 47 frames a second was the client's own presents: with V-sync off they
+sometimes miss the compositor's refresh. The median of three runs keeps it from deciding the
+result.
 
 ## Stream start (start_time.py)
 
