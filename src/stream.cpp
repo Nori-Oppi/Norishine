@@ -1628,8 +1628,10 @@ namespace stream {
           return (uint16_t) std::clamp<decltype(duration_us)>((duration_us + 50) / 100, 0, std::numeric_limits<uint16_t>::max());
         };
 
-        frame_latency = frame_send_start - *packet->frame_timestamp;
-        uint16_t latency = duration_to_latency(std::chrono::steady_clock::now() - *packet->frame_timestamp);
+        // From the real capture time, not the RTP timestamp on the frame grid (N16)
+        const auto captured = packet->capture_timestamp ? *packet->capture_timestamp : *packet->frame_timestamp;
+        frame_latency = frame_send_start - captured;
+        uint16_t latency = duration_to_latency(std::chrono::steady_clock::now() - captured);
         frame_header.frame_processing_latency = latency;
         frame_processing_latency_logger.collect_and_log(latency / 10.);
       } else {

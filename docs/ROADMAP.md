@@ -1,6 +1,6 @@
 # Norishine architecture decisions and roadmap
 
-Status key: **done**, **in progress**, **planned**. Updated 2026-11-19: phases 2–5 are done, and the next
+Status key: **done**, **in progress**, **planned**. Updated 2026-11-24: phases 2–5 are done, and the next
 items are ranked under [Next](#next). Evidence for the
 decisions is in [PHASE1-RESEARCH.md](PHASE1-RESEARCH.md).
 
@@ -87,7 +87,7 @@ in, with confirmation) or the command line, never from a paired client.
 
 ## Done
 
-Phases 2 to 5 are finished, and so are N1 to N6, N9, N10 and N14. Details are in the linked docs and the git history.
+Phases 2 to 5 are finished, and so are N1 to N6, N9, N10, N14 and N16. Details are in the linked docs and the git history.
 
 | Milestone | What it gave | More |
 | --- | --- | --- |
@@ -107,6 +107,7 @@ Phases 2 to 5 are finished, and so are N1 to N6, N9, N10 and N14. Details are in
 | N14 Fewer pacer drops (Norilight) | The full-queue drops all came from the first second of a stream: the decoder starts after the stream, so it began with a backlog of stale frames. A new decoder now shows its first frame and skips that backlog for a fresh key frame. Dropped frames 0.08 → 0.03 % in the benchmark check | [BENCHMARK.md](BENCHMARK.md#dropped-frames-norilight-counted-drops-moonlight-620-doesnt) |
 | N9 Settings during a stream | Host settings that need no restart apply at once, in running streams too; a client changes its stream's bitrate, error correction, encoder preset, resolution, frame rate and codec without reconnecting (`POST /api/v1/session/settings`, control message `0x3100` for a new format); Norilight's Stream settings menu (Ctrl+Alt+Shift+O). Other clients reconnect as before | [AUTOTUNE.md](AUTOTUNE.md#settings-during-a-stream-n9), [api.md](api.md#post-apiv1sessionsettings) |
 | N10 Through a host update | The host tells streaming clients it restarts (update or settings restart) and names each run (`RunId`); Norilight waits and starts the same app again by itself, 0.5 s after the host answers. A real handover isn't planned: the gap is the host's own downtime | [BENCHMARK.md](BENCHMARK.md#reconnect-after-a-host-restart-n10) |
+| N16 Steadier benchmark runs | Bad runs came from the test picture skipping refreshes (Tk timers) and from capture to send measured from the encoder's frame grid instead of the capture time. The picture now changes on every refresh and the host measures from the real capture time: frames shown 57.8–59.9 instead of 38.6–58.7, capture to send 3.9–4.2 ms instead of 2.0–4.4. That showed two real differences, N18 and N19 | [BENCHMARK.md](BENCHMARK.md#steadier-runs-n16) |
 | N2 Benchmark check | `scripts/benchmark/compare.py`: Norishine with Norilight against stored Apollo, Vibepollo and Sunshine results with Moonlight, per metric better, same or worse; run after every streaming change | [BENCHMARK.md](BENCHMARK.md#check-against-apollo-vibepollo-and-sunshine) |
 
 ## In progress: M10 measured improvements
@@ -122,8 +123,9 @@ Each one benchmarked before and after ([BENCHMARK.md](BENCHMARK.md)).
 - Frame cap matched to the client (**measured, not built**): the host already encodes no
   more frames than its display shows; a cap would undo the clients' V-sync-off for high
   frame rates ([BENCHMARK.md](BENCHMARK.md#m10-frame-cap-matched-to-the-client)).
-- Capture from a user-session helper (**designed, not built**): WGC measured 0.6 ms lower,
-  but proving it needs a client-side latency figure ([CAPTURE-HELPER.md](CAPTURE-HELPER.md)).
+- Capture from a user-session helper (**designed, not built**): WGC measured 0.6 ms lower
+  ([CAPTURE-HELPER.md](CAPTURE-HELPER.md)). Now N18: the steadier check (N16) shows Vibepollo,
+  which captures that way, 0.8 ms ahead.
 
 ## Next
 
@@ -135,6 +137,8 @@ they're listed here so there's one order for both.
 
 | # | Item | Project | Effort | Importance | Needs |
 | --- | --- | --- | --- | --- | --- |
+| N18 | Capture to send as low as Vibepollo's | Norishine | M–L | High | — |
+| N19 | First video packet as early as Apollo's and Sunshine's | Both | S–M | Medium | — |
 | N7 | Linux build | Norilight | M | Medium | — |
 | N8 | Separate command-line builds | Both | M | Medium | — |
 | N11 | Linux build | Norishine | XL | Medium | — |
@@ -147,7 +151,6 @@ whenever there's room, between the items above:
 | # | Item | Project | Effort | Importance |
 | --- | --- | --- | --- | --- |
 | N15 | Benchmark streams that show no picture | Norishine (check script) | S | Low |
-| N16 | Steadier benchmark runs | Norishine (check script) | S | Medium |
 | N17 | Virtual display follows a resolution change during a stream | Norishine | S–M | Low |
 
 ### N7. Linux build (Norilight) — M
@@ -187,12 +190,18 @@ and less predictable. Change how the script places the window (for example wait 
 frame, or start the client on the target position) so streams don't need a retry. See
 [BENCHMARK.md](BENCHMARK.md#streams-that-show-no-picture).
 
-### N16. Steadier benchmark runs (check script) — S
-On 2026-11-19 single runs of the check, unchanged master included, showed 100–200 stutters a
-minute or 10 fps less at 5 % loss, and the host's capture-to-send figure switched between about
-2.3 and 4.1 ms from run to run. With three runs one such run can make the verdict "worse"
-(N9's PRs explain it with a master run next to them). More runs, dropping the worst one, or
-finding what the bad runs have in common would make the verdict trustworthy again.
+### N18. Capture to send as low as Vibepollo's — M–L
+The only metric where the check (N16) shows Norishine worse: capture to send 4.0 ms against
+Vibepollo's 3.2, in every run. Vibepollo captures with Windows.Graphics.Capture from a helper in
+the user's session, which [CAPTURE-HELPER.md](CAPTURE-HELPER.md) measured 0.6 ms lower than
+Desktop Duplication and designed for Norishine. Build it, or find the 0.8 ms elsewhere first.
+
+### N19. First video packet as early as Apollo's and Sunshine's — S–M
+Norishine with Norilight receives the first video packet about 120 ms later than Apollo or
+Sunshine with Moonlight (1590 against 1470 ms), right at the check's 150 ms tolerance for time to
+first frame. Crossing hosts and clients, as for the dropped frames in
+[BENCHMARK.md](BENCHMARK.md#dropped-frames-norilight-counted-drops-moonlight-620-doesnt), shows
+which side it is; then the start steps both log (N5) show where.
 
 ### N17. Virtual display follows a resolution change — S–M
 A resolution changed during a stream (N9) scales the captured display. A virtual display made
